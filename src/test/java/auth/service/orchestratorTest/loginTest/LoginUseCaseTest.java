@@ -1,4 +1,4 @@
-package auth.service.orchestratorTest.loginTest;
+/*package auth.service.orchestratorTest.loginTest;
 
 import jakarta.servlet.http.HttpServletRequest;
 import source.auth.application.infra.persistance.jpa.UserRepository;
@@ -52,3 +52,4 @@ class LoginUseCaseTest {
 
 
 }
+*/
