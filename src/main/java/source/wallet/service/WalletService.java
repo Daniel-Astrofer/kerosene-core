@@ -9,10 +9,8 @@ import source.wallet.dto.WalletDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
-
-import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
+
 
 @Service
 public class WalletService {
