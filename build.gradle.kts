@@ -8,7 +8,7 @@ plugins {
 
 
 group = "kerosene"
-version = "0.0.1-SNAPSHOT"
+version = "PRE-ALPHA"
 description = "backend"
 
 repositories {
