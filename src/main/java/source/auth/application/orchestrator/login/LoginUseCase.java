@@ -40,13 +40,12 @@ public class LoginUseCase implements Login {
      * if the jwt is invalid the code check username and passphrase and throws RuntimeException if incorrect*/
     @Override
     public String loginUser(UserDTOContract dto, HttpServletRequest request) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UserDataBase user = verifier.matcher(dto, request);
 
         Long id = user.getId();
         Optional<UserDevice> dbDevice = deviceService.find(id);
 
-        if (service.extractDevice(auth.getCredentials().toString()).equals(dbDevice.get().getDeviceHash())){
+        if (request.getHeader("X-Device-Hash").equals(dbDevice.get().getDeviceHash())){
             return id + " " + service.generateToken(id,dbDevice.get().getDeviceHash()) ;
         }
 

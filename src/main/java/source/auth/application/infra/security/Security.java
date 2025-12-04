@@ -38,8 +38,12 @@ public class Security {
                         .requestMatchers("/auth/signup").permitAll()
                         .requestMatchers("/auth/signup/totp/verify").permitAll()
                         .requestMatchers("/auth/login").permitAll()
-
-                        .anyRequest().authenticated()
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml"
+                        ).permitAll().anyRequest().authenticated()
                 ).addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 

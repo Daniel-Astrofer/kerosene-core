@@ -1,6 +1,7 @@
 package source.wallet.controller;
 
 
+import jakarta.persistence.Id;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.catalina.connector.Response;
 import org.springframework.http.HttpStatus;
@@ -25,13 +26,14 @@ public class WalletController {
         wallet.createWallet(dto, request);
         return ResponseEntity.status(HttpStatus.CREATED).body("wallet created");
     }
-   /* @GetMapping("/find")
-    public ResponseEntity<String> findWallets(@RequestBody WalletDTO dto,
-                                              HttpServletRequest request){
 
 
+   @DeleteMapping("/delete")
+    public ResponseEntity<String> deleteWallets(@RequestBody WalletDTO dto,
+                                              HttpServletRequest request) {
+        wallet.deleteWallet(dto,request);
+        return ResponseEntity.status(HttpStatus.CREATED).body("wallet deleted");
 
-    }*/
-
+   }
 
 }

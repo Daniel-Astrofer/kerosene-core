@@ -2,8 +2,8 @@
 
 plugins {
     java
-    id("org.springframework.boot") version "3.5.5"
-    id("io.spring.dependency-management") version "1.1.7"
+    id("org.springframework.boot") version "3.3.2"
+    id("io.spring.dependency-management") version "1.1.6"
 }
 
 
@@ -28,6 +28,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
     implementation("org.jboss.aerogear:aerogear-otp-java:1.0.0.M1")
     implementation("commons-codec:commons-codec:1.16.0")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")

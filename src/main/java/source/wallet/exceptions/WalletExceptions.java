@@ -14,6 +14,18 @@ public class WalletExceptions {
             super(message);
         }
     }
+
+    public static class WalletNameAlredyExists extends  WalletExceptionsCreation{
+        public WalletNameAlredyExists(String meessage){
+            super(meessage);
+        }
+    }
+    public static class WalletNoExists extends CreateWalletException {
+        public WalletNoExists(String message){
+            super(message);
+        }
+
+    }
  }
 
 

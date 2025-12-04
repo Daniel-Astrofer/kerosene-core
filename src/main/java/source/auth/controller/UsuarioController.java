@@ -32,14 +32,12 @@ public class UsuarioController {
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody UserDTO userDTO, HttpServletRequest request) {
         String id = login.loginUser(userDTO, request);
-
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(id);
     }
 
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody UserDTO userDTO, HttpServletRequest request) {
         String key = signup.signupUser(userDTO);
-
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(key);
     }
 

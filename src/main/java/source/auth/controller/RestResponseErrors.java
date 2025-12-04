@@ -105,4 +105,45 @@ public class RestResponseErrors extends ResponseEntityExceptionHandler {
         );
     }
 
+    @ExceptionHandler
+    public ResponseEntity<ResponseError> WalletNoExists(WalletExceptions.WalletNoExists ex,
+                                                             HttpServletRequest request){
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                new ResponseError(
+                        LocalDateTime.now(),
+                        HttpStatus.NOT_FOUND,
+                        "wallet no exists",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                )
+        );
+    }
+
+    @ExceptionHandler
+    public ResponseEntity<ResponseError> WalletAlredyExists(WalletExceptions.WalletNameAlredyExists ex,
+                                                        HttpServletRequest request){
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                new ResponseError(
+                        LocalDateTime.now(),
+                        HttpStatus.CONFLICT,
+                        "you are using this name",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                )
+        );
+    }
+
+    @ExceptionHandler
+    public ResponseEntity<ResponseError> PassphraseNotBIP39(AuthExceptions.InvalidPassphrase ex,
+                                                            HttpServletRequest request){
+        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(
+                new ResponseError(
+                        LocalDateTime.now(),
+                        HttpStatus.NOT_ACCEPTABLE,
+                        "this passphrase is not BIP39",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                )
+        );
+    }
 }
