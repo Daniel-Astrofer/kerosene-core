@@ -31,6 +31,7 @@ public class TransactionDTO {
     public BigDecimal getAmount() {
         return amount;
     }
+    //
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
