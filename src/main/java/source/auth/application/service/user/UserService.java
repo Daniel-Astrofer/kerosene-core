@@ -1,5 +1,6 @@
 package source.auth.application.service.user;
 
+import jakarta.transaction.Transactional;
 import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.dto.UserDTO;
@@ -28,7 +29,7 @@ public class UserService implements UserServiceContract {
         return repository.findById(id);
     }
 
-    public Optional<UserDataBase> findByUsername(String username) {
+    public UserDataBase findByUsername(String username) {
 
         return repository.findByUsername(username);
     }

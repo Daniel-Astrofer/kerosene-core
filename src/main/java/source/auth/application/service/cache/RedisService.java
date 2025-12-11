@@ -1,6 +1,7 @@
 package source.auth.application.service.cache;
 
 
+import jakarta.transaction.Transactional;
 import source.auth.application.infra.persistance.redis.contracts.RedisContract;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.cripto.contracts.Cryptography;

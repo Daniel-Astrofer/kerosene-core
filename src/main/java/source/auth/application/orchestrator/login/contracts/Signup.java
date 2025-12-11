@@ -9,5 +9,6 @@ public interface Signup {
     String signupUser(UserDTO dto);
 
     String createUser(UserDTO dto,
+                      String deviceHash,
                       HttpServletRequest request);
 }

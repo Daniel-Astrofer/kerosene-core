@@ -1,6 +1,7 @@
 package source.auth.application.service.device;
 
 
+import jakarta.transaction.Transactional;
 import source.auth.application.infra.persistance.jpa.UserDeviceRepository;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.entity.UserDevice;

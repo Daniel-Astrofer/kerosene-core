@@ -68,7 +68,7 @@ public class RestResponseErrors extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AuthExceptions.UnrrecognizedDevice.class)
     public ResponseEntity<ResponseError> unrecognizedDevice(AuthExceptions.UnrrecognizedDevice ex,
                                                             HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).header("Next-Endpoint", "auth/signup/totp/verify").body(
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).header("Next-Endpoint", "auth/login/totp/verify").body(
                 new ResponseError(
                         LocalDateTime.now(),
                         HttpStatus.SEE_OTHER,

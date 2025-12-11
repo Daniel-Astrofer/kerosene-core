@@ -6,6 +6,7 @@ public class WalletDTO {
 
     private String passphrase;
     private String name;
+    private String newName;
 
 
     public String getPassphrase() {
@@ -22,5 +23,13 @@ public class WalletDTO {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getNewName() {
+        return newName;
+    }
+
+    public void setNewName(String newName) {
+        this.newName = newName;
     }
 }

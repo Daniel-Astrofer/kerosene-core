@@ -1,5 +1,6 @@
 package source.wallet.service;
 
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import source.auth.application.orchestrator.login.contracts.Signup;
@@ -11,9 +12,9 @@ import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
 import java.util.List;
 
-
+@Transactional
 @Service
-public class WalletService {
+public class WalletService implements WalletContract {
 
     private final WalletRepository walletRepository;
     private final Hasher hash;
@@ -52,6 +53,32 @@ public class WalletService {
             }
         }
         return false;
+    }
+
+    public void updateWallet(Long userId, WalletDTO dto) {
+        List<WalletEntity> userWallets = walletRepository.findByUserId(userId);
+        
+        if (userWallets.isEmpty()) {
+            throw new WalletExceptions.WalletNoExists("you no have any wallet");
+        }
+        
+
+        if (dto.getNewName() != null && !dto.getNewName().equals(dto.getName())) {
+            if (walletRepository.existsByName(dto.getNewName())) {
+                throw new WalletExceptions.WalletNameAlredyExists("new name already in use");
+            }
+        }
+        
+        for (WalletEntity wallet : userWallets) {
+            if (wallet.getName().equals(dto.getName())) {
+                if (dto.getNewName() != null && !dto.getNewName().isEmpty()) {
+                    wallet.setName(dto.getNewName());
+                }
+                walletRepository.save(wallet);
+            }
+        }
+        
+        throw new WalletExceptions.WalletNoExists("wallet not found");
     }
 
 

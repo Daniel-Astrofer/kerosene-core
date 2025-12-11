@@ -18,5 +18,5 @@ public interface UserServiceContract {
 
     UserDataBase fromDTO(UserDTO userDTO);
 
-    Optional<UserDataBase> findByUsername(String username);
+    UserDataBase findByUsername(String username);
 }

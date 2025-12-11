@@ -1,5 +1,6 @@
 package source.auth.application.service.authentication;
 
+import source.auth.AuthConstants;
 import source.auth.AuthExceptions;
 import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.application.service.authentication.contracts.SignupVerifier;
@@ -11,83 +12,86 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Service for verifying user credentials.
- * Checks username and passphrase for validity, format, length, and existence.
+ * Service for verifying user credentials during signup.
+ * Validates username and passphrase for format, length, and BIP39 compliance.
  */
 @Service
 public class SignupValidator implements SignupVerifier {
 
-    private static final int USERNAME_CHARACTER_LIMIT = 50;
-    private static final int PASSPHRASE_CHARACTER_MAX_LIMIT = 161;
-
     private final UserRepository repository;
-
 
     public SignupValidator(UserRepository repository) {
         this.repository = repository;
     }
 
-
     @Override
     public void checkUsernameNotNull(String username) {
         if (username == null || username.isBlank()) {
-            throw new AuthExceptions.UsernameCantBeNull("Username cannot be null");
+            throw new AuthExceptions.UsernameCantBeNull(AuthConstants.ERR_USERNAME_NULL);
         }
     }
 
     @Override
     public void checkPassphraseNotNull(String passphrase) {
         if (passphrase == null) {
-            throw new AuthExceptions.PassphraseCantBeNull("Passphrase cannot be null");
+            throw new AuthExceptions.PassphraseCantBeNull(AuthConstants.ERR_PASSPHRASE_NULL);
         }
     }
 
     @Override
     public void checkUsernameFormat(String username) {
-        if (!username.matches("^[a-zA-Z0-9_]+$")) {
-            throw new AuthExceptions.InvalidCharacterUsername("Invalid character in username");
+        if (!username.matches(AuthConstants.USERNAME_PATTERN)) {
+            throw new AuthExceptions.InvalidCharacterUsername(AuthConstants.ERR_USERNAME_INVALID_CHARS);
         }
     }
 
     @Override
     public void checkUsernameLength(String username) {
-        if (username.length() > USERNAME_CHARACTER_LIMIT) {
-            throw new AuthExceptions.UsernameCharacterLimitException("Username character limit exceeded");
+        if (username.length() > AuthConstants.USERNAME_MAX_LENGTH) {
+            throw new AuthExceptions.CharacterLimitException(AuthConstants.ERR_USERNAME_TOO_LONG);
         }
     }
 
     @Override
     public void checkPassphraseLength(String passphrase) {
-        if (passphrase.length() > PASSPHRASE_CHARACTER_MAX_LIMIT) {
-            throw new AuthExceptions.UsernameCharacterLimitException("Passphrase character limit exceeded");
+        if (passphrase.length() > AuthConstants.PASSPHRASE_MAX_LENGTH) {
+            throw new AuthExceptions.CharacterLimitException(AuthConstants.ERR_PASSPHRASE_TOO_LONG);
         }
     }
 
     @Override
     public void checkPassphraseBip39(String passphrase) {
-        String phrase = passphrase.trim().replaceAll("[\\s\\u00A0]+", " ");
-        List<String> words = Arrays.asList(phrase.split(" "));
+        String normalizedPhrase = passphrase.trim().replaceAll("[\\s\\u00A0]+", " ");
+        List<String> words = Arrays.asList(normalizedPhrase.split(" "));
 
         try {
             MnemonicCode.INSTANCE.check(words);
         } catch (MnemonicException.MnemonicWordException e) {
-            throw new AuthExceptions.InvalidPassphrase("Unrecognized word in passphrase");
+            throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSPHRASE_INVALID_WORD);
         } catch (MnemonicException.MnemonicLengthException e) {
-            throw new AuthExceptions.InvalidPassphrase("Passphrase length incompatible with BIP39");
+            throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSPHRASE_INVALID_LENGTH);
         } catch (MnemonicException e) {
-            throw new AuthExceptions.InvalidPassphrase("Invalid passphrase");
+            throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSPHRASE_INVALID);
         }
     }
 
     @Override
     public void checkUsernameExists(String username) {
-        if (repository.findByUsername(username).isPresent()) {
-            throw new AuthExceptions.UserAlreadyExistsException("User already exists");
+        if (repository.findByUsername(username) != null ) {
+            throw new AuthExceptions.UserAlreadyExistsException(AuthConstants.ERR_USERNAME_ALREADY_EXISTS);
         }
     }
 
+    /**
+     * Performs all validation checks for signup.
+     * 
+     * @param username the username to validate
+     * @param passphrase the passphrase to validate
+     * @return true if all validations pass
+     * @throws AuthExceptions.AuthValidationException if any validation fails
+     */
+    @Override
     public boolean verify(String username, String passphrase) {
-
         checkUsernameNotNull(username);
         checkPassphraseNotNull(passphrase);
         checkUsernameFormat(username);
@@ -98,5 +102,4 @@ public class SignupValidator implements SignupVerifier {
 
         return true;
     }
-
 }
