@@ -31,7 +31,7 @@ public class TransactionDTO {
     public BigDecimal getAmount() {
         return amount;
     }
-    
+
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
@@ -40,7 +40,7 @@ public class TransactionDTO {
     public String getContext() {
         return context;
     }
-
+//
     public void setContext(String context) {
         this.context = context;
     }
