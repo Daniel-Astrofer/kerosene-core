@@ -10,11 +10,14 @@ import source.auth.application.service.validation.totp.contratcs.TOTPVerifier;
 import source.auth.dto.contracts.UserDTOContract;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.entity.UserDevice;
+import source.ledger.service.LedgerService;
+import source.wallet.service.WalletService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Component
@@ -25,13 +28,22 @@ public class LoginUseCase implements Login {
     private final UserDeviceService deviceService;
     private final UserServiceContract userService;
     private final TOTPVerifier totpVerifier;
+    private final LedgerService ledgerService;
+    private final WalletService walletService;
+    
+    // Saldo inicial de teste (100.000)
+    private static final BigDecimal INITIAL_TEST_BALANCE = new BigDecimal("100000");
 
-    public LoginUseCase(LoginVerifier verifier, JwtServicer service, UserDeviceService deviceService, UserServiceContract userService, TOTPVerifier totpVerifier) {
+    public LoginUseCase(LoginVerifier verifier, JwtServicer service, UserDeviceService deviceService, 
+                        UserServiceContract userService, TOTPVerifier totpVerifier,
+                        LedgerService ledgerService, WalletService walletService) {
         this.verifier = verifier;
         this.service = service;
         this.deviceService = deviceService;
         this.userService = userService;
         this.totpVerifier = totpVerifier;
+        this.ledgerService = ledgerService;
+        this.walletService = walletService;
     }
 
 
@@ -52,6 +64,10 @@ public class LoginUseCase implements Login {
 
         UserDataBase user = verifier.matcher(dto, request);
         Optional<UserDevice> device = deviceService.find(user.getId());
+        
+        // Inicializar saldo de teste para novas contas
+        initializeTestBalance(user.getId());
+        
         return user.getId() + " " + service.generateToken(user.getId(),device.get().getDeviceHash()) ;
 
 
@@ -66,6 +82,9 @@ public class LoginUseCase implements Login {
 
 
         if (deviceOpt.isPresent() && deviceHash != null && deviceHash.equals(deviceOpt.get().getDeviceHash())) {
+            // Inicializar saldo de teste para novas contas
+            initializeTestBalance(user.getId());
+            
             return user.getId() + " " + service.generateToken(user.getId(), deviceOpt.get().getDeviceHash());
         }
 
@@ -89,13 +108,58 @@ public class LoginUseCase implements Login {
                 deviceService.create(newDevice);
             }
 
+            // Inicializar saldo de teste para novas contas
+            initializeTestBalance(user.getId());
+
             return user.getId() + " " + service.generateToken(user.getId(), deviceHash);
         }
 
         if (deviceOpt.isPresent()) {
+            // Inicializar saldo de teste para novas contas
+            initializeTestBalance(user.getId());
+            
             return user.getId() + " " + service.generateToken(user.getId(), deviceOpt.get().getDeviceHash());
         }
 
+        // Inicializar saldo de teste para novas contas
+        initializeTestBalance(user.getId());
+
         return user.getId() + " " + service.generateToken(user.getId(), "");
     }
+    
+    /**
+     * Inicializa saldo de teste (100.000) na primeira carteira do usuário
+     * Se o usuário já tem saldo, não faz nada (apenas na primeira vez)
+     */
+    private void initializeTestBalance(Long userId) {
+        try {
+            // Obter wallets do usuário
+            var wallets = walletService.findByUserId(userId);
+            
+            if (wallets != null && !wallets.isEmpty()) {
+                // Usar a primeira wallet do usuário
+                var wallet = wallets.get(0);
+                
+                try {
+                    // Verificar se ledger já existe
+                    var ledger = ledgerService.findByWalletId(wallet.getId());
+                    
+                    // Se o saldo for zero, adicionar o saldo de teste
+                    if (ledger.getBalance().compareTo(BigDecimal.ZERO) == 0) {
+                        ledgerService.updateBalance(wallet.getId(), INITIAL_TEST_BALANCE, "TEST_INITIAL_BALANCE");
+                        System.out.println("✅ Saldo de teste (100.000) adicionado para usuário " + userId);
+                    }
+                } catch (Exception e) {
+                    // Ledger não existe, criar novo com saldo de teste
+                    var newLedger = ledgerService.createLedger(wallet, "TEST_INITIAL_BALANCE");
+                    newLedger.setBalance(INITIAL_TEST_BALANCE);
+                    System.out.println("✅ Nova carteira criada com saldo de teste (100.000) para usuário " + userId);
+                }
+            }
+        } catch (Exception e) {
+            // Não impedir o login se houver erro ao inicializar saldo
+            System.err.println("⚠️  Erro ao inicializar saldo de teste: " + e.getMessage());
+        }
+    }
 }
+

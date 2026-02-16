@@ -57,10 +57,11 @@ public class RedisService implements RedisServicer {
             userDTO.setTotpSecret(base64);
 
         } catch (Exception e) {
+            e.printStackTrace();
             throw new RuntimeException("Error encrypting TOTP secret");
         }
         repository.save(key, userDTO, 120);
-        /**/
+
     }
 
     @Override

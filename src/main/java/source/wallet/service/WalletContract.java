@@ -10,6 +10,8 @@ public interface WalletContract {
 
     WalletEntity findByName(String name);
 
+    WalletEntity findByAddress(String address);
+
     boolean existsByName(String name);
 
     List<WalletEntity> findByUserId(Long userId);

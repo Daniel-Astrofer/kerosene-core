@@ -22,7 +22,7 @@ public class WalletDTO {
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = name != null ? name.toUpperCase() : null;
     }
 
     public String getNewName() {
@@ -30,6 +30,6 @@ public class WalletDTO {
     }
 
     public void setNewName(String newName) {
-        this.newName = newName;
+        this.newName = newName != null ? newName.toUpperCase() : null;
     }
 }

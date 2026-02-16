@@ -33,8 +33,11 @@ public class WalletService implements WalletContract {
         walletRepository.save(entity);
     }
 
-    public WalletEntity findByName(String name){ return walletRepository.findByName(name);}
-    public boolean existsByName(String name){return walletRepository.existsByName(name);}
+    public WalletEntity findByName(String name){ return walletRepository.findByName(name != null ? name.toUpperCase() : null);}
+
+    public WalletEntity findByAddress(String address) { return walletRepository.findByAddress(address); }
+
+    public boolean existsByName(String name){return walletRepository.existsByName(name != null ? name.toUpperCase() : null);}
 
     public List<WalletEntity> findByUserId(Long userId){
         return walletRepository.findByUserId(userId);
@@ -46,8 +49,9 @@ public class WalletService implements WalletContract {
         if (dbWallet.isEmpty()){
             throw new WalletExceptions.WalletNoExists("you no have any wallet");
         }
+        String walletNameUpperCase = wallet.getName() != null ? wallet.getName().toUpperCase() : null;
         for (WalletEntity walletName: dbWallet){
-            if (walletName.getName().equals(wallet.getName())){
+            if (walletName.getName().equals(walletNameUpperCase)){
                 walletRepository.delete(walletName);
                 return true;
             }
@@ -63,18 +67,20 @@ public class WalletService implements WalletContract {
         }
         
 
-        if (dto.getNewName() != null && !dto.getNewName().equals(dto.getName())) {
+        if (dto.getNewName() != null && !dto.getNewName().toUpperCase().equals(dto.getName())) {
             if (walletRepository.existsByName(dto.getNewName())) {
                 throw new WalletExceptions.WalletNameAlredyExists("new name already in use");
             }
         }
         
+        String dtoNameUpperCase = dto.getName() != null ? dto.getName().toUpperCase() : null;
         for (WalletEntity wallet : userWallets) {
-            if (wallet.getName().equals(dto.getName())) {
+            if (wallet.getName().equals(dtoNameUpperCase)) {
                 if (dto.getNewName() != null && !dto.getNewName().isEmpty()) {
                     wallet.setName(dto.getNewName());
                 }
                 walletRepository.save(wallet);
+                return;
             }
         }
         

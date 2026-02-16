@@ -41,13 +41,14 @@ public class WalletUseCase {
         if (db.isEmpty()) {
             throw new AuthExceptions.UserNoExists("invalid user");}
 
-        if (walletService.existsByName(dto.getName())) {
+        String nameUpperCase = dto.getName() != null ? dto.getName().toUpperCase() : null;
+        if (walletService.existsByName(nameUpperCase)) {
             throw new WalletExceptions.WalletNameAlredyExists("you are using this name");
         }
 
         WalletEntity wallet = new WalletEntity();
         wallet.setAddress(dto.getPassphrase());
-        wallet.setName(dto.getName());
+        wallet.setName(nameUpperCase);
         wallet.setUser(db.get());
         walletService.save(wallet);
         ledger.createLedger(wallet,"Initial ledger for new wallet");

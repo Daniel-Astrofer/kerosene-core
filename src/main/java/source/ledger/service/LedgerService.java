@@ -126,7 +126,7 @@ public class LedgerService implements LedgerContract{
         return hash.hash(data);
     }
     public void validateWalletOwnership(WalletEntity wallet, Long userId) {
-        if (wallet == null || !wallet.getUser().getId().equals(userId)) {
+        if (wallet == null ||! wallet.getUser().getId().equals(userId)) {
             throw new RuntimeException("Wallet not found or does not belong to you");
         }
     }

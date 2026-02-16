@@ -30,7 +30,7 @@ public class WalletEntity {
     }
 
     public void setName(String name) {
-        this.name = name;
+        this.name = name != null ? name.toUpperCase() : null;
     }
 
     public long getId() {
