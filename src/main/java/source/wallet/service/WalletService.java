@@ -21,7 +21,7 @@ public class WalletService implements WalletContract {
     private final SignupVerifier verify;
 
     public WalletService(WalletRepository walletRepository,
-                         @Qualifier("SHAHasher") Hasher hash, SignupVerifier verify) {
+            @Qualifier("SHAHasher") Hasher hash, SignupVerifier verify) {
         this.walletRepository = walletRepository;
         this.hash = hash;
         this.verify = verify;
@@ -33,25 +33,40 @@ public class WalletService implements WalletContract {
         walletRepository.save(entity);
     }
 
-    public WalletEntity findByName(String name){ return walletRepository.findByName(name != null ? name.toUpperCase() : null);}
+    public WalletEntity findByName(String name) {
+        String upperName = name != null ? name.toUpperCase() : null;
+        System.out.println("🔎 [WALLET] findByName - Input: '" + name + "' -> Uppercase: '" + upperName + "'");
+        WalletEntity wallet = walletRepository.findByName(upperName);
+        System.out.println("🔎 [WALLET] Result: "
+                + (wallet != null ? "Found ID=" + wallet.getId() + ", Name=" + wallet.getName() : "NULL"));
+        return wallet;
+    }
 
-    public WalletEntity findByAddress(String address) { return walletRepository.findByAddress(address); }
+    public WalletEntity findByAddress(String address) {
+        return walletRepository.findByAddress(address);
+    }
 
-    public boolean existsByName(String name){return walletRepository.existsByName(name != null ? name.toUpperCase() : null);}
+    public boolean existsByUserIdAndName(Long id, String name) {
+        return walletRepository.existsByUserIdAndName(id, name != null ? name.toUpperCase() : null);
+    }
 
-    public List<WalletEntity> findByUserId(Long userId){
+    public boolean existsByName(String name) {
+        return walletRepository.existsByName(name != null ? name.toUpperCase() : null);
+    }
+
+    public List<WalletEntity> findByUserId(Long userId) {
         return walletRepository.findByUserId(userId);
     }
 
-    public boolean deleteWallet(Long id,WalletDTO wallet){
+    public boolean deleteWallet(Long id, WalletDTO wallet) {
         wallet.setPassphrase(hash.hash(wallet.getPassphrase()));
         List<WalletEntity> dbWallet = walletRepository.findByUserId(id);
-        if (dbWallet.isEmpty()){
+        if (dbWallet.isEmpty()) {
             throw new WalletExceptions.WalletNoExists("you no have any wallet");
         }
         String walletNameUpperCase = wallet.getName() != null ? wallet.getName().toUpperCase() : null;
-        for (WalletEntity walletName: dbWallet){
-            if (walletName.getName().equals(walletNameUpperCase)){
+        for (WalletEntity walletName : dbWallet) {
+            if (walletName.getName().equals(walletNameUpperCase)) {
                 walletRepository.delete(walletName);
                 return true;
             }
@@ -61,18 +76,17 @@ public class WalletService implements WalletContract {
 
     public void updateWallet(Long userId, WalletDTO dto) {
         List<WalletEntity> userWallets = walletRepository.findByUserId(userId);
-        
+
         if (userWallets.isEmpty()) {
             throw new WalletExceptions.WalletNoExists("you no have any wallet");
         }
-        
 
         if (dto.getNewName() != null && !dto.getNewName().toUpperCase().equals(dto.getName())) {
-            if (walletRepository.existsByName(dto.getNewName())) {
+            if (walletRepository.existsByUserIdAndName(userId, dto.getNewName())) {
                 throw new WalletExceptions.WalletNameAlredyExists("new name already in use");
             }
         }
-        
+
         String dtoNameUpperCase = dto.getName() != null ? dto.getName().toUpperCase() : null;
         for (WalletEntity wallet : userWallets) {
             if (wallet.getName().equals(dtoNameUpperCase)) {
@@ -83,9 +97,8 @@ public class WalletService implements WalletContract {
                 return;
             }
         }
-        
+
         throw new WalletExceptions.WalletNoExists("wallet not found");
     }
-
 
 }

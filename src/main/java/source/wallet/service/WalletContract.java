@@ -12,7 +12,7 @@ public interface WalletContract {
 
     WalletEntity findByAddress(String address);
 
-    boolean existsByName(String name);
+    boolean existsByUserIdAndName(Long id, String name);
 
     List<WalletEntity> findByUserId(Long userId);
 

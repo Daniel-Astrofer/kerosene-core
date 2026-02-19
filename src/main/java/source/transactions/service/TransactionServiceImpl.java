@@ -3,33 +3,43 @@ package source.transactions.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 import source.transactions.dto.EstimatedFeeDTO;
-import source.transactions.dto.SignedTransactionDTO;
 import source.transactions.dto.TransactionRequestDTO;
 import source.transactions.dto.TransactionResponseDTO;
+import source.transactions.dto.UnsignedTransactionDTO;
 import source.transactions.infra.BlockchainInfoClient;
+import source.transactions.model.PendingTransaction;
+import source.transactions.repository.PendingTransactionRedisRepository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
     private final BlockchainInfoClient blockchainInfo;
+    private final PendingTransactionRedisRepository pendingTxRepository;
+    private final BlockchainMonitorService monitorService;
     private static final long AVERAGE_TX_SIZE_BYTES = 225; // Tamanho médio de uma TX
 
-    public TransactionServiceImpl(BlockchainInfoClient blockchainInfo) {
+    public TransactionServiceImpl(BlockchainInfoClient blockchainInfo,
+            PendingTransactionRedisRepository pendingTxRepository,
+            BlockchainMonitorService monitorService) {
         this.blockchainInfo = blockchainInfo;
+        this.pendingTxRepository = pendingTxRepository;
+        this.monitorService = monitorService;
     }
 
     @Override
     public EstimatedFeeDTO estimateFee(BigDecimal amount) {
         // Consultar taxas recomendadas da blockchain
         JsonNode fees = blockchainInfo.getRecommendedFees();
-        
+
         Long fastSatPerByte = 50L;
         Long standardSatPerByte = 35L;
         Long slowSatPerByte = 15L;
-        
+
         if (fees != null) {
             fastSatPerByte = fees.has("fastestFee") ? fees.get("fastestFee").asLong(50L) : 50L;
             standardSatPerByte = fees.has("halfHourFee") ? fees.get("halfHourFee").asLong(35L) : 35L;
@@ -51,8 +61,7 @@ public class TransactionServiceImpl implements TransactionService {
         BigDecimal totalToSend = amount.add(standardBtc);
 
         EstimatedFeeDTO estimate = new EstimatedFeeDTO(
-                fastSatPerByte, standardSatPerByte, slowSatPerByte, amountReceived, totalToSend
-        );
+                fastSatPerByte, standardSatPerByte, slowSatPerByte, amountReceived, totalToSend);
         estimate.setEstimatedFastBtc(fastBtc);
         estimate.setEstimatedStandardBtc(standardBtc);
         estimate.setEstimatedSlowBtc(slowBtc);
@@ -61,52 +70,89 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
-    public TransactionResponseDTO sendTransaction(TransactionRequestDTO request) {
-        BigDecimal totalAmount = request.getAmount();
-        String from = request.getFromAddress();
-        String to = request.getToAddress();
-        Long feeSatoshis = request.getFeeSatoshis() != null ? request.getFeeSatoshis() : 0L;
+    public UnsignedTransactionDTO createUnsignedTransaction(TransactionRequestDTO request) {
+        // Gerar um txid temporário para rastreamento
+        String tempTxId = "temp-" + UUID.randomUUID().toString();
 
-        // Converter fee de satoshis para BTC
-        BigDecimal feeBtc = satoshisToBtc(feeSatoshis);
+        // Criar DTO com transação não assinada
+        UnsignedTransactionDTO unsignedTx = new UnsignedTransactionDTO();
+        unsignedTx.setTxId(tempTxId);
+        unsignedTx.setFromAddress(request.getFromAddress());
+        unsignedTx.setToAddress(request.getToAddress());
+        unsignedTx.setTotalAmount(request.getAmount());
+        unsignedTx.setFee(request.getFeeSatoshis());
 
-        // Descontar a taxa do valor total
-        BigDecimal amountReceived = totalAmount.subtract(feeBtc);
+        // Aqui você deve gerar a raw transaction hex usando bitcoinj ou similar
+        // Por enquanto retornamos placeholder
+        unsignedTx.setRawTxHex("RAW_TX_HEX_PLACEHOLDER");
 
-        // Validar que o valor final seja positivo
-        if (amountReceived.compareTo(BigDecimal.ZERO) <= 0) {
-            return new TransactionResponseDTO("error", "fee_exceeds_amount", feeSatoshis, BigDecimal.ZERO);
-        }
+        // Registrar no banco para monitoramento futuro (quando usuário fazer broadcast)
+        // Não salvamos ainda porque não temos o txid real
 
-        // Enviar apenas o valor final (já descontada a taxa)
-        String txid = blockchainInfo.sendTransaction(from, to, amountReceived);
-
-        return new TransactionResponseDTO(txid, "broadcasted", feeSatoshis, amountReceived);
+        return unsignedTx;
     }
 
     @Override
-    public TransactionResponseDTO getStatus(String txid) {
+    public TransactionResponseDTO getTransactionStatus(String txid) {
+        // Primeiro verificar se temos no Redis
+        PendingTransaction pending = monitorService.getTransaction(txid);
+
+        if (pending != null) {
+            return new TransactionResponseDTO(
+                    txid,
+                    pending.getStatus().toLowerCase(),
+                    pending.getFeeSatoshis(),
+                    pending.getAmount());
+        }
+
+        // Se não tiver no Redis, consultar blockchain diretamente
         JsonNode info = blockchainInfo.getTransactionInfo(txid);
         String status = "unknown";
         Long feeSats = 0L;
+
         if (info != null) {
             int confs = info.has("block_height") && !info.get("block_height").isNull() ? 1 : 0;
-            if (confs > 0) status = "confirmed"; else status = "unconfirmed";
+            if (confs > 0)
+                status = "confirmed";
+            else
+                status = "unconfirmed";
+
             if (info.has("fee")) {
-                long feeSatoshis = info.get("fee").asLong(0L);
-                feeSats = feeSatoshis;
+                feeSats = info.get("fee").asLong(0L);
             }
         }
+
         return new TransactionResponseDTO(txid, status, feeSats);
     }
 
     @Override
-    public TransactionResponseDTO broadcastSignedTransaction(SignedTransactionDTO signedTx) {
-        String txid = blockchainInfo.pushSignedTransaction(signedTx.getRawTxHex());
-        if (txid == null || txid.isEmpty()) {
-            return new TransactionResponseDTO("error", "failed", 0L);
+    public void checkPendingTransactions() {
+        // Delegado ao BlockchainMonitorService que roda via @Scheduled
+        List<PendingTransaction> pending = pendingTxRepository.findByStatus("PENDING");
+        for (PendingTransaction tx : pending) {
+            monitorService.checkTransaction(tx);
         }
-        return new TransactionResponseDTO(txid, "broadcasted", 0L);
+    }
+
+    @Override
+    public TransactionResponseDTO broadcastTransaction(String rawTxHex) {
+        String txid = blockchainInfo.pushSignedTransaction(rawTxHex);
+
+        if (txid == null) {
+            throw new RuntimeException("Falha ao transmitir transação");
+        }
+
+        // Registrar como pendente para monitoramento
+        PendingTransaction pending = new PendingTransaction();
+        pending.setTxid(txid);
+        pending.setStatus("PENDING");
+        pending.setRawTxHex(rawTxHex);
+        // pending.setTimestamp(System.currentTimeMillis()); // CreatedAt is set in
+        // constructor
+
+        pendingTxRepository.save(pending);
+
+        return new TransactionResponseDTO(txid, "pending", 0L);
     }
 
     private BigDecimal satoshisToBtc(Long satoshis) {
@@ -114,5 +160,3 @@ public class TransactionServiceImpl implements TransactionService {
                 BigDecimal.valueOf(100_000_000), 8, RoundingMode.HALF_UP);
     }
 }
-
-

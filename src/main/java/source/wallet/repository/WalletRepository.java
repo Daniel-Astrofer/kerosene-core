@@ -1,6 +1,5 @@
 package source.wallet.repository;
 
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import source.wallet.model.WalletEntity;
@@ -18,4 +17,6 @@ public interface WalletRepository extends JpaRepository<WalletEntity, Long> {
     List<WalletEntity> findByUserId(Long id);
 
     boolean existsByName(String name);
+
+    boolean existsByUserIdAndName(Long id, String name);
 }

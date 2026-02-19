@@ -42,7 +42,7 @@ public class WalletUseCase {
             throw new AuthExceptions.UserNoExists("invalid user");}
 
         String nameUpperCase = dto.getName() != null ? dto.getName().toUpperCase() : null;
-        if (walletService.existsByName(nameUpperCase)) {
+        if (walletService.existsByUserIdAndName(id,nameUpperCase)) {
             throw new WalletExceptions.WalletNameAlredyExists("you are using this name");
         }
 

@@ -16,16 +16,13 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-
-
 @Configuration
 @EnableWebSecurity
 public class Security {
 
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtAuthenticationFilter jwtAuthenticationFilter)
+            JwtAuthenticationFilter jwtAuthenticationFilter)
             throws Exception {
         http
 
@@ -40,17 +37,17 @@ public class Security {
                         .requestMatchers("/auth/login").permitAll()
                         .requestMatchers("/auth/login/totp/verify").permitAll()
                         .requestMatchers("/v3/api-docs").permitAll()
-                        .anyRequest().authenticated()
-                ).addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
+                        .requestMatchers("/ws/**").permitAll() // Allow WebSocket connections
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtServicer jwtService,
-                                                           @Qualifier("handlerExceptionResolver")HandlerExceptionResolver resolver) {
-        return new JwtAuthenticationFilter(jwtService,resolver);
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
+        return new JwtAuthenticationFilter(jwtService, resolver);
     }
 
 }

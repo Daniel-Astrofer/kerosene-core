@@ -25,25 +25,23 @@ import java.security.SignatureException;
 import java.util.Collections;
 import java.util.Optional;
 
-
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtServicer jwtService;
     private final JwtService jwtServiceImpl;
     private final HandlerExceptionResolver resolver;
 
-
     public JwtAuthenticationFilter(
             @Qualifier("JwtService") JwtServicer jwtService,
-            @Qualifier("handlerExceptionResolver")HandlerExceptionResolver resolver) {
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
         this.jwtService = jwtService;
         this.jwtServiceImpl = (JwtService) jwtService;
         this.resolver = resolver;
     }
 
-
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
 
@@ -51,26 +49,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             String token = header.substring(7);
             UsernamePasswordAuthenticationToken auth = null;
-            try{
+            try {
                 Long userId = jwtService.extractId(token);
                 String deviceHash = jwtService.extractDevice(token);
-                
-                // Verificar se device hash corresponde
-                if (!deviceHash.equals(request.getHeader("X-Device-Hash"))){
-                    throw new Exception("Invalid session");
+
+                // Relax device hash check for WebSocket handshakes or specific paths if needed
+                String path = request.getRequestURI();
+                boolean isWs = path != null && path.startsWith("/ws/");
+                String requestedDeviceHash = request.getHeader("X-Device-Hash");
+
+                if (!isWs && (requestedDeviceHash == null || !deviceHash.equals(requestedDeviceHash))) {
+                    throw new Exception("Invalid session: Device hash mismatch");
                 }
-                
+
                 auth = new UsernamePasswordAuthenticationToken(userId, token, Collections.singletonList(() -> "USER"));
-                
+
                 // Verificar se o token precisa ser renovado
                 if (jwtServiceImpl.shouldRenewToken(token)) {
                     String newToken = jwtService.generateToken(userId, deviceHash);
                     // Adicionar novo token no header da resposta
                     response.setHeader("X-New-Token", newToken);
                 }
-                
-            }catch (Exception e){
-                resolver.resolveException(request,response,null, new AuthExceptions.UnrrecognizedDevice("invalid session"));
+
+            } catch (Exception e) {
+                resolver.resolveException(request, response, null,
+                        new AuthExceptions.UnrrecognizedDevice("invalid session"));
                 return;
             }
             SecurityContextHolder.getContext().setAuthentication(auth);
@@ -78,4 +81,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
+
 }

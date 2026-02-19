@@ -4,14 +4,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
+import source.ledger.service.LedgerService;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.infra.BlockchainInfoClient;
-import source.transactions.model.PaymentLinkEntity;
-import source.transactions.repository.PaymentLinkRepository;
+import source.wallet.service.WalletService;
+import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -26,13 +30,22 @@ public class PaymentLinkServiceRedisTest {
     @Autowired
     private RedisTemplate<String, PaymentLinkDTO> redisTemplate;
 
-    @Autowired
-    private PaymentLinkRepository paymentLinkRepository;
+    @MockBean
+    private LedgerService ledgerService;
+
+    @MockBean
+    private WalletService walletService;
+
+    @MockBean
+    private BlockchainInfoClient blockchainInfoClient;
 
     @BeforeEach
     public void setup() {
-        // Limpar Redis antes de cada teste
-        redisTemplate.getConnectionFactory().getConnection().flushDb();
+        try {
+            redisTemplate.getConnectionFactory().getConnection().flushDb();
+        } catch (Exception e) {
+            // ignore
+        }
     }
 
     /**
@@ -40,7 +53,6 @@ public class PaymentLinkServiceRedisTest {
      */
     @Test
     public void testPaymentLinkStoredInRedis() {
-        // Criar um payment link
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Depósito de teste";
@@ -61,11 +73,10 @@ public class PaymentLinkServiceRedisTest {
     }
 
     /**
-     * Testa se o payment link é recuperado do Redis (mais rápido que do banco)
+     * Testa se o payment link é recuperado do Redis
      */
     @Test
     public void testPaymentLinkRetrievedFromRedis() {
-        // Criar um payment link
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Teste Redis";
@@ -84,29 +95,36 @@ public class PaymentLinkServiceRedisTest {
     }
 
     /**
-     * Testa se o status de expiração é sincronizado no Redis
+     * Testa o fluxo de confirmação e creditamento na carteira
      */
     @Test
-    public void testPaymentLinkExpirationSync() {
-        // Criar um payment link com expiração imediata
-        Long userId = 1L;
-        BigDecimal amountBtc = new BigDecimal("0.1");
-        String description = "Link expirado";
+    public void testConfirmPaymentCreditsWallet() {
+        Long userId = 123L;
+        BigDecimal amount = new BigDecimal("1.0");
+        String description = "Credit Test";
 
-        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
-        String linkId = createdLink.getId();
+        // Mock Wallet
+        WalletEntity mockWallet = new WalletEntity();
+        mockWallet.setId(999L);
+        when(walletService.findByUserId(userId)).thenReturn(Collections.singletonList(mockWallet));
 
-        // Simular expiração no banco
-        PaymentLinkEntity entity = paymentLinkRepository.findById(linkId).orElseThrow();
-        entity.setExpiresAt(LocalDateTime.now().minusMinutes(1));
-        paymentLinkRepository.save(entity);
+        // Mock Blockchain validation
+        when(blockchainInfoClient.validateDepositTransaction(anyString(), anyString(), any(BigDecimal.class)))
+                .thenReturn(true);
 
-        // Recuperar do Redis - deve validar expiração
-        PaymentLinkDTO retrievedLink = paymentLinkService.getPaymentLink(linkId);
+        PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, amount, description);
+        String txid = "tx_mock_123";
+        String fromAddress = "addr_from";
 
-        assertEquals("expired", retrievedLink.getStatus());
+        PaymentLinkDTO confirmed = paymentLinkService.confirmPayment(link.getId(), txid, fromAddress);
 
-        System.out.println("✅ Status de expiração sincronizado no Redis: " + linkId);
+        assertEquals("paid", confirmed.getStatus());
+        assertEquals(txid, confirmed.getTxid());
+
+        // VERIFY LEDGER CALL
+        verify(ledgerService, times(1)).updateBalance(eq(999L), eq(amount), contains("PAYMENT_LINK_"));
+
+        System.out.println("✅ Ledger creditado corretamente!");
     }
 
     /**
@@ -114,7 +132,6 @@ public class PaymentLinkServiceRedisTest {
      */
     @Test
     public void testRedisKeyTTL() {
-        // Criar um payment link
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Teste TTL";
@@ -129,7 +146,7 @@ public class PaymentLinkServiceRedisTest {
         assertNotNull(ttl);
         assertTrue(ttl > 0 && ttl <= 10800, "TTL deve estar entre 0 e 10800 segundos");
 
-        System.out.println("✅ Redis TTL válido: " + ttl + " segundos (máximo 3 horas)");
+        System.out.println("✅ Redis TTL válido: " + ttl + " segundos");
     }
 
     /**
@@ -137,7 +154,6 @@ public class PaymentLinkServiceRedisTest {
      */
     @Test
     public void testRemoveFromRedis() {
-        // Criar um payment link
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Teste remoção";
@@ -156,10 +172,6 @@ public class PaymentLinkServiceRedisTest {
         // Validar que foi removido
         PaymentLinkDTO dtoAfterRemoval = redisTemplate.opsForValue().get(redisKey);
         assertNull(dtoAfterRemoval);
-
-        // Mas deve estar no banco
-        PaymentLinkEntity entity = paymentLinkRepository.findById(linkId).orElse(null);
-        assertNotNull(entity);
 
         System.out.println("✅ Payment link removido do Redis com sucesso");
     }
