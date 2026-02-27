@@ -3,10 +3,10 @@ package source.wallet.service;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import source.auth.application.orchestrator.login.contracts.Signup;
 import source.auth.application.service.authentication.contracts.SignupVerifier;
 import source.auth.application.service.cripto.contracts.Hasher;
-import source.wallet.dto.WalletDTO;
+import source.wallet.dto.WalletRequestDTO;
+import source.wallet.dto.WalletUpdateDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
@@ -28,22 +28,22 @@ public class WalletService implements WalletContract {
     }
 
     public void save(WalletEntity entity) {
-        verify.checkPassphraseBip39(entity.getAddress());
-        entity.setAddress(hash.hash(entity.getAddress()));
+        verify.checkPassphraseBip39(entity.getPassphraseHash());
+        entity.setPassphraseHash(hash.hash(entity.getPassphraseHash()));
         walletRepository.save(entity);
     }
 
     public WalletEntity findByName(String name) {
         String upperName = name != null ? name.toUpperCase() : null;
-        System.out.println("🔎 [WALLET] findByName - Input: '" + name + "' -> Uppercase: '" + upperName + "'");
-        WalletEntity wallet = walletRepository.findByName(upperName);
-        System.out.println("🔎 [WALLET] Result: "
-                + (wallet != null ? "Found ID=" + wallet.getId() + ", Name=" + wallet.getName() : "NULL"));
-        return wallet;
+        return walletRepository.findByName(upperName);
     }
 
-    public WalletEntity findByAddress(String address) {
-        return walletRepository.findByAddress(address);
+    public WalletEntity findById(Long id) {
+        return walletRepository.findById(id).orElse(null);
+    }
+
+    public WalletEntity findByPassphraseHash(String passphraseHash) {
+        return walletRepository.findByPassphraseHash(passphraseHash);
     }
 
     public boolean existsByUserIdAndName(Long id, String name) {
@@ -58,47 +58,36 @@ public class WalletService implements WalletContract {
         return walletRepository.findByUserId(userId);
     }
 
-    public boolean deleteWallet(Long id, WalletDTO wallet) {
-        wallet.setPassphrase(hash.hash(wallet.getPassphrase()));
-        List<WalletEntity> dbWallet = walletRepository.findByUserId(id);
-        if (dbWallet.isEmpty()) {
-            throw new WalletExceptions.WalletNoExists("you no have any wallet");
+    public boolean deleteWallet(Long id, WalletRequestDTO wallet) {
+        String walletNameUpperCase = wallet.name() != null ? wallet.name().toUpperCase() : null;
+        WalletEntity dbWallet = walletRepository.findByUserIdAndName(id, walletNameUpperCase)
+                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet no exists"));
+
+        String hashedPassphrase = hash.hash(wallet.passphrase());
+        if (!dbWallet.getPassphraseHash().equals(hashedPassphrase)) {
+            throw new WalletExceptions.WalletNoExists("invalid passphrase for deletion");
         }
-        String walletNameUpperCase = wallet.getName() != null ? wallet.getName().toUpperCase() : null;
-        for (WalletEntity walletName : dbWallet) {
-            if (walletName.getName().equals(walletNameUpperCase)) {
-                walletRepository.delete(walletName);
-                return true;
-            }
-        }
-        return false;
+
+        walletRepository.delete(dbWallet);
+        return true;
     }
 
-    public void updateWallet(Long userId, WalletDTO dto) {
-        List<WalletEntity> userWallets = walletRepository.findByUserId(userId);
+    public void updateWallet(Long userId, WalletUpdateDTO dto) {
+        String dtoNameUpperCase = dto.name() != null ? dto.name().toUpperCase() : null;
+        WalletEntity wallet = walletRepository.findByUserIdAndName(userId, dtoNameUpperCase)
+                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
 
-        if (userWallets.isEmpty()) {
-            throw new WalletExceptions.WalletNoExists("you no have any wallet");
-        }
+        String newNameUpper = dto.newName() != null ? dto.newName().toUpperCase() : null;
 
-        if (dto.getNewName() != null && !dto.getNewName().toUpperCase().equals(dto.getName())) {
-            if (walletRepository.existsByUserIdAndName(userId, dto.getNewName())) {
+        if (newNameUpper != null && !newNameUpper.equals(dtoNameUpperCase)) {
+            if (walletRepository.existsByUserIdAndName(userId, newNameUpper)) {
                 throw new WalletExceptions.WalletNameAlredyExists("new name already in use");
             }
         }
 
-        String dtoNameUpperCase = dto.getName() != null ? dto.getName().toUpperCase() : null;
-        for (WalletEntity wallet : userWallets) {
-            if (wallet.getName().equals(dtoNameUpperCase)) {
-                if (dto.getNewName() != null && !dto.getNewName().isEmpty()) {
-                    wallet.setName(dto.getNewName());
-                }
-                walletRepository.save(wallet);
-                return;
-            }
+        if (newNameUpper != null && !newNameUpper.isEmpty()) {
+            wallet.setName(dto.newName());
         }
-
-        throw new WalletExceptions.WalletNoExists("wallet not found");
+        walletRepository.save(wallet);
     }
-
 }

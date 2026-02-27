@@ -15,39 +15,90 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import source.auth.application.infra.security.RateLimitFilter; // Added import for RateLimitFilter
 
 @Configuration
 @EnableWebSecurity
+@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 public class Security {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter)
-            throws Exception {
-        http
+        @Bean
+        public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                        JwtAuthenticationFilter jwtAuthenticationFilter,
+                        RateLimitFilter rateLimitFilter)
+                        throws Exception {
+                http
 
-                .csrf(AbstractHttpConfigurer::disable)
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                                .csrf(AbstractHttpConfigurer::disable)
+                                .headers(headers -> headers
+                                                .contentSecurityPolicy(
+                                                                csp -> csp.policyDirectives("default-src 'self'"))
+                                                .frameOptions(frame -> frame.deny())
+                                                .xssProtection(xss -> xss.headerValue(
+                                                                org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
+                                                .httpStrictTransportSecurity(hsts -> hsts
+                                                                .includeSubDomains(true)
+                                                                .maxAgeInSeconds(31536000))) // 1 year
 
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                .authorizeHttpRequests(auth -> auth
+                                .authorizeHttpRequests(auth -> auth
 
-                        .requestMatchers("/auth/signup").permitAll()
-                        .requestMatchers("/auth/signup/totp/verify").permitAll()
-                        .requestMatchers("/auth/login").permitAll()
-                        .requestMatchers("/auth/login/totp/verify").permitAll()
-                        .requestMatchers("/v3/api-docs").permitAll()
-                        .requestMatchers("/ws/**").permitAll() // Allow WebSocket connections
-                        .anyRequest().authenticated())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                                                .requestMatchers("/auth/signup").permitAll()
+                                                .requestMatchers("/auth/signup/totp/verify").permitAll()
+                                                .requestMatchers("/auth/login").permitAll()
+                                                .requestMatchers("/auth/login/totp/verify").permitAll()
+                                                .requestMatchers("/auth/pow/challenge").permitAll()
+                                                .requestMatchers(
+                                                                "/v3/api-docs",
+                                                                "/v3/api-docs/**",
+                                                                "/swagger-ui",
+                                                                "/swagger-ui/**",
+                                                                "/swagger-ui.html",
+                                                                "/swagger-resources",
+                                                                "/swagger-resources/**",
+                                                                "/configuration/ui",
+                                                                "/configuration/security",
+                                                                "/webjars/**",
+                                                                "/error",
+                                                                "/ws/**",
+                                                                "/actuator/**")
+                                                .permitAll()
+                                                .anyRequest().authenticated())
+                                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        return http.build();
-    }
+                return http.build();
+        }
 
-    @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtServicer jwtService,
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
-        return new JwtAuthenticationFilter(jwtService, resolver);
-    }
+        @Bean
+        public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+                org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
+                configuration.setAllowedOriginPatterns(java.util.List.of("*")); // Allow all origins for dev/testing
+                configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                configuration.setAllowedHeaders(java.util.List.of("*"));
+                configuration.setAllowCredentials(true);
+                org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/**", configuration);
+                return source;
+        }
+
+        @Bean
+        public JwtAuthenticationFilter jwtAuthenticationFilter(JwtServicer jwtService,
+                        @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) {
+                return new JwtAuthenticationFilter(jwtService, resolver);
+        }
+
+        @Bean
+        public UserDetailsService userDetailsService() {
+                return username -> {
+                        throw new UsernameNotFoundException(
+                                        "UserDetails service not strictly used, managed by JWT filter");
+                };
+        }
 
 }

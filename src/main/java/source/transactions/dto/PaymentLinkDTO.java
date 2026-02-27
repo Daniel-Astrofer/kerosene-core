@@ -6,11 +6,12 @@ import java.time.LocalDateTime;
 public class PaymentLinkDTO {
 
     private String id;
-    private Long userId;
+    private Long userId; // Can be null if tied to an onboarding session
+    private String sessionId; // Used for onboarding before a User is persisted
     private BigDecimal amountBtc;
     private String description;
     private String depositAddress;
-    private String status;  // "pending", "paid", "expired", "completed"
+    private String status; // "pending", "paid", "expired", "completed"
     private String txid;
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
@@ -42,6 +43,14 @@ public class PaymentLinkDTO {
 
     public void setUserId(Long userId) {
         this.userId = userId;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
     }
 
     public BigDecimal getAmountBtc() {

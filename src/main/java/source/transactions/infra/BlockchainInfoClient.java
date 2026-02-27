@@ -2,7 +2,6 @@ package source.transactions.infra;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -11,89 +10,42 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Unified Blockchain Client that delegates to Alchemy for Node RPC
+ * and Mempool.space for indexed address data.
+ */
 @Component
 public class BlockchainInfoClient {
 
-    private static final String API_BASE = "https://blockchain.info";
-    private final String apiKey;
+    private final AlchemyClient alchemyClient;
     private final RestTemplate rest;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final boolean mockMode;
 
-    public BlockchainInfoClient(@Value("${blockchain.info.api-key:}") String apiKey,
-            @Value("${bitcoin.mock-mode:false}") boolean mockMode) {
-        this.apiKey = apiKey;
+    public BlockchainInfoClient(AlchemyClient alchemyClient) {
+        this.alchemyClient = alchemyClient;
         this.rest = new RestTemplate();
-        this.mockMode = mockMode;
-
-        if (mockMode) {
-            System.out.println("⚠️  MODO MOCK ATIVADO - Não fará chamadas reais à API");
-        }
     }
 
+    /**
+     * @deprecated Use pushSignedTransaction with actual signed hex from client.
+     */
+    @Deprecated
     public String sendTransaction(String fromAddress, String toAddress, BigDecimal amountBtc) {
-        // Blockchain.info push_tx requires a signed raw transaction hex
-        // For a simple flow, we simulate using their paid API
-        // In production, sign tx client-side and push here
-        try {
-            if (apiKey == null || apiKey.isEmpty()) {
-                return "mock-tx-" + System.currentTimeMillis();
-            }
-            // Push signed tx: POST /pushtx with param tx=<hex>
-            // This is a placeholder - real implementation needs signed hex
-            String url = API_BASE + "/pushtx?tx=<signed_hex>&api_code=" + apiKey;
-            System.out.println("⚠️  To send real tx via Blockchain.info, sign tx client-side and call: " + url);
-            return "mock-tx-" + System.currentTimeMillis();
-        } catch (Exception e) {
-            System.err.println("Blockchain.info send failed: " + e.getMessage());
-            return "mock-tx-" + System.currentTimeMillis();
-        }
+        System.out.println("⚠️  sendTransaction is deprecated. Use pushSignedTransaction.");
+        return null;
     }
 
     public JsonNode getTransactionInfo(String txid) {
-        // Support for Mock Mode
-        if (mockMode && (txid.startsWith("mock-tx"))) {
-            try {
-                // Return a simulated confirmed transaction JSON
-                ObjectMapper mockMapper = new ObjectMapper();
-                var mockNode = mockMapper.createObjectNode();
-                mockNode.put("hash", txid);
-                mockNode.put("ver", 1);
-                mockNode.put("block_height", 800000); // Simulates confirmed tx (non-null block_height)
-                mockNode.put("time", System.currentTimeMillis() / 1000);
-                mockNode.put("fee", 5000);
-
-                var outArray = mockNode.putArray("out");
-                var outItem = outArray.addObject();
-                outItem.put("value", 100000);
-                outItem.put("addr", "mock-address");
-
-                var inputsArray = mockNode.putArray("inputs");
-                var inputItem = inputsArray.addObject();
-                inputItem.put("sequence", 4294967295L);
-
-                return mockNode;
-            } catch (Exception e) {
-                System.err.println("Error creating mock transaction info: " + e.getMessage());
-                return null;
-            }
-        }
-
-        try {
-            String url = API_BASE + "/rawtx/" + txid;
-            if (apiKey != null && !apiKey.isEmpty()) {
-                url += "?api_code=" + apiKey;
-            }
-            ResponseEntity<String> resp = rest.getForEntity(url, String.class);
-            if (!resp.getStatusCode().is2xxSuccessful()) {
-                return null;
-            }
-            JsonNode tree = mapper.readTree(resp.getBody());
-            return tree;
-        } catch (Exception e) {
-            System.err.println("Blockchain.info query failed: " + e.getMessage());
+        if (!isValidTxid(txid)) {
+            System.err.println("⚠️  Invalid TXID format: " + txid);
             return null;
         }
+        // Use Alchemy JSON-RPC getrawtransaction (verbose=1)
+        return alchemyClient.getRawTransaction(txid, true);
+    }
+
+    private boolean isValidTxid(String txid) {
+        return txid != null && txid.matches("^[a-fA-F0-9]{64}$");
     }
 
     public Map<String, Object> getTransaction(String txid) {
@@ -106,16 +58,18 @@ public class BlockchainInfoClient {
             Map<String, Object> result = new HashMap<>();
             result.put("txid", txid);
 
-            // Extrair confirmações
+            // Alchemy returns blockheight/confirmations differently
             int confirmations = 0;
-            if (jsonNode.has("block_height") && !jsonNode.get("block_height").isNull()) {
-                confirmations = 1; // Simplificado - na prática calcular: current_height - block_height + 1
+            if (jsonNode.has("confirmations")) {
+                confirmations = jsonNode.get("confirmations").asInt(0);
             }
             result.put("confirmations", confirmations);
 
-            // Extrair fee
+            // Extrair fee (Alchemy getrawtransaction verbose=1 includes fee in some
+            // versions/nodes,
+            // otherwise we'd need gettxout or mempool)
             if (jsonNode.has("fee")) {
-                result.put("fee", jsonNode.get("fee").asLong(0L));
+                result.put("fee", (long) (jsonNode.get("fee").asDouble(0) * 1e8));
             }
 
             return result;
@@ -127,64 +81,36 @@ public class BlockchainInfoClient {
 
     public String getAddressBalance(String address) {
         try {
-            String url = API_BASE + "/q/addressbalance/" + address;
-            if (apiKey != null && !apiKey.isEmpty()) {
-                url += "?api_code=" + apiKey;
-            }
+            // Use Mempool.space for address balance (indexed data)
+            String url = "https://mempool.space/api/address/" + address;
             ResponseEntity<String> resp = rest.getForEntity(url, String.class);
             if (!resp.getStatusCode().is2xxSuccessful()) {
                 return "0";
             }
-            return resp.getBody();
+            JsonNode node = mapper.readTree(resp.getBody());
+            long funded = node.get("chain_stats").get("funded_txo_sum").asLong(0);
+            long spent = node.get("chain_stats").get("spent_txo_sum").asLong(0);
+            return String.valueOf(funded - spent);
         } catch (Exception e) {
-            System.err.println("Blockchain.info balance query failed: " + e.getMessage());
+            System.err.println("Mempool.space balance query failed: " + e.getMessage());
             return "0";
         }
     }
 
     public String pushSignedTransaction(String rawTxHex) {
-        if (mockMode) {
-            System.out.println("⚠️  [MOCK] Push Transaction: " + rawTxHex);
-            return "mock-txid-" + java.util.UUID.randomUUID().toString();
-        }
-        try {
-            String url = API_BASE + "/pushtx";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-            String body = "tx=" + rawTxHex;
-            if (apiKey != null && !apiKey.isEmpty()) {
-                body += "&api_code=" + apiKey;
-            }
-
-            HttpEntity<String> req = new HttpEntity<>(body, headers);
-            ResponseEntity<String> resp = rest.postForEntity(url, req, String.class);
-
-            if (!resp.getStatusCode().is2xxSuccessful()) {
-                System.err.println("Failed to push TX: " + resp.getStatusCode());
-                return null;
-            }
-
-            // Blockchain.info returns txid on success
-            return resp.getBody();
-        } catch (Exception e) {
-            System.err.println("Blockchain.info push signed tx failed: " + e.getMessage());
-            return null;
-        }
+        // Use Alchemy JSON-RPC sendrawtransaction
+        return alchemyClient.sendRawTransaction(rawTxHex);
     }
 
     public JsonNode getRecommendedFees() {
         try {
-            // Usar Mempool.space API para obter taxas recomendadas
+            // Mempool.space is the standard for fee estimation
             String url = "https://mempool.space/api/v1/fees/recommended";
             ResponseEntity<String> resp = rest.getForEntity(url, String.class);
-
             if (!resp.getStatusCode().is2xxSuccessful()) {
                 return null;
             }
-
-            JsonNode tree = mapper.readTree(resp.getBody());
-            return tree;
+            return mapper.readTree(resp.getBody());
         } catch (Exception e) {
             System.err.println("Failed to fetch recommended fees: " + e.getMessage());
             return null;
@@ -193,87 +119,68 @@ public class BlockchainInfoClient {
 
     public boolean validateDepositTransaction(String txid, String expectedToAddress, BigDecimal expectedAmount) {
         try {
-            // MODO MOCK
-            if (mockMode) {
-                return validateDepositMock(txid, expectedToAddress, expectedAmount);
-            }
-
-            // Consultar TX na blockchain
             JsonNode txInfo = getTransactionInfo(txid);
             if (txInfo == null) {
-                System.err.println("⚠️  TX não encontrada: " + txid);
+                System.err.println("⚠️  TX não encontrada no Alchemy: " + txid);
                 return false;
             }
 
-            // Validar que enviou para o endereço correto
-            if (!txInfo.has("out")) {
-                System.err.println("⚠️  TX não tem outputs");
+            if (!txInfo.has("vout")) {
+                System.err.println("⚠️  TX não tem outputs (vout)");
                 return false;
             }
 
-            JsonNode outputs = txInfo.get("out");
+            JsonNode outputs = txInfo.get("vout");
             boolean foundCorrectOutput = false;
             double totalReceived = 0;
 
             for (JsonNode output : outputs) {
-                if (output.has("addr") && output.get("addr").asText().equals(expectedToAddress)) {
-                    double satoshis = output.get("value").asDouble(0);
-                    double btc = satoshis / 1e8;
-                    totalReceived += btc;
-                    foundCorrectOutput = true;
+                JsonNode scriptPubKey = output.get("scriptPubKey");
+                if (scriptPubKey != null && scriptPubKey.has("address")) {
+                    String addr = scriptPubKey.get("address").asText();
+                    if (addr.equals(expectedToAddress)) {
+                        double valueBtc = output.get("value").asDouble(0);
+                        totalReceived += valueBtc;
+                        foundCorrectOutput = true;
+                    }
                 }
             }
 
             if (!foundCorrectOutput) {
-                System.err.println("⚠️  TX não enviou para o endereço esperado");
+                System.err.println("⚠️  TX não enviou para o endereço esperado: " + expectedToAddress);
                 return false;
             }
 
-            // Validar que o valor é pelo menos o esperado
             if (totalReceived < expectedAmount.doubleValue()) {
-                System.err.println(
-                        "⚠️  Valor recebido (" + totalReceived + ") menor que esperado (" + expectedAmount + ")");
+                System.err.println("⚠️  Valor insuficiente: " + totalReceived + " < " + expectedAmount);
                 return false;
             }
-
-            // Validar que TX está assinada (tem inputs válidos)
-            if (!txInfo.has("inputs") || txInfo.get("inputs").size() == 0) {
-                System.err.println("⚠️  TX não tem inputs válidos (não foi assinada)");
-                return false;
-            }
-
-            System.out.println("✅ TX validada: " + txid);
-            System.out.println("   Endereço: " + expectedToAddress);
-            System.out.println("   Valor recebido: " + totalReceived + " BTC");
-            System.out.println(
-                    "   Confirmações: " + (txInfo.has("block_height") && !txInfo.get("block_height").isNull() ? 1 : 0));
 
             return true;
-
         } catch (Exception e) {
             System.err.println("Erro ao validar TX: " + e.getMessage());
             return false;
         }
     }
 
-    private boolean validateDepositMock(String txid, String expectedToAddress, BigDecimal expectedAmount) {
-        // Validações básicas no modo mock
-        if (txid == null || txid.isEmpty()) {
-            System.err.println("⚠️  TXID inválido");
-            return false;
+    /**
+     * Fetches the real-time BTC to BRL price from Binance public API.
+     * Returns the price as a BigDecimal. Returns null if the request fails.
+     */
+    public BigDecimal getBtcPriceInBrl() {
+        try {
+            String url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCBRL";
+            ResponseEntity<String> resp = rest.getForEntity(url, String.class);
+            if (!resp.getStatusCode().is2xxSuccessful()) {
+                System.err.println("❌ Erro ao buscar preço BTC/BRL: HTTP " + resp.getStatusCode());
+                return null;
+            }
+            JsonNode node = mapper.readTree(resp.getBody());
+            String priceStr = node.get("price").asText();
+            return new BigDecimal(priceStr);
+        } catch (Exception e) {
+            System.err.println("❌ Erro ao conectar com Binance API: " + e.getMessage());
+            return null;
         }
-
-        if (expectedAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            System.err.println("⚠️  Valor deve ser positivo");
-            return false;
-        }
-
-        // Simular validação bem-sucedida
-        System.out.println("✅ [MOCK] TX validada: " + txid);
-        System.out.println("   Endereço: " + expectedToAddress);
-        System.out.println("   Valor recebido: " + expectedAmount + " BTC");
-        System.out.println("   Confirmações: 1 (simulado)");
-
-        return true;
     }
 }

@@ -7,15 +7,14 @@ import source.auth.application.service.cripto.contracts.Hasher;
 import source.ledger.dto.LedgerDTO;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.exceptions.LedgerExceptions;
-import source.ledger.repository.LedgerRepository;
 import source.ledger.event.BalanceEventPublisher;
+import source.ledger.repository.LedgerRepository;
+import source.ledger.repository.LedgerTransactionHistoryRepository;
+import source.ledger.entity.LedgerTransactionHistory;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,13 +23,16 @@ public class LedgerService implements LedgerContract {
     private final LedgerRepository ledgerRepository;
     private final Hasher hash;
     private final BalanceEventPublisher balanceEventPublisher;
+    private final LedgerTransactionHistoryRepository historyRepository;
 
     public LedgerService(LedgerRepository ledgerRepository,
             @Qualifier("SHAHasher") Hasher hash,
-            BalanceEventPublisher balanceEventPublisher) {
+            BalanceEventPublisher balanceEventPublisher,
+            LedgerTransactionHistoryRepository historyRepository) {
         this.ledgerRepository = ledgerRepository;
         this.hash = hash;
         this.balanceEventPublisher = balanceEventPublisher;
+        this.historyRepository = historyRepository;
     }
 
     @Override
@@ -61,7 +63,9 @@ public class LedgerService implements LedgerContract {
     @Override
     @Transactional
     public LedgerEntity updateBalance(Long walletId, BigDecimal amount, String context) {
-        LedgerEntity ledger = findByWalletId(walletId);
+        LedgerEntity ledger = ledgerRepository.findByWalletIdForUpdate(walletId)
+                .orElseThrow(() -> new LedgerExceptions.LedgerNotFoundException(
+                        "Ledger not found for wallet ID: " + walletId));
 
         // Validate sufficient balance for debit operations
         if (amount.compareTo(BigDecimal.ZERO) < 0) {
@@ -141,17 +145,8 @@ public class LedgerService implements LedgerContract {
     }
 
     public void validateWalletOwnership(WalletEntity wallet, Long userId) {
-        System.out.println("🔐 [VALIDATION] Wallet: "
-                + (wallet != null ? wallet.getId() + " ('" + wallet.getName() + "')" : "NULL"));
-        System.out.println("🔐 [VALIDATION] Requested UserId: " + userId);
-        System.out.println("🔐 [VALIDATION] Wallet Owner: "
-                + (wallet != null && wallet.getUser() != null ? wallet.getUser().getId() : "NULL"));
-
         if (wallet == null || wallet.getUser() == null || !wallet.getUser().getId().equals(userId)) {
-            System.err.println("❌ [VALIDATION] FAILED - Wallet not found or does not belong to user");
-            throw new RuntimeException("Wallet not found or does not belong to you");
+            throw new RuntimeException("Carteira não encontrada ou não pertence ao usuário logado.");
         }
-        System.out.println("✅ [VALIDATION] SUCCESS");
     }
-
 }

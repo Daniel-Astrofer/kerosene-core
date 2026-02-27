@@ -1,1138 +1,882 @@
-# 📚 Documentação Completa de Endpoints - Kerosene API
+# Kerosene Backend API Endpoints Documentation
 
-**Data:** 11 de Fevereiro de 2026  
-**Versão:** v0.5  
-**Base URL:** `http://localhost:8080`
-
----
-
-## 📋 Índice
-
-1. [Autenticação](#autenticação)
-2. [Wallet](#wallet)
-3. [Ledger (Saldo)](#ledger-saldo)
-4. [Transações Bitcoin](#transações-bitcoin)
-5. [Headers Globais](#headers-globais)
-6. [Status Codes](#status-codes)
+Abaixo estão listados **TODOS** os endpoints com seus paramêtros exatos. 
+Todas as respostas (Response Body) demonstram **exatamente o que é retornado no corpo do JSON da requisição**, com a casca do formato padrão `ApiResponse`.
 
 ---
 
-## 🔐 Autenticação
+## 0. Account Security Modes
 
-### 1. Login
-Autentica o usuário com username e passphrase. Retorna ID do usuário e JWT Token.
+O campo `accountSecurity` é escolhido uma única vez no momento do cadastro (`POST /auth/signup`) e define como a plataforma co-assina operações da conta. **Não pode ser alterado após o onboarding.**
 
-```http
-POST /auth/login
-Content-Type: application/json
+| Valor | Descrição | Servidor guarda |
+|---|---|---|
+| `STANDARD` | Senha + TOTP (comportamento padrão) | Nada extra |
+| `SHAMIR` | Shamirs Secret Sharing — a chave privada do usuário é dividida em N shares; a plataforma guarda 1 share criptografado (AES-256-GCM) e age como co-assinante obrigatório | 1 share criptografado em `platform_cosigner_secret` |
+| `MULTISIG_2FA` | A plataforma guarda uma chave de co-assinatura criptografada (AES-256-GCM); toda operação sensível requer a autenticação do usuário **e** a assinatura da plataforma | 1 chave de co-assinatura criptografada em `platform_cosigner_secret` |
 
-{
-  "username": "what",
-  "passphrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-}
-```
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-
-**Response (202 Accepted):**
-```
-"1 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJteV9kZXZpY2VfaGFzaCIsImlkIjoiMSIsImNsYWltcyI6eyJkZXZpY2VoYXNoIjoibXlfZGV2aWNlX2hhc2gifSwiaWF0IjoxNjM5MjM2ODAwLCJleHAiOjE2MzkyNDAwMDB9...."
-```
-
-**Formato Resposta:**
-- `<USER_ID> <JWT_TOKEN>`
-
-**Status Codes:**
-- `202 Accepted` - Login bem-sucedido
-- `401 Unauthorized` - Credenciais inválidas
-- `400 Bad Request` - Username/passphrase inválidos
-
-**Notas:**
-- ✅ Saldo de 100.000 é adicionado automaticamente se for primeira vez
-- ✅ JWT token renovado a cada login (valido por 24h)
-- ✅ Token renovado automaticamente em cada requisição se faltar menos de 1 hora
+> **Segurança**: o campo `platform_cosigner_secret` é armazenado como [ciphertext AES-256-GCM] Base64 no banco de dados, nunca como texto plano. A chave de criptografia é o próprio `AES_SECRET` já configurado na aplicação. **Este campo NUNCA é retornado em nenhuma resposta de API** (`@JsonIgnore` na entidade).
 
 ---
 
-### 2. Signup (Registrar)
-Cria uma nova conta de usuário.
+## 1. Authentication & Users (`/auth`)
 
-```http
-POST /auth/signup
-Content-Type: application/json
-
-{
-  "username": "newuser",
-  "passphrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-}
-```
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-
-**Response (202 Accepted):**
-```
-"TOTP_SECRET_KEY_BASE64"
-```
-
-**Status Codes:**
-- `202 Accepted` - Signup iniciado, aguardando TOTP
-- `400 Bad Request` - Username já existe ou passphrase inválida
-
-**Notas:**
-- Retorna chave TOTP para verificação em duas etapas
-- Passphrase deve ser válida BIP39 (12 ou 24 palavras)
-
----
-
-### 3. Signup - Verificar TOTP
-Verifica o código TOTP após o signup.
-
-```http
-POST /auth/signup/totp/verify
-Content-Type: application/json
-X-Device-Hash: "device_identification_hash"
-
-{
-  "username": "newuser",
-  "passphrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-  "totpCode": "123456"
-}
-```
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-- `X-Device-Hash: string` - Hash único do dispositivo
-
-**Response (202 Accepted):**
-```
-"1 eyJhbGciOiJIUzI1NiJ9..."
-```
-
-**Status Codes:**
-- `202 Accepted` - Conta criada com sucesso
-- `400 Bad Request` - TOTP inválido
-- `401 Unauthorized` - Credenciais incorretas
-
-**Notas:**
-- Device hash identifica o dispositivo para verificações futuras
-- Recomenda-se usar hash SHA-256 do user-agent + IP
-
----
-
-### 4. Login - Verificar TOTP
-Verifica TOTP quando dispositivo não é reconhecido.
-
-```http
-POST /auth/login/totp/verify
-Content-Type: application/json
-X-Device-Hash: "device_hash_novo_ou_existente"
-
-{
-  "username": "what",
-  "passphrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-  "totpCode": "123456"
-}
-```
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-- `X-Device-Hash: string` - Hash do dispositivo
-
-**Response (202 Accepted):**
-```
-"1 eyJhbGciOiJIUzI1NiJ9..."
-```
-
-**Status Codes:**
-- `202 Accepted` - Login com TOTP bem-sucedido
-- `400 Bad Request` - TOTP inválido ou expirado
-- `401 Unauthorized` - Credenciais incorretas
-
----
-
-## 💰 Wallet
-
-Gerencia carteiras de criptografia do usuário.
-
-### 1. Criar Carteira
-Cria uma nova carteira Bitcoin para o usuário.
-
-```http
-POST /wallet/create
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-
-{
-  "name": "Carteira Principal",
-  "passphrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-}
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-- `Content-Type: application/json`
-
-**Response (201 Created):**
-```
-"wallet created"
-```
-
-**Status Codes:**
-- `201 Created` - Carteira criada com sucesso
-- `400 Bad Request` - Nome duplicado ou passphrase inválida
-- `401 Unauthorized` - Token inválido/expirado
-
-**Notas:**
-- Nome da carteira deve ser único por usuário
-- Passphrase é criptografada antes de armazenar
-
----
-
-### 2. Listar Todas as Carteiras
-Lista todas as carteiras do usuário autenticado.
-
-```http
-GET /wallet/all
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
+### 1.1 Login Initiation
+- **URL**: `/auth/login`
+- **Method**: `POST`
+- **Request Body**:
 ```json
-[
-  {
-    "id": 1,
-    "userId": 1,
-    "name": "Carteira Principal",
-    "address": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP"
-  },
-  {
-    "id": 2,
-    "userId": 1,
-    "name": "Carteira Secundária",
-    "address": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y"
+{
+  "username": "user123",
+  "passphrase": "mypassword"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Login requires TOTP verification.",
+  "data": {
+    "authId": "temp-auth-id-12345"
   }
-]
+}
 ```
-
-**Status Codes:**
-- `200 OK` - Lista retornada com sucesso
-- `401 Unauthorized` - Token inválido/expirado
-
----
-
-### 3. Buscar Carteira por Nome
-Busca uma carteira específica pelo nome.
-
-```http
-GET /wallet/find?name=Carteira%20Principal
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Query Parameters:**
-- `name` (string) - Nome da carteira
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
+- **Error Responses** (Exemplo de formato em caso de falha):
 ```json
 {
-  "id": 1,
-  "userId": 1,
-  "name": "Carteira Principal",
-  "address": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP"
+  "success": false,
+  "message": "No account found matching the provided username.",
+  "errorCode": "ERR_AUTH_USER_NOT_FOUND"
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Carteira encontrada
-- `404 Not Found` - Carteira não existe
-- `401 Unauthorized` - Token inválido/expirado
-
----
-
-### 4. Atualizar Carteira
-Renomeia uma carteira existente.
-
-```http
-PUT /wallet/update
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-
-{
-  "name": "Carteira Principal",
-  "newName": "Carteira Principal - Atualizada"
-}
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-- `Content-Type: application/json`
-
-**Response (200 OK):**
-```
-"wallet updated"
-```
-
-**Status Codes:**
-- `200 OK` - Carteira atualizada
-- `400 Bad Request` - Novo nome duplicado
-- `404 Not Found` - Carteira não encontrada
-- `401 Unauthorized` - Token inválido/expirado
-
----
-
-### 5. Deletar Carteira
-Remove uma carteira do usuário.
-
-```http
-DELETE /wallet/delete
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-
-{
-  "name": "Carteira Principal",
-  "passphrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-}
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-- `Content-Type: application/json`
-
-**Response (201 Created):**
-```
-"wallet deleted"
-```
-
-**Status Codes:**
-- `201 Created` - Carteira deletada
-- `404 Not Found` - Carteira não encontrada
-- `401 Unauthorized` - Passphrase incorreta ou token inválido
-
----
-
-## 📊 Ledger (Saldo)
-
-Gerencia o livro-razão (ledger) e saldo das carteiras.
-
-### 1. Listar Todos os Ledgers
-Lista todos os ledgers (saldos) do usuário.
-
-```http
-GET /ledger/all
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
+### 1.2 User Registration (Signup)
+- **URL**: `/auth/signup`
+- **Method**: `POST`
+- **Request Body**:
 ```json
-[
-  {
+{
+  "username": "newuser",
+  "passphrase": "abandon ability able about above absent...",
+  "challenge": "random-challenge-string",
+  "nonce": "123456",
+  "accountSecurity": "STANDARD"
+}
+```
+
+> **`accountSecurity`** — opcional. Valores aceitos: `STANDARD` (padrão), `SHAMIR`, `MULTISIG_2FA`. Ver seção 0.
+
+> **BIP39 Multilingual**: o campo `passphrase` aceita frases mnemônicas válidas em **Inglês (EN)** ou **Português do Brasil (PT-BR)**. A frase deve ter 12, 15, 18, 21 ou 24 palavras da wordlist BIP39 oficial. O sistema obriga a resolução do desafio PoW para prosseguir.
+
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "User registered. Please configure your authenticator app using the provided setup key.",
+  "data": {
+    "totpSecret": "JBSWY3DPEHPK3PXP",
+    "qrCodeUri": "otpauth://totp/Kerosene:newuser?secret=..."
+  }
+}
+> **Observação de Inatividade:** O usuário é criado com `isActive = false` e precisará pagar a taxa de Onboarding (100 BRL) usando `/voucher/onboarding-link` após a validação do TOTP, antes de realizar operações de ledger.
+```
+- **Error Responses**:
+
+| `errorCode` | Motivo |
+|---|---|
+| `ERR_POW_INVALID` | O desafio/nonce PoW falhou ou expirou |
+| `ERR_PASSPHRASE_INVALID_WORD` | Uma ou mais palavras da frase não existem na wordlist EN nem PT-BR |
+| `ERR_PASSPHRASE_INVALID_LENGTH` | Número de palavras inválido (deve ser 12/15/18/21/24) |
+| `ERR_PASSPHRASE_INVALID` | Checksum BIP39 inválido (frase corrompida ou em ordem errada) |
+| `ERR_USERNAME_ALREADY_EXISTS` | Username já cadastrado |
+
+### 1.3 Signup TOTP Verification
+- **URL**: `/auth/signup/totp/verify`
+- **Method**: `POST`
+
+- **Request Body**:
+```json
+{
+  "username": "newuser",
+  "totpCode": "123456"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Device verified and account successfully created. You are now fully authenticated.",
+  "data": "a1b2c3d4e5f6g7h8..." // Session ID for Onboarding
+}
+```
+> **Atenção:** Como a persistência neste momento é temporária no Redis, a API não retorna um JWT, mas sim um `sessionId` que deve ser usado nos passos seguintes (Registro de Passkey e Geração do Voucher de Onboarding).
+
+### 1.4 Login TOTP Verification
+- **URL**: `/auth/login/totp/verify`
+- **Method**: `POST`
+
+- **Request Body**:
+```json
+{
+  "username": "user123",
+  "totpCode": "123456"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Authentication successful.",
+  "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." // O JWT Token final do login
+}
+```
+
+### 1.5 Proof of Work (PoW) Challenge
+- **URL**: `/auth/pow/challenge`
+- **Method**: `GET`
+- **Description**: Retorna um desafio único que o cliente deve resolver com um *nonce* (`SHA-256(challenge + nonce)` terminando/começando com zeros dependendo da dificuldade) para permitir registros, prevenindo spam bots.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "PoW Challenge generated",
+  "data": {
+    "challenge": "ab82c9f1a23b..."
+  }
+}
+```
+
+### 1.6 Passkey Registration Start
+- **URL**: `/auth/passkey/register/start`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Description**: Inicia o fluxo de registro de uma Passkey (WebAuthn). Requer que o usuário esteja logado via TOTP padrão.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Registration options generated",
+  "data": "{ PublicKeyCredentialCreationOptions JSON String }"
+}
+```
+
+### 1.7 Passkey Registration Finish
+- **URL**: `/auth/passkey/register/finish`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**: Raw JSON string retornada via cliente do Authenticator.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Passkey registered successfully",
+  "data": "OK"
+}
+```
+
+### 1.8 Passkey Login Start
+- **URL**: `/auth/passkey/login/start?username={username}`
+- **Method**: `POST`
+- **Description**: Inicia o fluxo de login via Passkey caso o usuário já tenha registrado uma. Retorna o json de request de assertion.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Login options generated",
+  "data": "{ AssertionRequest JSON String }"
+}
+```
+
+### 1.9 Passkey Login Finish
+- **URL**: `/auth/passkey/login/finish?username={username}`
+- **Method**: `POST`
+- **Request Body**: Raw JSON string retornada via assertion do Authenticator.
+- **Description**: Termina fluxo Passkey e ao comprovar, devolve o Token JWT, **bypassando** a etapa de TOTP.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Passkey login successful",
+  "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." // JWT Token
+}
+```
+
+### 1.10 Passkey Onboarding Registration Start
+- **URL**: `/auth/passkey/register/onboarding/start?sessionId={sessionId}`
+- **Method**: `POST`
+- **Description**: Inicia o fluxo de registro de uma Passkey vinculado a um `sessionId` temporário, antes de o usuário existir no PostgreSQL.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Onboarding passkey options generated",
+  "data": "{ PublicKeyCredentialCreationOptions JSON String }"
+}
+```
+
+### 1.11 Passkey Onboarding Registration Finish
+- **URL**: `/auth/passkey/register/onboarding/finish?sessionId={sessionId}`
+- **Method**: `POST`
+- **Request Body**: Raw JSON string retornada via cliente do Authenticator.
+- **Description**: Salva a Passkey temporariamente no `SignupState` do Redis. A inserção no DB ocorrerá apenas após 3 confirmações do voucher Onboarding.
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Passkey attached to Onboarding Session",
+  "data": "OK"
+}
+```
+
+### 1.12 Device Change / Passkey Recovery Flow (Lost Passkey)
+O sistema não bloqueia múltiplos dispositivos ou Passkeys vinculados à mesma conta (as verificações baseadas em `X-Device-Hash` foram removidas em favor da segurança descentralizada do Tor). Se o usuário perder acesso ao seu YubiKey ou dispositivo principal contendo a Passkey, o fluxo de recuperação exigirá autenticação bruta.
+
+**Passos para Cadastrar Novo Dispositivo/Passkey:**
+1. O Front-End deve tentar executar a biometria/passkey, que retornará falha no client-side (credential not found).
+2. O usuário faz fallback enviando Username + Passphrase para **`POST /auth/login`**.
+3. Em seguida, envia o código 2FA do aplicativo Google/Microsoft para **`POST /auth/login/totp/verify`**.
+4. O backend emitirá um JWT Token **válido**. 
+5. Logado na conta, o usuário envia os headers de autenticação JWT e executa `/auth/passkey/register/start` (passo 1.6) e `/auth/passkey/register/finish` (passo 1.7) para atrelar a nova Passkey do seu novo celular/device à conta existente no PostgeSQL.
+
+---
+
+## 2. Wallet Management (`/wallet`)
+
+### 2.1 Create Wallet
+- **URL**: `/wallet/create`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "name": "minhacarteira",
+  "passphrase": "palavras semente bip trinta e nove..."
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Wallet created successfully",
+  "data": "Wallet created successfully"
+}
+```
+
+### 2.2 Get All Wallets
+- **URL**: `/wallet/all`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": [
+    {
+      "id": 1,
+      "name": "minhacarteira",
+      "passphraseHash": "$2a$10$hashed...",
+      "createdAt": "2023-10-01T12:00:00",
+      "updatedAt": "2023-10-01T12:00:00",
+      "isActive": true
+    }
+  ]
+}
+```
+
+### 2.3 Find Wallet By Name
+- **URL**: `/wallet/find?name=minhacarteira`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "id": 1,
+    "name": "minhacarteira",
+    "passphraseHash": "$2a$10$hashed...",
+    "createdAt": "2023-10-01T12:00:00",
+    "updatedAt": null,
+    "isActive": true
+  }
+}
+```
+
+### 2.4 Update Wallet
+- **URL**: `/wallet/update`
+- **Method**: `PUT`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "name": "minhacarteira",
+  "newName": "carteira_investimento",
+  "passphrase": "senha_atual_para_validar"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Wallet name updated successfully.",
+  "data": "Wallet name updated successfully."
+}
+```
+
+### 2.5 Delete Wallet
+- **URL**: `/wallet/delete`
+- **Method**: `DELETE`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "name": "carteira_investimento",
+  "passphrase": "senha_atual_para_validar"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Wallet deleted successfully.",
+  "data": "Wallet deleted successfully."
+}
+```
+
+---
+
+## 3. Ledger & Internal Financials (`/ledger`)
+
+### 3.1 Process Internal Transaction
+- **URL**: `/ledger/transaction`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "sender": "minha_carteira", 
+  "receiver": "username_do_amigo ou endereco_btc_recebedor",
+  "amount": 0.05123,
+  "context": "Pagamento do jantar"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Transaction processed successfully.",
+  "data": {
+    "sender": "minha_carteira",
+    "receiver": "amigo_username",
+    "amount": 0.05123,
+    "context": "Pagamento do jantar"
+  }
+}
+```
+
+### 3.2 Get Transaction History
+- **URL**: `/ledger/history`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": [
+    {
+      "id": "uuid-da-transacao",
+      "senderIdentifier": "minha_carteira",
+      "senderUserId": 1,
+      "receiverIdentifier": "amigo_username",
+      "receiverUserId": 2,
+      "transactionType": "INTERNAL",
+      "amount": 0.05000000,
+      "status": "CONCLUDED",
+      "networkFee": null,
+      "blockchainTxid": null,
+      "context": "Pagamento do jantar",
+      "createdAt": "2023-10-01T15:00:00"
+    }
+  ]
+}
+```
+
+### 3.3 Get All Ledgers
+- **URL**: `/ledger/all`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": [
+    {
+      "id": 1,
+      "walletId": 1,
+      "balance": 1.25000000
+    }
+  ]
+}
+```
+
+### 3.4 Find Ledger By Wallet Name
+- **URL**: `/ledger/find?walletName=minhacarteira`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
     "id": 1,
     "walletId": 1,
-    "walletName": "Carteira Principal",
-    "balance": 100000,
-    "nonce": 5,
-    "lastHash": "a1b2c3d4e5f6...",
-    "context": "TEST_INITIAL_BALANCE"
-  },
-  {
-    "id": 2,
-    "walletId": 2,
-    "walletName": "Carteira Secundária",
-    "balance": 50000,
-    "nonce": 2,
-    "lastHash": "f6e5d4c3b2a1...",
-    "context": "DEPOSIT"
+    "balance": 1.25000000
   }
-]
-```
-
-**Status Codes:**
-- `200 OK` - Ledgers retornados
-- `401 Unauthorized` - Token inválido/expirado
-
----
-
-### 2. Buscar Ledger por Nome da Carteira
-Busca um ledger específico pelo nome da carteira.
-
-```http
-GET /ledger/find?walletName=Carteira%20Principal
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Query Parameters:**
-- `walletName` (string) - Nome da carteira
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "walletId": 1,
-  "walletName": "Carteira Principal",
-  "balance": 100000,
-  "nonce": 5,
-  "lastHash": "a1b2c3d4e5f6...",
-  "context": "TEST_INITIAL_BALANCE"
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Ledger encontrado
-- `404 Not Found` - Carteira/ledger não encontrado
-- `401 Unauthorized` - Token inválido ou carteira não pertence ao usuário
-
----
-
-### 3. Consultar Saldo
-Retorna o saldo de uma carteira específica.
-
-```http
-GET /ledger/balance?walletName=Carteira%20Principal
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Query Parameters:**
-- `walletName` (string) - Nome da carteira
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
-```
-100000
-```
-
-**Status Codes:**
-- `200 OK` - Saldo retornado
-- `404 Not Found` - Carteira não encontrada
-- `401 Unauthorized` - Token inválido ou acesso negado
-
----
-
-### 4. Processar Transação
-Processa uma transação interna (transferência de saldo).
-
-```http
-POST /ledger/transaction
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-
+### 3.5 Get Balance
+- **URL**: `/ledger/balance?walletName=minhacarteira`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
 {
-  "fromWalletId": 1,
-  "toWalletId": 2,
-  "amount": 1000,
-  "context": "TRANSFER"
+  "success": true,
+  "message": "Success",
+  "data": 1.25000000
 }
 ```
 
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-- `Content-Type: application/json`
-
-**Response (202 Accepted):**
-```json
-(vazio)
-```
-
-**Status Codes:**
-- `202 Accepted` - Transação processada
-- `400 Bad Request` - Saldo insuficiente
-- `404 Not Found` - Carteira não encontrada
-- `401 Unauthorized` - Token inválido
-
----
-
-### 5. Deletar Ledger
-Remove o ledger de uma carteira.
-
-```http
-DELETE /ledger/delete?walletName=Carteira%20Principal
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Query Parameters:**
-- `walletName` (string) - Nome da carteira
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
-```
-"Ledger deleted successfully"
-```
-
-**Status Codes:**
-- `200 OK` - Ledger deletado
-- `404 Not Found` - Carteira/ledger não encontrado
-- `401 Unauthorized` - Token inválido ou acesso negado
-
----
-
-## ₿ Transações Bitcoin
-
-Gerencia depósitos, saques e payment links em Bitcoin.
-
-### Transações - Grupo 1: Estimativa e Status
-
-#### 1. Estimar Taxa de Transação
-Calcula as taxas estimadas para uma transação Bitcoin.
-
-```http
-GET /transactions/estimate-fee?amount=0.5
-```
-
-**Query Parameters:**
-- `amount` (BigDecimal) - Valor em BTC
-
-**Response (200 OK):**
+### 3.6 Create Internal Payment Request
+- **URL**: `/ledger/payment-request`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
 ```json
 {
-  "fastSatPerByte": 50,
-  "standardSatPerByte": 35,
-  "slowSatPerByte": 15,
-  "estimatedFastBtc": 0.00115,
-  "estimatedStandardBtc": 0.00078,
-  "estimatedSlowBtc": 0.00034,
-  "amountReceived": 0.49922,
-  "totalToSend": 0.50078
+  "amount": 0.0125,
+  "receiverWalletName": "minha_carteira"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Payment request created.",
+  "data": {
+    "id": "link-uuid-1234",
+    "requesterUserId": 1,
+    "receiverWalletName": "minha_carteira",
+    "amount": 0.0125,
+    "status": "PENDING",
+    "expiresAt": "2023-10-01T18:00:00",
+    "createdAt": "2023-10-01T17:00:00",
+    "paidAt": null
+  }
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Estimativa calculada
-- `400 Bad Request` - Valor inválido
+> **WebSocket — Notificação em Tempo Real**: Após criar o link, o criador deve conectar-se e assinar `/topic/payment-request/{id}`. Quando o pagador executar o endpoint 3.8 com sucesso, o backend publica imediatamente o DTO completo (com `status: PAID`) neste tópico — sem necessidade de polling.
+>
+> Conexão: `ws://host/ws/payment-request?token=<jwt>` (SockJS) ou `ws://host/ws/raw-payment-request?token=<jwt>` (raw)
 
-**Notas:**
-- Usa Mempool.space API para taxas em tempo real
-- `amountReceived` = valor final após taxa (padrão: standard)
-- `totalToSend` = valor total a enviar (incluindo taxa)
-
----
-
-#### 2. Consultar Status de Transação
-Verifica o status de uma transação na blockchain.
-
-```http
-GET /transactions/status?txid=abc123def456...
-```
-
-**Query Parameters:**
-- `txid` (string) - Hash da transação
-
-**Response (200 OK):**
+### 3.7 Retrieve Payment Request
+- **URL**: `GET /ledger/payment-request/{linkId}`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
 ```json
 {
-  "txid": "abc123def456...",
-  "status": "confirmed",
-  "feeSatoshis": 5600,
-  "amountReceived": 0.495
+  "success": true,
+  "message": "Success",
+  "data": {
+    "id": "link-uuid-1234",
+    "requesterUserId": 1,
+    "receiverWalletName": "minha_carteira",
+    "amount": 0.0125,
+    "status": "PENDING",
+    "expiresAt": "2023-10-01T18:00:00",
+    "createdAt": "2023-10-01T17:00:00",
+    "paidAt": null
+  }
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Status retornado
-- `400 Bad Request` - TXID inválido
-- `404 Not Found` - Transação não encontrada
+### 3.8 Pay Payment Request
+- **URL**: `POST /ledger/payment-request/{linkId}/pay`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "payerWalletName": "carteira_pagadora"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Payment successful.",
+  "data": {
+    "id": "link-uuid-1234",
+    "requesterUserId": 1,
+    "receiverWalletName": "minha_carteira",
+    "amount": 0.0125,
+    "status": "PAID",
+    "expiresAt": "2023-10-01T18:00:00",
+    "createdAt": "2023-10-01T17:00:00",
+    "paidAt": "2023-10-01T17:30:00"
+  }
+}
+```
+> **Efeito colateral**: Além de concluir a transação interna, este endpoint dispara um push WebSocket para `/topic/payment-request/{linkId}` com o DTO atualizado (`status: PAID`) — notificando o criador do link em tempo real.
 
 ---
 
-### Transações - Grupo 2: Envio e Broadcast
+## 4. On-Chain Bitcoin Transactions (`/transactions`)
 
-#### 3. Enviar Transação
-Envia uma transação Bitcoin já assinada.
-
-```http
-POST /transactions/send
-Content-Type: application/json
-
+### 4.1 Get Global Deposit Address
+- **URL**: `/transactions/deposit-address`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
 {
-  "fromAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "toAddress": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y",
+  "success": true,
+  "message": "Success",
+  "data": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+}
+```
+
+### 4.2 Estimate Network Fee
+- **URL**: `/transactions/estimate-fee?amount=1.5`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": {
+    "fastSatoshisPerByte": 30,
+    "standardSatoshisPerByte": 15,
+    "slowSatoshisPerByte": 5,
+    "estimatedFastBtc": 0.00008500,
+    "estimatedStandardBtc": 0.00004250,
+    "estimatedSlowBtc": 0.00001400,
+    "amountReceived": 1.5,
+    "totalToSend": 1.50004250
+  }
+}
+```
+
+### 4.3 Create Unsigned Transaction
+- **URL**: `/transactions/create-unsigned`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "toAddress": "bc1...",
   "amount": 0.5,
-  "feeSatoshis": 5600
+  "feeLevel": "fast" 
 }
 ```
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-
-**Response (202 Accepted):**
+- **Response Body** (200 OK):
 ```json
 {
-  "txid": "abc123def456...",
-  "status": "broadcasted",
-  "feeSatoshis": 5600,
-  "amountReceived": 0.495
+  "success": true,
+  "message": "Unsigned transaction created",
+  "data": {
+    "rawTxHex": "0100000001...",
+    "txId": "sha256-hash",
+    "inputs": [],
+    "outputs": [],
+    "totalAmount": 0.5,
+    "fee": 5000,
+    "fromAddress": "bc1...",
+    "toAddress": "bc1..."
+  }
 }
 ```
 
-**Status Codes:**
-- `202 Accepted` - Transação enviada com sucesso
-- `400 Bad Request` - Dados inválidos ou saldo insuficiente
-- `500 Internal Server Error` - Erro ao comunicar com blockchain
-
----
-
-#### 4. Broadcast de Transação Assinada
-Transmite uma transação raw já assinada para a blockchain.
-
-```http
-POST /transactions/broadcast
-Content-Type: application/json
-
-{
-  "rawTxHex": "0100000001abc123...def456"
-}
-```
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-
-**Response (202 Accepted):**
+### 4.4 Broadcast Signed Transaction
+- **URL**: `/transactions/broadcast`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
 ```json
 {
-  "txid": "abc123def456...",
-  "status": "broadcasted",
-  "feeSatoshis": 0
+  "signedTxHex": "0100000001tx1234..."
 }
 ```
-
-**Status Codes:**
-- `202 Accepted` - Transação transmitida
-- `400 Bad Request` - Hex inválido
-- `500 Internal Server Error` - Erro ao transmitir
-
----
-
-### Transações - Grupo 3: Depósitos
-
-#### 5. Obter Endereço de Depósito
-Retorna o endereço Bitcoin central para depósitos.
-
-```http
-GET /transactions/deposit-address
-```
-
-**Response (200 OK):**
-```
-"1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP"
-```
-
-**Status Codes:**
-- `200 OK` - Endereço retornado
-
-**Notas:**
-- Todos os depósitos devem ser enviados para este endereço
-- Endereço configurável em `application.properties`
-
----
-
-#### 6. Confirmar Depósito
-Registra um novo depósito após validação na blockchain.
-
-```http
-POST /transactions/confirm-deposit
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-
-{
-  "txid": "abc123def456...",
-  "fromAddress": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y",
-  "amount": 0.5
-}
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-- `Content-Type: application/json`
-
-**Response (201 Created):**
+- **Response Body** (200 OK):
 ```json
 {
-  "id": 1,
-  "userId": 1,
-  "txid": "abc123def456...",
-  "fromAddress": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y",
-  "toAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "amountBtc": 0.5,
-  "confirmations": 1,
-  "status": "confirmed",
-  "createdAt": "2026-02-11T10:30:00",
-  "confirmedAt": "2026-02-11T10:30:00"
+  "success": true,
+  "message": "Transaction broadcasted to mempool",
+  "data": {
+    "txid": "hash-da-transacao",
+    "status": "broadcasted",
+    "feeSatoshis": 5000,
+    "amountReceived": 0.5
+  }
 }
 ```
 
-**Status Codes:**
-- `201 Created` - Depósito registrado
-- `400 Bad Request` - TXID duplicado ou transação inválida
-- `401 Unauthorized` - Token inválido/expirado
-
-**Notas:**
-- Valida TX na blockchain antes de registrar
-- Status inicial é "confirmed"
-- Será "credited" quando o saldo for sincronizado
+### 4.5 On-Chain Withdrawal
+- **URL**: `/transactions/withdraw`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "fromWalletName": "minhacarteira",
+  "toAddress": "bc1_destino...",
+  "amount": 0.1,
+  "description": "Retirada externa"
+}
+```
+- **Response Body** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Withdrawal sent to blockchain",
+  "data": {
+    "txid": "hash-on-chain",
+    "status": "broadcasted",
+    "feeSatoshis": 3000,
+    "amountReceived": 0.10000000
+  }
+}
+```
 
 ---
 
-#### 7. Listar Depósitos do Usuário
-Lista todos os depósitos do usuário autenticado.
+## 5. WebSockets (`/ws`)
 
-```http
-GET /transactions/deposits
-Authorization: Bearer <JWT_TOKEN>
+### 5.1 Real-time Balance Updates
+- **Endpoint**: `/ws/balance` (SockJS) ou `/ws/raw-balance` (raw)
+- **Protocol**: STOMP over WebSocket
+- **Authentication**: `?token=<jwt_token>` (query param) ou header STOMP `Authorization: Bearer <token>`
+- **Subscription Topic**: `/topic/balance/{userId}`
+- **Payload Pushed to Client**:
+```json
+{
+  "walletId": 1,
+  "walletName": "minha_carteira",
+  "userId": 42,
+  "newBalance": 1.55000000,
+  "amount": 0.05000000,
+  "context": "Pagamento do jantar"
+}
 ```
 
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
+### 5.2 Real-time Payment Request Notifications
+- **Endpoint**: `/ws/payment-request` (SockJS) ou `/ws/raw-payment-request` (raw)
+- **Protocol**: STOMP over WebSocket
+- **Authentication**: `?token=<jwt_token>` (query param) ou header STOMP `Authorization: Bearer <token>`
+- **Subscription Topic**: `/topic/payment-request/{linkId}`
 
-**Response (200 OK):**
+O criador do link deve assinar este tópico imediatamente após criar o payment request. Quando o pagador executar `POST /ledger/payment-request/{linkId}/pay`, o backend publica o DTO completo com `status: PAID` neste tópico sem nenhum delay.
+
+- **Payload Pushed to Client** (quando o link é pago):
+```json
+{
+  "id": "link-uuid-1234",
+  "requesterUserId": 1,
+  "receiverWalletName": "minha_carteira",
+  "amount": 0.0125,
+  "status": "PAID",
+  "expiresAt": "2023-10-01T18:00:00",
+  "createdAt": "2023-10-01T17:00:00",
+  "paidAt": "2023-10-01T17:30:00"
+}
+```
+
+**Exemplo de integração (Flutter/Dart):**
+```dart
+stompClient.subscribe(
+  destination: '/topic/payment-request/$linkId',
+  callback: (frame) {
+    final req = jsonDecode(frame.body!);
+    if (req['status'] == 'PAID') {
+      // Exibir confirmacao de pagamento
+    }
+  },
+);
+```
+
+---
+
+## 6. Merkle Audit (`/audit`)
+
+O sistema gera automaticamente um checkpoint de auditoria a cada 5 minutos (configurável via `audit.merkle.interval-ms`). Cada checkpoint calcula a raiz de uma árvore de Merkle SHA-256 sobre **todos os saldos internos**, provando que nenhum saldo foi alterado silenciosamente — sem revelar os donos.
+
+Todos os endpoints requerem autenticação JWT. O endpoint de trigger manual requer role `ADMIN`.
+
+### 6.1 Get Latest Merkle Root
+- **URL**: `/audit/latest-root`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response Body** (200 OK):
+```json
+{
+  "id": "uuid-do-checkpoint",
+  "merkleRoot": "a3f5d2e1b4c8...",
+  "ledgerCount": 42,
+  "createdAt": "2026-02-25T16:00:00",
+  "anchorTxid": ""
+}
+```
+
+| Campo | Descrição |
+|---|---|
+| `merkleRoot` | Hash SHA-256 de 64 hex chars — raiz da árvore Merkle de todos os saldos |
+| `ledgerCount` | Número de ledgers incluídos no snapshot |
+| `anchorTxid` | (Futuro) txid do OP_RETURN Bitcoin que âncora este root na blockchain |
+
+- **Response Body** quando ainda não há checkpoints:
+```json
+{
+  "merkleRoot": "NO_CHECKPOINT_YET",
+  "ledgerCount": 0,
+  "createdAt": "2026-02-25T16:52:00",
+  "anchorTxid": ""
+}
+```
+
+### 6.2 Get Audit History
+- **URL**: `/audit/history`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Query Params**: `limit` (opcional, default `10`, máximo `50`)
+- **Response Body** (200 OK):
 ```json
 [
   {
-    "id": 1,
-    "userId": 1,
-    "txid": "abc123def456...",
-    "fromAddress": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y",
-    "toAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-    "amountBtc": 0.5,
-    "confirmations": 6,
-    "status": "credited",
-    "createdAt": "2026-02-11T09:30:00",
-    "confirmedAt": "2026-02-11T09:35:00"
+    "id": "uuid-checkpoint-1",
+    "merkleRoot": "a3f5d2e1b4c8...",
+    "ledgerCount": 42,
+    "createdAt": "2026-02-25T16:05:00",
+    "anchorTxid": ""
+  },
+  {
+    "id": "uuid-checkpoint-2",
+    "merkleRoot": "9b2c4d6e8f0a...",
+    "ledgerCount": 41,
+    "createdAt": "2026-02-25T16:00:00",
+    "anchorTxid": ""
   }
 ]
 ```
 
-**Status Codes:**
-- `200 OK` - Lista retornada
-- `401 Unauthorized` - Token inválido/expirado
-
----
-
-#### 8. Consultar Saldo de Depósitos
-Retorna o saldo total de depósitos creditados.
-
-```http
-GET /transactions/deposit-balance
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
-```
-1.5
-```
-
-**Status Codes:**
-- `200 OK` - Saldo retornado
-- `401 Unauthorized` - Token inválido/expirado
-
-**Notas:**
-- Retorna apenas saldo creditado (status = "credited")
-- Formato: número em BTC
-
----
-
-#### 9. Obter Depósito Específico
-Retorna detalhes de um depósito específico.
-
-```http
-GET /transactions/deposit/abc123def456...
-```
-
-**Path Parameters:**
-- `txid` (string) - Hash da transação do depósito
-
-**Response (200 OK):**
+### 6.3 Trigger Manual Audit
+- **URL**: `/audit/trigger`
+- **Method**: `POST`
+- **Headers**: `Authorization: Bearer <token>` *(role `ADMIN` obrigatória)*
+- **Response Body** (200 OK):
 ```json
 {
-  "id": 1,
-  "userId": 1,
-  "txid": "abc123def456...",
-  "fromAddress": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y",
-  "toAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "amountBtc": 0.5,
-  "confirmations": 6,
-  "status": "credited",
-  "createdAt": "2026-02-11T09:30:00",
-  "confirmedAt": "2026-02-11T09:35:00"
+  "id": "uuid-novo-checkpoint",
+  "merkleRoot": "f8e7d6c5b4a3...",
+  "ledgerCount": 42,
+  "createdAt": "2026-02-25T16:52:56",
+  "anchorTxid": ""
 }
 ```
-
-**Status Codes:**
-- `200 OK` - Depósito encontrado
-- `404 Not Found` - Depósito não existe
-
----
-
-### Transações - Grupo 4: Payment Links
-
-#### 10. Criar Payment Link
-Cria um novo payment link para receber pagamentos.
-
-```http
-POST /transactions/create-payment-link
-Authorization: Bearer <JWT_TOKEN>
-Content-Type: application/json
-
-{
-  "amount": 0.25,
-  "description": "Pagamento de serviço"
-}
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-- `Content-Type: application/json`
-
-**Response (201 Created):**
+- **Error Response** (403 Forbidden — sem role ADMIN):
 ```json
 {
-  "id": "pay_abc123xyz789",
-  "userId": 1,
-  "amountBtc": 0.25,
-  "description": "Pagamento de serviço",
-  "depositAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "status": "pending",
-  "txid": null,
-  "expiresAt": "2026-02-11T11:30:00",
-  "createdAt": "2026-02-11T10:30:00",
-  "paidAt": null,
-  "completedAt": null
+  "success": false,
+  "message": "Access Denied",
+  "errorCode": "ERR_FORBIDDEN"
 }
 ```
 
-**Status Codes:**
-- `201 Created` - Payment link criado
-- `400 Bad Request` - Dados inválidos
-- `401 Unauthorized` - Token inválido/expirado
-
-**Notas:**
-- Link expira em 60 minutos (configurável)
-- ID único: `pay_<12 caracteres aleatórios>`
-- Armazenado apenas em Redis (TTL: 3 horas)
-
 ---
 
-#### 11. Obter Payment Link
-Retorna informações de um payment link (público, sem autenticação).
+## 7. Voucher & Onboarding System (`/voucher`)
 
-```http
-GET /transactions/payment-link/pay_abc123xyz789
-```
+O sistema exige uma taxa de ativação "Onboarding" (100 BRL cotados dinamicamente em BTC). 
+Após o cadastro e login, o usuário terá `isActive = false` e precisará gerar um *Onboarding Link* e realizar o pagamento on-chain para liberar a conta.
 
-**Path Parameters:**
-- `linkId` (string) - ID do payment link
-
-**Response (200 OK):**
+### 7.1 Generate Onboarding Payment Link
+- **URL**: `/voucher/onboarding-link?sessionId={sessionId}`
+- **Method**: `POST`
+- **Description**: Gera um link de pagamento (usando o sistema `PaymentLinkService`) cobrando exatamente 100 BRL convertidos para BTC em tempo real pela API da Binance. É retornada uma entidade `PaymentLinkDTO` com o endereço para depósito e o status "pending".
+- **Headers**: Nenhuma (requer `sessionId` obtido no `/auth/signup/totp/verify` via query param).
+- **Response Body** (200 OK):
 ```json
 {
-  "id": "pay_abc123xyz789",
-  "userId": 1,
-  "amountBtc": 0.25,
-  "description": "Pagamento de serviço",
-  "depositAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "status": "pending",
-  "txid": null,
-  "expiresAt": "2026-02-11T11:30:00",
-  "createdAt": "2026-02-11T10:30:00",
-  "paidAt": null,
-  "completedAt": null
+  "success": true,
+  "message": "Onboarding Payment Link generated successfully.",
+  "data": {
+    "id": "pay_3b2f91e98d8c",
+    "userId": 12,
+    "amountBtc": 0.00030250,
+    "description": "ONBOARDING_VOUCHER",
+    "depositAddress": "1A1z7agoat7F...",
+    "status": "pending",
+    "createdAt": "2026-02-28T14:32:00Z",
+    "expiresAt": "2026-02-28T15:32:00Z",
+    "paidAt": null,
+    "completedAt": null,
+    "txid": null
+  }
 }
 ```
+> **Nota do Fluxo:** O usuário deve pagar o valor exato no endereço fornecido. O Kerosene através do `OnboardingMonitorService` fará polling aguardando o pagamento acumular **3 confirmações na blockchain**. Somente após as 3 confirmações, o usuário e a passkey serão efetivamente salvos no PostgreSQL (`isActive=true`) e uma notificação WebSocket será disparada confirmando a criação da conta.
 
-**Status Codes:**
-- `200 OK` - Link encontrado
-- `404 Not Found` - Link não existe ou expirou
-
-**Notas:**
-- Endpoint público (sem autenticação)
-- Expiração verificada automaticamente
-
----
-
-#### 12. Confirmar Pagamento de Payment Link
-Marca um payment link como pago após validação na blockchain.
-
-```http
-POST /transactions/payment-link/pay_abc123xyz789/confirm
-Content-Type: application/json
-
-{
-  "txid": "def456abc123...",
-  "fromAddress": "3J98t1W1mU4Uxdg9BgKp8hPyV9Zf1z5C1Y"
-}
-```
-
-**Path Parameters:**
-- `linkId` (string) - ID do payment link
-
-**Headers Requeridos:**
-- `Content-Type: application/json`
-
-**Response (200 OK):**
+### 7.2 Request Voucher (Legacy System Request)
+- **URL**: `/voucher/request`
+- **Method**: `POST`
+- **Description**: Solicita os dados de pagamento em satoshis para um Voucher de pré-depósito. Requer autenticação de JWT válida. Retorna o endereço Bitcoin e a quantidade em sats para o envio on-chain.
+- **Response Body** (200 OK):
 ```json
 {
-  "id": "pay_abc123xyz789",
-  "userId": 1,
-  "amountBtc": 0.25,
-  "description": "Pagamento de serviço",
-  "depositAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "status": "paid",
-  "txid": "def456abc123...",
-  "expiresAt": "2026-02-11T11:30:00",
-  "createdAt": "2026-02-11T10:30:00",
-  "paidAt": "2026-02-11T10:35:00",
-  "completedAt": null
+  "success": true,
+  "message": "Voucher requested. Please send the exact amount of satoshis...",
+  "data": {
+    "depositAddress": "bc1qxy2kgdygjrsqtzq2n0yrf249x3p...",
+    "amountSats": 100000,
+    "pendingVoucherId": "pend_vch_192e21b8..."
+  }
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Pagamento confirmado
-- `400 Bad Request` - Link já processado ou expirado
-- `404 Not Found` - Link não existe
-- `500 Internal Server Error` - Erro ao validar TX na blockchain
-
-**Notas:**
-- Valida TX na blockchain antes de confirmar
-- Muda status: `pending` → `paid`
-- Registra data/hora de pagamento
-
----
-
-#### 13. Completar Payment Link
-Marca um payment link como completado (libera o valor).
-
-```http
-POST /transactions/payment-link/pay_abc123xyz789/complete
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Path Parameters:**
-- `linkId` (string) - ID do payment link
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
+### 7.3 Confirm Payment (Legacy System Request)
+- **URL**: `/voucher/confirm?pendingVoucherId={..}&txid={..}`
+- **Method**: `POST`
+- **Description**: Confirma o TXID que o usuário fez em resposta a `/voucher/request`, validando-o na blockchain. Se for válido, emite o código (Voucher Code) para uso posterior.
+- **Response Body** (200 OK):
 ```json
 {
-  "id": "pay_abc123xyz789",
-  "userId": 1,
-  "amountBtc": 0.25,
-  "description": "Pagamento de serviço",
-  "depositAddress": "1A1z7agoat7F9gq5TFGakzrx6R5vbR2rAP",
-  "status": "completed",
-  "txid": "def456abc123...",
-  "expiresAt": "2026-02-11T11:30:00",
-  "createdAt": "2026-02-11T10:30:00",
-  "paidAt": "2026-02-11T10:35:00",
-  "completedAt": "2026-02-11T10:40:00"
+  "success": true,
+  "message": "Voucher paid and confirmed successfully.",
+  "data": "VCH-A8B9C1-D2E3F4" // The Voucher Code string
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Payment link completado
-- `400 Bad Request` - Link não está em status "paid"
-- `404 Not Found` - Link não existe ou não pertence ao usuário
-- `401 Unauthorized` - Token inválido/expirado
-
-**Notas:**
-- Só funciona se status = "paid"
-- Requer autenticação (apenas dono pode completar)
-- Muda status: `paid` → `completed`
-
----
-
-#### 14. Listar Payment Links do Usuário
-Lista todos os payment links criados pelo usuário.
-
-```http
-GET /transactions/payment-links
-Authorization: Bearer <JWT_TOKEN>
-```
-
-**Headers Requeridos:**
-- `Authorization: Bearer <JWT_TOKEN>` ⭐ Requer autenticação
-
-**Response (200 OK):**
+### 7.4 Verify Voucher (Legacy Action)
+- **URL**: `/voucher/verify?code={codigo_voucher}`
+- **Method**: `GET`
+- **Description**: Verifica se um voucher código existe e qual seu saldo. Pode ser usado publicamente antes do registro.
+- **Response Body** (200 OK):
 ```json
-[]
+{
+  "success": true,
+  "message": "Voucher is valid.",
+  "data": {
+    "code": "VCH-A8B9C1-D2E3F4",
+    "valueBtc": 0.015,
+    "status": "UNUSED",
+    "expiresAt": "2026-03-01T23:59:59"
+  }
+}
 ```
-
-**Status Codes:**
-- `200 OK` - Lista retornada (pode estar vazia)
-- `401 Unauthorized` - Token inválido/expirado
-
-**Notas:**
-- Implementação atual retorna lista vazia
-- TODO: Implementar índice dedicado no Redis
-
----
-
----
-
-## 📌 Headers Globais
-
-### Headers Requeridos (Autenticação)
-
-Endpoints com ⭐ requerem estes headers:
-
-```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
-X-Device-Hash: "device_hash_ou_uuid"
-```
-
-| Header | Obrigatório | Descrição |
-|--------|------------|-----------|
-| `Authorization` | ⭐ SIM | JWT Token obtido no login |
-| `X-Device-Hash` | Conditonal | Hash único do dispositivo (obrigatório em alguns endpoints) |
-| `Content-Type` | Conditional | `application/json` para POST/PUT/DELETE |
-
-### Headers de Resposta
-
-```http
-X-New-Token: eyJhbGciOiJIUzI1NiJ9...
-Content-Type: application/json
-```
-
-| Header | Descrição |
-|--------|-----------|
-| `X-New-Token` | JWT renovado (se token estava prestes a expirar) |
-| `Content-Type` | Sempre `application/json` para respostas com body |
-
----
-
-## 📊 Status Codes
-
-| Code | Significado | Quando Usado |
-|------|-------------|--------------|
-| `200 OK` | Sucesso com dados | GET bem-sucedido, consultas |
-| `201 Created` | Recurso criado | POST que cria novo recurso |
-| `202 Accepted` | Solicitação aceita | Operações assíncronas |
-| `400 Bad Request` | Dados inválidos | Validação falhou |
-| `401 Unauthorized` | Não autenticado | Token ausente/inválido |
-| `403 Forbidden` | Sem permissão | Usuário não tem acesso |
-| `404 Not Found` | Recurso não existe | Entidade não encontrada |
-| `409 Conflict` | Conflito | Recurso duplicado |
-| `500 Internal Server Error` | Erro do servidor | Exceção não tratada |
-
----
-
-## 🔑 Exemplos de Uso Completo
-
-### Exemplo 1: Fluxo de Login e Deposit
-
-```bash
-# 1. Login
-curl -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"what","passphrase":"abandon abandon..."}'
-
-# Response: "1 eyJhbGciOiJIUzI1NiJ9..."
-TOKEN="eyJhbGciOiJIUzI1NiJ9..."
-DEVICE_HASH="abc123xyz"
-
-# 2. Obter endereço de depósito
-curl -X GET http://localhost:8080/transactions/deposit-address
-
-# 3. Estimar taxa
-curl -X GET "http://localhost:8080/transactions/estimate-fee?amount=0.5"
-
-# 4. Confirmar depósito (após enviar BTC)
-curl -X POST http://localhost:8080/transactions/confirm-deposit \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "txid":"abc123...",
-    "fromAddress":"3J98t1W...",
-    "amount":0.5
-  }'
-
-# 5. Consultar saldo de depósitos
-curl -X GET http://localhost:8080/transactions/deposit-balance \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Exemplo 2: Criar Payment Link
-
-```bash
-# 1. Criar payment link
-curl -X POST http://localhost:8080/transactions/create-payment-link \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"amount":0.25,"description":"Pagamento"}'
-
-# Response: {"id":"pay_abc123xyz789",...}
-LINK_ID="pay_abc123xyz789"
-
-# 2. Compartilhar link com cliente
-echo "http://localhost:8080/transactions/payment-link/$LINK_ID"
-
-# 3. Cliente confirma pagamento (após enviar BTC)
-curl -X POST "http://localhost:8080/transactions/payment-link/$LINK_ID/confirm" \
-  -H "Content-Type: application/json" \
-  -d '{"txid":"def456...","fromAddress":"3J98t1W..."}'
-
-# 4. Receptor completa o pagamento
-curl -X POST "http://localhost:8080/transactions/payment-link/$LINK_ID/complete" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Exemplo 3: Operações com Wallet
-
-```bash
-# 1. Criar carteira
-curl -X POST http://localhost:8080/wallet/create \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Minha Carteira","passphrase":"abandon abandon..."}'
-
-# 2. Listar todas
-curl -X GET http://localhost:8080/wallet/all \
-  -H "Authorization: Bearer $TOKEN"
-
-# 3. Consultar saldo
-curl -X GET "http://localhost:8080/ledger/balance?walletName=Minha%20Carteira" \
-  -H "Authorization: Bearer $TOKEN"
-
-# 4. Deletar carteira
-curl -X DELETE http://localhost:8080/wallet/delete \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Minha Carteira","passphrase":"abandon abandon..."}'
-```
-
----
-
-## 🚀 Versão e Data
-
-- **Versão API:** v0.5
-- **Data da Documentação:** 11 de Fevereiro de 2026
-- **Última Atualização:** 11 de Fevereiro de 2026
-
----
-
-## 📞 Suporte
-
-Para dúvidas sobre os endpoints:
-1. Consulte este documento
-2. Verifique os READMEs nas pastas do projeto
-3. Execute testes com Postman (arquivo incluído)
-
----

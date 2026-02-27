@@ -13,9 +13,7 @@ import source.wallet.service.WalletService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Collections;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,7 +40,8 @@ public class PaymentLinkServiceRedisTest {
     @BeforeEach
     public void setup() {
         try {
-            redisTemplate.getConnectionFactory().getConnection().flushDb();
+            redisTemplate.getConnectionFactory().getConnection().flushDb(
+                    org.springframework.data.redis.connection.RedisServerCommands.FlushOption.ASYNC);
         } catch (Exception e) {
             // ignore
         }
@@ -90,8 +89,6 @@ public class PaymentLinkServiceRedisTest {
         assertNotNull(retrievedLink);
         assertEquals(createdLink.getId(), retrievedLink.getId());
         assertEquals(amountBtc, retrievedLink.getAmountBtc());
-
-        System.out.println("✅ Payment link recuperado com sucesso do Redis: " + linkId);
     }
 
     /**
@@ -120,11 +117,7 @@ public class PaymentLinkServiceRedisTest {
 
         assertEquals("paid", confirmed.getStatus());
         assertEquals(txid, confirmed.getTxid());
-
-        // VERIFY LEDGER CALL
         verify(ledgerService, times(1)).updateBalance(eq(999L), eq(amount), contains("PAYMENT_LINK_"));
-
-        System.out.println("✅ Ledger creditado corretamente!");
     }
 
     /**
@@ -145,8 +138,6 @@ public class PaymentLinkServiceRedisTest {
 
         assertNotNull(ttl);
         assertTrue(ttl > 0 && ttl <= 10800, "TTL deve estar entre 0 e 10800 segundos");
-
-        System.out.println("✅ Redis TTL válido: " + ttl + " segundos");
     }
 
     /**
@@ -172,7 +163,5 @@ public class PaymentLinkServiceRedisTest {
         // Validar que foi removido
         PaymentLinkDTO dtoAfterRemoval = redisTemplate.opsForValue().get(redisKey);
         assertNull(dtoAfterRemoval);
-
-        System.out.println("✅ Payment link removido do Redis com sucesso");
     }
 }

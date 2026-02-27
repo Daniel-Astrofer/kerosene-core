@@ -1,7 +1,5 @@
 package source.auth.application.service.cache;
 
-
-import jakarta.transaction.Transactional;
 import source.auth.application.infra.persistance.redis.contracts.RedisContract;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.cripto.contracts.Cryptography;
@@ -16,7 +14,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-
 @Service
 public class RedisService implements RedisServicer {
 
@@ -27,13 +24,11 @@ public class RedisService implements RedisServicer {
     private String keybase;
     private SecretKey secretKey;
 
-
     public RedisService(
             RedisContract repository,
             @Qualifier("aes256") Cryptography cryptography,
             @Qualifier("SHAHasher") Hasher hasher,
-            @Value("${api.secret.aes.secret}") String keybase
-    ) {
+            @Value("${api.secret.aes.secret}") String keybase) {
         this.repository = repository;
         this.cryptography = cryptography;
         this.hasher = hasher;
@@ -46,8 +41,8 @@ public class RedisService implements RedisServicer {
     @Override
     public void createTempUser(UserDTO userDTO) {
 
-        userDTO.setPassphrase(
-                hasher.hash(userDTO.getPassphrase()));
+        String normalizedPassphrase = userDTO.getPassphrase().trim().replaceAll("[\\s\\u00A0]+", " ");
+        userDTO.setPassphrase(hasher.hash(normalizedPassphrase));
 
         try {
             String base64 = Base64.getEncoder()
@@ -73,6 +68,31 @@ public class RedisService implements RedisServicer {
     @Override
     public void deleteFromRedis(UserDTO dto) {
         repository.delete(key, dto);
+    }
+
+    @Override
+    public Long increment(String key) {
+        return repository.increment(key);
+    }
+
+    @Override
+    public void expire(String key, long timeoutSeconds) {
+        repository.expire(key, timeoutSeconds);
+    }
+
+    @Override
+    public String getValue(String key) {
+        return repository.getValue(key);
+    }
+
+    @Override
+    public void setValue(String key, String value, long timeoutSeconds) {
+        repository.setValue(key, value, timeoutSeconds);
+    }
+
+    @Override
+    public void deleteValue(String key) {
+        repository.deleteValue(key);
     }
 
 }

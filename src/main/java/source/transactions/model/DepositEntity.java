@@ -27,11 +27,14 @@ public class DepositEntity {
     @Column(nullable = false)
     private BigDecimal amountBtc;
 
+    @Column(name = "network_fee")
+    private BigDecimal networkFee;
+
     @Column(nullable = false)
     private Long confirmations = 0L;
 
     @Column(nullable = false)
-    private String status = "pending";  // pending, confirmed, credited
+    private String status = "pending"; // pending, confirmed, credited
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -89,6 +92,14 @@ public class DepositEntity {
 
     public void setAmountBtc(BigDecimal amountBtc) {
         this.amountBtc = amountBtc;
+    }
+
+    public BigDecimal getNetworkFee() {
+        return networkFee;
+    }
+
+    public void setNetworkFee(BigDecimal networkFee) {
+        this.networkFee = networkFee;
     }
 
     public Long getConfirmations() {

@@ -9,13 +9,31 @@ import java.math.BigDecimal;
  * - Username do usuário (ex: "what")
  * - ID da carteira (ex: "1", "2", etc)
  * - Hash/Endereço da carteira (ex: "1A1z7agoat7F9gq5...")
+ *
+ * Campos de segurança adicionados:
+ * - idempotencyKey: UUID gerado pelo app para prevenção de double-spend.
+ * - requestTimestamp: epoch ms para rejeitar replays de requisições antigas.
  */
 public class TransactionDTO {
 
-    private String sender;      // Username, Wallet ID ou Address (se não autenticado)
-    private String receiver;    // Username, Wallet ID ou Address
+    private String sender; // Username, Wallet ID ou Address
+    private String receiver; // Username, Wallet ID ou Address
     private BigDecimal amount;
     private String context;
+
+    /**
+     * UUID gerado pelo app antes de cada nova intenção de pagamento.
+     * Se duas requisições chegarem com a mesma key, a segunda é descartada
+     * e retorna o resultado da primeira (idempotência).
+     */
+    private String idempotencyKey;
+
+    /**
+     * Timestamp da requisição em milissegundos (System.currentTimeMillis()).
+     * O servidor rejeita requisições com timestamp mais antigo que 2 minutos
+     * (anti-replay: impede reenvio de pacotes capturados).
+     */
+    private Long requestTimestamp;
 
     public TransactionDTO() {
     }
@@ -57,6 +75,22 @@ public class TransactionDTO {
 
     public void setContext(String context) {
         this.context = context;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
+    public Long getRequestTimestamp() {
+        return requestTimestamp;
+    }
+
+    public void setRequestTimestamp(Long requestTimestamp) {
+        this.requestTimestamp = requestTimestamp;
     }
 
     /**

@@ -26,15 +26,18 @@ public class BlockchainMonitorService {
     private final BlockchainInfoClient blockchainClient;
     private final WalletService walletService;
     private final LedgerService ledgerService;
+    private final source.notification.service.NotificationService notificationService;
 
     public BlockchainMonitorService(PendingTransactionRedisRepository repository,
             BlockchainInfoClient blockchainClient,
             WalletService walletService,
-            LedgerService ledgerService) {
+            LedgerService ledgerService,
+            source.notification.service.NotificationService notificationService) {
         this.repository = repository;
         this.blockchainClient = blockchainClient;
         this.walletService = walletService;
         this.ledgerService = ledgerService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -42,19 +45,26 @@ public class BlockchainMonitorService {
      */
     @Scheduled(fixedDelay = 30000) // 30 segundos
     public void monitorPendingTransactions() {
-        log.info("Checking pending transactions...");
-
         List<PendingTransaction> pendingTxs = repository.findByStatus("PENDING");
 
         if (pendingTxs.isEmpty()) {
-            log.info("No pending transactions to monitor");
             return;
         }
 
+        log.info("Checking pending transactions...");
         log.info("Found {} pending transaction(s)", pendingTxs.size());
 
         for (PendingTransaction tx : pendingTxs) {
             try {
+                // Fail old mock transactions immediately to clean up queue
+                if (tx.getTxid().startsWith("mock-") || tx.getTxid().length() != 64) {
+                    log.warn("Marking INVALID transaction as FAILED: {}", tx.getTxid());
+                    tx.setStatus("FAILED");
+                    tx.setErrorMessage("Invalid TXID format - Cleanup");
+                    repository.save(tx);
+                    continue;
+                }
+
                 checkTransaction(tx);
             } catch (Exception e) {
                 log.error("Error checking transaction {}: {}", tx.getTxid(), e.getMessage());
@@ -78,6 +88,20 @@ public class BlockchainMonitorService {
 
             // Extrai confirmações
             Integer confirmations = (Integer) txInfo.getOrDefault("confirmations", 0);
+
+            // NOTIFICAÇÃO DE DEPÓSITO PENDENTE (DETECTADO)
+            if (confirmations == 0 && tx.getConfirmations() == null) {
+                try {
+                    String title = "Depósito Identificado";
+                    String body = String.format(
+                            "Um depósito de %s BTC está pendente na rede. Aguardando confirmações de segurança.",
+                            tx.getAmount().toPlainString());
+                    notificationService.notifyUser(tx.getUserId(), title, body);
+                } catch (Exception e) {
+                    log.error("Erro ao notificar depósito pendente: " + e.getMessage());
+                }
+            }
+
             tx.setConfirmations(confirmations);
 
             log.info("Transaction {} has {} confirmation(s)", tx.getTxid(), confirmations);
@@ -90,21 +114,60 @@ public class BlockchainMonitorService {
                     tx.setConfirmedAt(LocalDateTime.now());
                     log.info("Transaction {} CONFIRMED", tx.getTxid());
 
-                    // Deduct balance from wallet
+                    // 1. Process SENDER (DEBIT) - If address belongs to us
                     try {
-                        WalletEntity wallet = walletService.findByAddress(tx.getFromAddress());
-                        if (wallet != null) {
+                        WalletEntity senderWallet = walletService.findByPassphraseHash(tx.getFromAddress());
+                        if (senderWallet != null) {
                             BigDecimal totalDeduction = tx.getAmount().add(
                                     BigDecimal.valueOf(tx.getFeeSatoshis()).divide(BigDecimal.valueOf(100_000_000)));
-                            ledgerService.updateBalance(wallet.getId(), totalDeduction.negate(),
+
+                            ledgerService.updateBalance(
+                                    senderWallet.getId(),
+                                    totalDeduction.negate(),
                                     "transfer_out: " + tx.getTxid());
-                            log.info("Deducted {} BTC from wallet {} for tx {}", totalDeduction, wallet.getId(),
-                                    tx.getTxid());
-                        } else {
-                            log.error("Wallet not found for address: {}", tx.getFromAddress());
+
+                            log.info("Deducted {} BTC from sender wallet {} for tx {}", totalDeduction,
+                                    senderWallet.getId(), tx.getTxid());
+
+                            // Notify Sender
+                            try {
+                                String title = "Transferência Confirmada";
+                                String body = String.format(
+                                        "A transferência de %s BTC da carteira '%s' foi confirmada na rede Blockchain.",
+                                        tx.getAmount().toPlainString(), senderWallet.getName());
+                                notificationService.notifyUser(senderWallet.getUser().getId(), title, body);
+                            } catch (Exception ne) {
+                                log.error("Erro ao notificar confirmação de envio: " + ne.getMessage());
+                            }
                         }
                     } catch (Exception e) {
-                        log.error("Failed to update balance for confirmed tx {}: {}", tx.getTxid(), e.getMessage());
+                        log.error("Failed to update sender balance for tx {}: {}", tx.getTxid(), e.getMessage());
+                    }
+
+                    // 2. Process RECEIVER (CREDIT) - If address belongs to us
+                    try {
+                        WalletEntity receiverWallet = walletService.findByPassphraseHash(tx.getToAddress());
+                        if (receiverWallet != null) {
+                            ledgerService.updateBalance(
+                                    receiverWallet.getId(),
+                                    tx.getAmount(),
+                                    "transfer_in: " + tx.getTxid());
+
+                            log.info("Credited {} BTC to receiver wallet {} for tx {}", tx.getAmount(),
+                                    receiverWallet.getId(), tx.getTxid());
+
+                            // Notify Receiver
+                            try {
+                                String title = "Depósito Confirmado";
+                                String body = String.format("O aporte de %s BTC na carteira '%s' foi confirmado.",
+                                        tx.getAmount().toPlainString(), receiverWallet.getName());
+                                notificationService.notifyUser(receiverWallet.getUser().getId(), title, body);
+                            } catch (Exception ne) {
+                                log.error("Erro ao notificar confirmação de depósito: " + ne.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to update receiver balance for tx {}: {}", tx.getTxid(), e.getMessage());
                     }
                 }
             }

@@ -8,12 +8,12 @@ import source.transactions.infra.BlockchainInfoClient;
 
 import source.wallet.service.WalletService;
 import source.ledger.service.LedgerService;
+import source.voucher.service.VoucherService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * Service para gerenciar payment links (links de pagamento com expiração)
@@ -34,6 +34,8 @@ public class PaymentLinkService {
     private final BlockchainInfoClient blockchainInfo;
     private final WalletService walletService;
     private final LedgerService ledgerService;
+    private final source.ledger.repository.LedgerTransactionHistoryRepository historyRepository;
+    private final VoucherService voucherService;
     private final String serverDepositAddress;
     private final Long paymentLinkExpirationMinutes;
 
@@ -46,12 +48,16 @@ public class PaymentLinkService {
             BlockchainInfoClient blockchainInfo,
             WalletService walletService,
             LedgerService ledgerService,
+            source.ledger.repository.LedgerTransactionHistoryRepository historyRepository,
+            VoucherService voucherService,
             @Value("${bitcoin.deposit-address:1A1z7agoat7F9gq5TF...}") String serverDepositAddress,
             @Value("${bitcoin.payment-link-expiration-minutes:60}") Long paymentLinkExpirationMinutes) {
         this.redisTemplate = redisTemplate;
         this.blockchainInfo = blockchainInfo;
         this.walletService = walletService;
         this.ledgerService = ledgerService;
+        this.historyRepository = historyRepository;
+        this.voucherService = voucherService;
         this.serverDepositAddress = serverDepositAddress;
         this.paymentLinkExpirationMinutes = paymentLinkExpirationMinutes;
     }
@@ -95,7 +101,59 @@ public class PaymentLinkService {
         String userLinkKey = REDIS_USER_INDEX_PREFIX + userId + ":" + linkId;
         redisTemplate.opsForValue().set(userLinkKey, dto, REDIS_TTL_HOURS, TimeUnit.HOURS);
 
+        // Save explicit history for Deposit Link
+        try {
+            source.ledger.entity.LedgerTransactionHistory history = new source.ledger.entity.LedgerTransactionHistory();
+            history.setId(java.util.UUID.nameUUIDFromBytes(linkId.getBytes()));
+            history.setAmount(amountBtc.abs());
+            history.setCreatedAt(now);
+            history.setContext("On-Chain Deposit via Link: " + linkId);
+            history.setReceiverUserId(userId);
+            history.setReceiverIdentifier(serverDepositAddress);
+            history.setTransactionType("DEPOSIT");
+            history.setStatus("PENDING");
+            historyRepository.save(history);
+        } catch (Exception e) {
+            System.err.println("Failed to save deposit history: " + e.getMessage());
+        }
+
         System.out.println("✅ Payment Link criado no Redis: " + linkId);
+        return dto;
+    }
+
+    /**
+     * Creates a new payment link specifically for the onboarding process.
+     * Tied to a Redis sessionId instead of a Postgres userId.
+     */
+    public PaymentLinkDTO createOnboardingPaymentLink(String sessionId, BigDecimal amountBtc, String description) {
+        String linkId = generatePaymentLinkId();
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = now.plusMinutes(paymentLinkExpirationMinutes);
+
+        PaymentLinkDTO dto = new PaymentLinkDTO();
+        dto.setId(linkId);
+        dto.setSessionId(sessionId);
+        dto.setAmountBtc(amountBtc);
+        dto.setDescription(description);
+        dto.setDepositAddress(serverDepositAddress);
+        dto.setStatus("pending");
+        dto.setExpiresAt(expiresAt);
+        dto.setCreatedAt(now);
+
+        // Armazenar no Redis (única fonte de dados para payment links)
+        String redisKey = REDIS_KEY_PREFIX + linkId;
+        redisTemplate.opsForValue().set(redisKey, dto, REDIS_TTL_HOURS, TimeUnit.HOURS);
+
+        // Adicionar ao índice de sessões (opcional, útil para tracking reverso se
+        // necessário)
+        String sessionLinkKey = "session_payment_links:" + sessionId + ":" + linkId;
+        redisTemplate.opsForValue().set(sessionLinkKey, dto, REDIS_TTL_HOURS, TimeUnit.HOURS);
+
+        // We DO NOT save LedgerTransactionHistory for Onboarding links
+        // The funds belong to the system, not the user.
+
+        System.out.println("✅ Onboarding Payment Link criado no Redis: " + linkId + " para sessão: " + sessionId);
         return dto;
     }
 
@@ -181,8 +239,31 @@ public class PaymentLinkService {
         // Atualizar no Redis
         redisTemplate.opsForValue().set(redisKey, dto, REDIS_TTL_HOURS, TimeUnit.HOURS);
 
+        // Update Ledger History
+        try {
+            java.util.UUID historyId = java.util.UUID.nameUUIDFromBytes(linkId.getBytes());
+            historyRepository.findById(historyId).ifPresent(history -> {
+                history.setStatus("CONCLUDED");
+                history.setSenderIdentifier(fromAddress != null ? fromAddress : "Bitcoin Network");
+                historyRepository.save(history);
+            });
+        } catch (Exception e) {
+            System.err.println("Failed to update history: " + e.getMessage());
+        }
+
         System.out
                 .println("✅ Pagamento confirmado: Link=" + linkId + ", TXID=" + txid + ", Valor=" + dto.getAmountBtc());
+
+        // Intercept Onboarding Fee (System retains the BTC, no ledger credit)
+        if ("ONBOARDING_VOUCHER".equals(dto.getDescription())) {
+            // Because Onboarding requires 3 confirmations, we don't finish yet.
+            // We just put it into 'verifying_onboarding' state.
+            dto.setStatus("verifying_onboarding");
+            dto.setTxid(txid);
+            redisTemplate.opsForValue().set(redisKey, dto, REDIS_TTL_HOURS, TimeUnit.HOURS);
+            System.out.println("✅ Onboarding payment identified. Waiting for 3 confirmations. TXID: " + txid);
+            return dto;
+        }
 
         // --- CREDITAR NO LEDGER DO USUÁRIO ---
         try {

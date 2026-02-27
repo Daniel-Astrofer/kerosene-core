@@ -1,5 +1,6 @@
 package source.config;
 
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -9,6 +10,8 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -20,17 +23,38 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.WebSocketHandler;
 
 import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
+import org.springframework.web.socket.server.HandshakeInterceptor;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.http.server.ServletServerHttpRequest;
+import java.util.Map;
+import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.MessageDeliveryException;
 
+import java.util.Collections;
 import java.util.List;
 
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    @Autowired
+    private JwtServicer jwtServicer;
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic");
+        config.enableSimpleBroker("/topic")
+                .setTaskScheduler(heartBeatScheduler()) // Required for heartbeats
+                .setHeartbeatValue(new long[] { 10000, 10000 }); // 10 sec heartbeat (sends, expects)
         config.setApplicationDestinationPrefixes("/app");
+    }
+
+    @Bean
+    public TaskScheduler heartBeatScheduler() {
+        return new ThreadPoolTaskScheduler();
     }
 
     @Override
@@ -50,22 +74,62 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             }
         };
 
+        // Handshake Interceptor to extract token from Query Params
+        HandshakeInterceptor tokenInterceptor = new HandshakeInterceptor() {
+            @Override
+            public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                    WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
+                if (request instanceof ServletServerHttpRequest) {
+                    ServletServerHttpRequest servletRequest = (ServletServerHttpRequest) request;
+                    String token = servletRequest.getServletRequest().getParameter("token");
+                    if (token != null) {
+                        attributes.put("token", token);
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
+                    WebSocketHandler wsHandler, Exception exception) {
+            }
+        };
+
         // Main endpoint + SockJS
         registry.addEndpoint("/ws/balance")
                 .setAllowedOriginPatterns("*")
                 .setHandshakeHandler(handshakeHandler)
+                .addInterceptors(tokenInterceptor)
                 .withSockJS();
 
         // Raw fallback
         registry.addEndpoint("/ws/raw-balance")
                 .setAllowedOriginPatterns("*")
-                .setHandshakeHandler(handshakeHandler);
+                .setHandshakeHandler(handshakeHandler)
+                .addInterceptors(tokenInterceptor);
 
-        System.out.println("🔌 [WEBSOCKET] Endpoints registered (SockJS enabled with Forced STOMP)");
+        // Payment request real-time notifications
+        // Clients subscribe to: /topic/payment-request/{linkId}
+        // Pushed when payRequest() marks the link as PAID
+        registry.addEndpoint("/ws/payment-request")
+                .setAllowedOriginPatterns("*")
+                .setHandshakeHandler(handshakeHandler)
+                .addInterceptors(tokenInterceptor)
+                .withSockJS();
+
+        registry.addEndpoint("/ws/raw-payment-request")
+                .setAllowedOriginPatterns("*")
+                .setHandshakeHandler(handshakeHandler)
+                .addInterceptors(tokenInterceptor);
+
+        System.out.println("🔌 [WEBSOCKET] Endpoints registered (SockJS enabled + Token Query Param supported)");
     }
 
     @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.setSendTimeLimit(20 * 1000) // Increase to 20 seconds
+                .setSendBufferSizeLimit(512 * 1024); // Increase to 512KB
+
         registration.addDecoratorFactory(new WebSocketHandlerDecoratorFactory() {
             @Override
             public WebSocketHandler decorate(WebSocketHandler handler) {
@@ -101,9 +165,51 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 if (accessor != null) {
                     StompCommand command = accessor.getCommand();
+
+                    if (StompCommand.CONNECT.equals(command)) {
+                        String token = null;
+
+                        // 1. Try from Native Headers (STOMP frames)
+                        List<String> authorization = accessor.getNativeHeader("Authorization");
+                        if (authorization != null && !authorization.isEmpty()) {
+                            token = authorization.get(0).replace("Bearer ", "");
+                        }
+
+                        // 2. Fallback to Session Attributes (Handshake query param)
+                        if (token == null && accessor.getSessionAttributes() != null) {
+                            token = (String) accessor.getSessionAttributes().get("token");
+                        }
+
+                        if (token != null) {
+                            try {
+                                Long userId = jwtServicer.extractId(token);
+
+                                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                                        userId.toString(), null, Collections.emptyList());
+                                SecurityContextHolder.getContext().setAuthentication(auth);
+                                accessor.setUser(auth);
+                                System.out.println("✅ [STOMP-AUTH] Connect authenticated for User: " + userId);
+                            } catch (Exception e) {
+                                System.err.println("❌ [STOMP-AUTH] Invalid JWT token: " + e.getMessage());
+                            }
+                        } else {
+                            System.out.println("⚠️ [STOMP-AUTH] No Token found in headers or query params.");
+                        }
+                    }
+
+                    // Enforce security on SUBSCRIBE
+                    if (StompCommand.SUBSCRIBE.equals(command)) {
+                        if (accessor.getUser() == null) {
+                            System.err.println(
+                                    "❌ [STOMP-AUTH] Unauthorized SUBSCRIBE attempt to: " + accessor.getDestination());
+                            throw new MessageDeliveryException("Unauthorized: Please connect with a valid JWT token");
+                        }
+                    }
+
                     if (command != null) {
                         System.out.println("📥 [STOMP-IN] " + command + " | Session: " + accessor.getSessionId()
-                                + " | User: " + accessor.getUser());
+                                + " | User: "
+                                + (accessor.getUser() != null ? accessor.getUser().getName() : "UNAUTHENTICATED"));
                     }
                 }
                 return message;

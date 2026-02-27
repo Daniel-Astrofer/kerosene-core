@@ -2,6 +2,7 @@ package source.auth.application.infra.security;
 
 import io.jsonwebtoken.JwtException;
 import org.springframework.http.HttpStatus;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import source.auth.AuthExceptions;
 import source.auth.application.service.device.UserDeviceService;
@@ -27,6 +28,13 @@ import java.util.Optional;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
+    // Paths where the HTTP filter should NOT abort on JWT failure.
+    // WebSocket upgrade requests are authenticated at the STOMP layer instead.
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+    private static final java.util.List<String> SKIP_BLOCK_PATHS = java.util.List.of("/ws/**");
+
     private final JwtServicer jwtService;
     private final JwtService jwtServiceImpl;
     private final HandlerExceptionResolver resolver;
@@ -39,28 +47,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.resolver = resolver;
     }
 
+    private boolean isSkipBlockPath(String path) {
+        return SKIP_BLOCK_PATHS.stream().anyMatch(p -> PATH_MATCHER.match(p, path));
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
+        String token = null;
 
         if (header != null && header.startsWith("Bearer ")) {
+            token = header.substring(7);
+        } else if (request.getParameter("token") != null) {
+            token = request.getParameter("token");
+        }
 
-            String token = header.substring(7);
+        if (token != null) {
             UsernamePasswordAuthenticationToken auth = null;
             try {
                 Long userId = jwtService.extractId(token);
-                String deviceHash = jwtService.extractDevice(token);
-
-                // Relax device hash check for WebSocket handshakes or specific paths if needed
-                String path = request.getRequestURI();
-                boolean isWs = path != null && path.startsWith("/ws/");
-                String requestedDeviceHash = request.getHeader("X-Device-Hash");
-
-                if (!isWs && (requestedDeviceHash == null || !deviceHash.equals(requestedDeviceHash))) {
-                    throw new Exception("Invalid session: Device hash mismatch");
-                }
+                String deviceHash = ""; // Device hash is no longer enforced
 
                 auth = new UsernamePasswordAuthenticationToken(userId, token, Collections.singletonList(() -> "USER"));
 
@@ -72,11 +80,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
 
             } catch (Exception e) {
-                resolver.resolveException(request, response, null,
-                        new AuthExceptions.UnrrecognizedDevice("invalid session"));
-                return;
+                log.warn("JWT Authentication Error for path {}: {}", request.getServletPath(), e.getMessage());
+                // For WebSocket upgrade paths (/ws/**), do NOT abort the request.
+                // The STOMP-level interceptor in WebSocketConfig handles authentication
+                // AFTER the HTTP upgrade. Returning 401 here prevents the upgrade entirely.
+                if (isSkipBlockPath(request.getServletPath())) {
+                    log.debug("Skipping JWT block for WS path: {}", request.getServletPath());
+                } else {
+                    resolver.resolveException(request, response, null,
+                            new AuthExceptions.UnrrecognizedDevice("invalid session: " + e.getMessage()));
+                    return;
+                }
             }
-            SecurityContextHolder.getContext().setAuthentication(auth);
+            if (auth != null) {
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            }
         }
 
         filterChain.doFilter(request, response);

@@ -10,14 +10,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import source.auth.application.service.authentication.contracts.SignupVerifier;
 import source.auth.application.service.cripto.contracts.Hasher;
 import source.auth.model.entity.UserDataBase;
-import source.wallet.dto.WalletDTO;
+import source.wallet.dto.WalletRequestDTO;
+import source.wallet.dto.WalletUpdateDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
 
 import java.util.Arrays;
-import java.util.Collections;
+
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -41,22 +43,23 @@ class WalletServiceTest {
 
     private WalletEntity wallet;
     private UserDataBase user;
-    private WalletDTO walletDTO;
+    private WalletRequestDTO requestDTO;
+    private WalletUpdateDTO updateDTO;
 
     @BeforeEach
     void setUp() {
-        user = new UserDataBase();
-        user.setUsername("testuser");
+        user = mock(UserDataBase.class);
+        when(user.getId()).thenReturn(1L);
+        when(user.getUsername()).thenReturn("testuser");
 
         wallet = new WalletEntity();
         wallet.setId(1L);
-        wallet.setName("TestWallet");
-        wallet.setAddress("hashed-address");
+        wallet.setName("TESTWALLET");
+        wallet.setPassphraseHash("hashed-address");
         wallet.setUser(user);
 
-        walletDTO = new WalletDTO();
-        walletDTO.setName("TestWallet");
-        walletDTO.setPassphrase("test-passphrase-bip39");
+        requestDTO = new WalletRequestDTO("test-passphrase-bip39", "TestWallet");
+        updateDTO = new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", "UpdatedWallet");
     }
 
     @Test
@@ -76,24 +79,24 @@ class WalletServiceTest {
     @Test
     @DisplayName("Should find wallet by name")
     void shouldFindWalletByName() {
-        when(walletRepository.findByName("TestWallet")).thenReturn(wallet);
+        when(walletRepository.findByName("TESTWALLET")).thenReturn(wallet);
 
-        WalletEntity result = walletService.findByName("TestWallet");
+        WalletEntity result = walletService.findByName("TESTWALLET");
 
         assertNotNull(result);
-        assertEquals("TestWallet", result.getName());
-        verify(walletRepository).findByName("TestWallet");
+        assertEquals("TESTWALLET", result.getName());
+        verify(walletRepository).findByName("TESTWALLET");
     }
 
     @Test
     @DisplayName("Should check if wallet exists by name")
     void shouldCheckIfWalletExistsByName() {
-        when(walletRepository.existsByName("TestWallet")).thenReturn(true);
+        when(walletRepository.existsByName("TESTWALLET")).thenReturn(true);
 
-        boolean result = walletService.existsByName("TestWallet");
+        boolean result = walletService.existsByName("TESTWALLET");
 
         assertTrue(result);
-        verify(walletRepository).existsByName("TestWallet");
+        verify(walletRepository).existsByName("TESTWALLET");
     }
 
     @Test
@@ -112,112 +115,84 @@ class WalletServiceTest {
     @Test
     @DisplayName("Should delete wallet successfully")
     void shouldDeleteWalletSuccessfully() {
-        List<WalletEntity> wallets = Arrays.asList(wallet);
-        when(walletRepository.findByUserId(user.getId())).thenReturn(wallets);
-        when(hash.hash(anyString())).thenReturn("hashed-passphrase");
+        when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.of(wallet));
+        when(hash.hash("test-passphrase-bip39")).thenReturn("hashed-address");
         doNothing().when(walletRepository).delete(any(WalletEntity.class));
 
-        boolean result = walletService.deleteWallet(user.getId(), walletDTO);
+        boolean result = walletService.deleteWallet(user.getId(), requestDTO);
 
         assertTrue(result);
-        verify(walletRepository).findByUserId(user.getId());
-        verify(hash).hash(anyString());
+        verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
+        verify(hash).hash("test-passphrase-bip39");
         verify(walletRepository).delete(wallet);
     }
 
     @Test
     @DisplayName("Should throw exception when deleting wallet with no wallets")
     void shouldThrowExceptionWhenDeletingWalletWithNoWallets() {
-        when(walletRepository.findByUserId(user.getId())).thenReturn(Collections.emptyList());
-        when(hash.hash(anyString())).thenReturn("hashed-passphrase");
+        when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.empty());
 
         assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletService.deleteWallet(user.getId(), walletDTO);
+            walletService.deleteWallet(user.getId(), requestDTO);
         });
 
-        verify(walletRepository).findByUserId(user.getId());
+        verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
         verify(walletRepository, never()).delete(any(WalletEntity.class));
     }
 
     @Test
-    @DisplayName("Should return false when wallet to delete not found")
-    void shouldReturnFalseWhenWalletToDeleteNotFound() {
-        WalletEntity differentWallet = new WalletEntity();
-        differentWallet.setName("DifferentWallet");
-        List<WalletEntity> wallets = Arrays.asList(differentWallet);
-        
-        when(walletRepository.findByUserId(user.getId())).thenReturn(wallets);
-        when(hash.hash(anyString())).thenReturn("hashed-passphrase");
+    @DisplayName("Should return exception when wallet to delete has wrong passphrase")
+    void shouldReturnExceptionWhenWalletToDeleteHasWrongPass() {
+        when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.of(wallet));
+        when(hash.hash("test-passphrase-bip39")).thenReturn("wrong-passphrase");
 
-        boolean result = walletService.deleteWallet(user.getId(), walletDTO);
+        assertThrows(WalletExceptions.WalletNoExists.class, () -> {
+            walletService.deleteWallet(user.getId(), requestDTO);
+        });
 
-        assertFalse(result);
-        verify(walletRepository).findByUserId(user.getId());
+        verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
         verify(walletRepository, never()).delete(any(WalletEntity.class));
     }
 
     @Test
     @DisplayName("Should update wallet name successfully")
     void shouldUpdateWalletNameSuccessfully() {
-        walletDTO.setNewName("UpdatedWallet");
-        List<WalletEntity> wallets = Arrays.asList(wallet);
-        
-        when(walletRepository.findByUserId(user.getId())).thenReturn(wallets);
-        when(walletRepository.existsByName("UpdatedWallet")).thenReturn(false);
+        when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.of(wallet));
+        when(walletRepository.existsByUserIdAndName(user.getId(), "UPDATEDWALLET")).thenReturn(false);
         when(walletRepository.save(any(WalletEntity.class))).thenReturn(wallet);
 
-        assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletService.updateWallet(user.getId(), walletDTO);
+        assertDoesNotThrow(() -> {
+            walletService.updateWallet(user.getId(), updateDTO);
         });
 
-        verify(walletRepository).findByUserId(user.getId());
-        verify(walletRepository).existsByName("UpdatedWallet");
-    }
-
-    @Test
-    @DisplayName("Should throw exception when updating wallet with no wallets")
-    void shouldThrowExceptionWhenUpdatingWalletWithNoWallets() {
-        when(walletRepository.findByUserId(user.getId())).thenReturn(Collections.emptyList());
-
-        assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletService.updateWallet(user.getId(), walletDTO);
-        });
-
-        verify(walletRepository).findByUserId(user.getId());
-        verify(walletRepository, never()).save(any(WalletEntity.class));
+        verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
+        verify(walletRepository).existsByUserIdAndName(user.getId(), "UPDATEDWALLET");
     }
 
     @Test
     @DisplayName("Should throw exception when new name already exists")
     void shouldThrowExceptionWhenNewNameAlreadyExists() {
-        walletDTO.setNewName("ExistingWallet");
-        List<WalletEntity> wallets = Arrays.asList(wallet);
-        
-        when(walletRepository.findByUserId(user.getId())).thenReturn(wallets);
-        when(walletRepository.existsByName("ExistingWallet")).thenReturn(true);
+        when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.of(wallet));
+        when(walletRepository.existsByUserIdAndName(user.getId(), "UPDATEDWALLET")).thenReturn(true);
 
         assertThrows(WalletExceptions.WalletNameAlredyExists.class, () -> {
-            walletService.updateWallet(user.getId(), walletDTO);
+            walletService.updateWallet(user.getId(), updateDTO);
         });
 
-        verify(walletRepository).findByUserId(user.getId());
-        verify(walletRepository).existsByName("ExistingWallet");
+        verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
+        verify(walletRepository).existsByUserIdAndName(user.getId(), "UPDATEDWALLET");
         verify(walletRepository, never()).save(any(WalletEntity.class));
     }
 
     @Test
     @DisplayName("Should throw exception when wallet not found for update")
     void shouldThrowExceptionWhenWalletNotFoundForUpdate() {
-        WalletEntity differentWallet = new WalletEntity();
-        differentWallet.setName("DifferentWallet");
-        List<WalletEntity> wallets = Arrays.asList(differentWallet);
-        
-        when(walletRepository.findByUserId(user.getId())).thenReturn(wallets);
+        when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.empty());
 
         assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletService.updateWallet(user.getId(), walletDTO);
+            walletService.updateWallet(user.getId(), updateDTO);
         });
 
-        verify(walletRepository).findByUserId(user.getId());
+        verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
     }
 }

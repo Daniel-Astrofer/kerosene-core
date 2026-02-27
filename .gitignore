@@ -39,4 +39,10 @@ out/
 # Security / Secrets
 application-secret.properties
 *.env
+.env
 src/main/resources/secrets/
+service-account.json
+google-services.json
+
+# Tor hidden service private key — NEVER commit this
+tor/kerosene_service/

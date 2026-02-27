@@ -7,12 +7,11 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-
 @Repository
 public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
 
     Optional<UserDevice> findByUserId(Long id);
 
-    Optional<UserDevice> findByIdAndDeviceHash(Long id, String deviceHash);
+    java.util.List<UserDevice> findAllByUserId(Long userId);
 
 }

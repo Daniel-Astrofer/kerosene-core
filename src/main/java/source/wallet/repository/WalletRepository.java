@@ -12,11 +12,13 @@ public interface WalletRepository extends JpaRepository<WalletEntity, Long> {
 
     WalletEntity findByName(String name);
 
-    WalletEntity findByAddress(String address);
+    WalletEntity findByPassphraseHash(String passphraseHash);
 
     List<WalletEntity> findByUserId(Long id);
 
     boolean existsByName(String name);
 
     boolean existsByUserIdAndName(Long id, String name);
+
+    Optional<WalletEntity> findByUserIdAndName(Long userId, String name);
 }

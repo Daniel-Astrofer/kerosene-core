@@ -1,6 +1,5 @@
 package source.wallet.orchestrator;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -8,14 +7,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.AuthExceptions;
+
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.model.entity.UserDataBase;
 import source.ledger.service.LedgerService;
-import source.wallet.dto.WalletDTO;
+import source.wallet.dto.WalletRequestDTO;
+import source.wallet.dto.WalletUpdateDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletService;
@@ -44,54 +41,42 @@ class WalletUseCaseTest {
     @Mock
     private LedgerService ledgerService;
 
-    @Mock
-    private HttpServletRequest request;
-
-    @Mock
-    private SecurityContext securityContext;
-
-    @Mock
-    private Authentication authentication;
-
     @InjectMocks
     private WalletUseCase walletUseCase;
 
     private UserDataBase user;
     private WalletEntity wallet;
-    private WalletDTO walletDTO;
+    private WalletRequestDTO requestDTO;
+    private WalletUpdateDTO updateDTO;
+    private Long userId = 1L;
 
     @BeforeEach
     void setUp() {
         user = mock(UserDataBase.class);
-        when(user.getId()).thenReturn(1L);
+        when(user.getId()).thenReturn(userId);
         when(user.getUsername()).thenReturn("testuser");
 
         wallet = new WalletEntity();
-        wallet.setId(1L);
-        wallet.setName("TestWallet");
+        wallet.setId(userId);
+        wallet.setName("TESTWALLET");
         wallet.setUser(user);
 
-        walletDTO = new WalletDTO();
-        walletDTO.setName("TestWallet");
-        walletDTO.setPassphrase("test-passphrase-bip39");
-
-        SecurityContextHolder.setContext(securityContext);
+        requestDTO = new WalletRequestDTO("test-passphrase-bip39", "TestWallet");
+        updateDTO = new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", "UpdatedWallet");
     }
 
     @Test
     @DisplayName("Should create wallet successfully")
     void shouldCreateWalletSuccessfully() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
-        when(walletService.existsByName("TestWallet")).thenReturn(false);
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
+        when(walletService.existsByUserIdAndName(userId, "TESTWALLET")).thenReturn(false);
         doNothing().when(walletService).save(any(WalletEntity.class));
         when(ledgerService.createLedger(any(WalletEntity.class), anyString())).thenReturn(null);
 
-        assertDoesNotThrow(() -> walletUseCase.createWallet(walletDTO, request));
+        assertDoesNotThrow(() -> walletUseCase.createWallet(requestDTO, userId));
 
-        verify(userService).buscarPorId(1L);
-        verify(walletService).existsByName("TestWallet");
+        verify(userService).buscarPorId(userId);
+        verify(walletService).existsByUserIdAndName(userId, "TESTWALLET");
         verify(walletService).save(any(WalletEntity.class));
         verify(ledgerService).createLedger(any(WalletEntity.class), eq("Initial ledger for new wallet"));
     }
@@ -99,59 +84,51 @@ class WalletUseCaseTest {
     @Test
     @DisplayName("Should throw exception when user not found during wallet creation")
     void shouldThrowExceptionWhenUserNotFoundDuringWalletCreation() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.empty());
+        when(userService.buscarPorId(userId)).thenReturn(Optional.empty());
 
-        assertThrows(AuthExceptions.UserNoExists.class, () -> {
-            walletUseCase.createWallet(walletDTO, request);
+        assertThrows(IllegalArgumentException.class, () -> {
+            walletUseCase.createWallet(requestDTO, userId);
         });
 
-        verify(userService).buscarPorId(1L);
+        verify(userService).buscarPorId(userId);
         verify(walletService, never()).save(any(WalletEntity.class));
     }
 
     @Test
     @DisplayName("Should throw exception when wallet name already exists")
     void shouldThrowExceptionWhenWalletNameAlreadyExists() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
-        when(walletService.existsByName("TestWallet")).thenReturn(true);
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
+        when(walletService.existsByUserIdAndName(userId, "TESTWALLET")).thenReturn(true);
 
         assertThrows(WalletExceptions.WalletNameAlredyExists.class, () -> {
-            walletUseCase.createWallet(walletDTO, request);
+            walletUseCase.createWallet(requestDTO, userId);
         });
 
-        verify(userService).buscarPorId(1L);
-        verify(walletService).existsByName("TestWallet");
+        verify(userService).buscarPorId(userId);
+        verify(walletService).existsByUserIdAndName(userId, "TESTWALLET");
         verify(walletService, never()).save(any(WalletEntity.class));
     }
 
     @Test
     @DisplayName("Should delete wallet successfully")
     void shouldDeleteWalletSuccessfully() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(walletService.deleteWallet(1L, walletDTO)).thenReturn(true);
+        when(walletService.deleteWallet(userId, requestDTO)).thenReturn(true);
 
-        assertDoesNotThrow(() -> walletUseCase.deleteWallet(walletDTO, request));
+        assertDoesNotThrow(() -> walletUseCase.deleteWallet(requestDTO, userId));
 
-        verify(walletService).deleteWallet(1L, walletDTO);
+        verify(walletService).deleteWallet(userId, requestDTO);
     }
 
     @Test
     @DisplayName("Should throw exception when wallet deletion fails")
     void shouldThrowExceptionWhenWalletDeletionFails() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(walletService.deleteWallet(1L, walletDTO)).thenReturn(false);
+        when(walletService.deleteWallet(userId, requestDTO)).thenReturn(false);
 
         assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletUseCase.deleteWallet(walletDTO, request);
+            walletUseCase.deleteWallet(requestDTO, userId);
         });
 
-        verify(walletService).deleteWallet(1L, walletDTO);
+        verify(walletService).deleteWallet(userId, requestDTO);
     }
 
     @Test
@@ -159,63 +136,55 @@ class WalletUseCaseTest {
     void shouldGetAllWalletsSuccessfully() {
         List<WalletEntity> wallets = Arrays.asList(wallet);
 
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
-        when(walletService.findByUserId(1L)).thenReturn(wallets);
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
+        when(walletService.findByUserId(userId)).thenReturn(wallets);
 
-        List<WalletEntity> result = walletUseCase.getAllWallets(request);
+        List<WalletEntity> result = walletUseCase.getAllWallets(userId);
 
         assertNotNull(result);
         assertEquals(1, result.size());
-        verify(userService).buscarPorId(1L);
-        verify(walletService).findByUserId(1L);
+        verify(userService).buscarPorId(userId);
+        verify(walletService).findByUserId(userId);
     }
 
     @Test
     @DisplayName("Should throw exception when user not found during get all wallets")
     void shouldThrowExceptionWhenUserNotFoundDuringGetAllWallets() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.empty());
+        when(userService.buscarPorId(userId)).thenReturn(Optional.empty());
 
-        assertThrows(AuthExceptions.UserNoExists.class, () -> {
-            walletUseCase.getAllWallets(request);
+        assertThrows(IllegalArgumentException.class, () -> {
+            walletUseCase.getAllWallets(userId);
         });
 
-        verify(userService).buscarPorId(1L);
+        verify(userService).buscarPorId(userId);
         verify(walletService, never()).findByUserId(anyLong());
     }
 
     @Test
     @DisplayName("Should get wallet by name successfully")
     void shouldGetWalletByNameSuccessfully() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
         when(walletService.findByName("TestWallet")).thenReturn(wallet);
 
-        WalletEntity result = walletUseCase.getWalletByName("TestWallet", request);
+        WalletEntity result = walletUseCase.getWalletByName("TestWallet", userId);
 
         assertNotNull(result);
-        assertEquals("TestWallet", result.getName());
-        verify(userService).buscarPorId(1L);
+        assertEquals("TESTWALLET", result.getName());
+        verify(userService).buscarPorId(userId);
         verify(walletService).findByName("TestWallet");
     }
 
     @Test
     @DisplayName("Should throw exception when wallet not found by name")
     void shouldThrowExceptionWhenWalletNotFoundByName() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
         when(walletService.findByName("TestWallet")).thenReturn(null);
 
         assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletUseCase.getWalletByName("TestWallet", request);
+            walletUseCase.getWalletByName("TestWallet", userId);
         });
 
-        verify(userService).buscarPorId(1L);
+        verify(userService).buscarPorId(userId);
         verify(walletService).findByName("TestWallet");
     }
 
@@ -227,45 +196,39 @@ class WalletUseCaseTest {
         when(differentUser.getUsername()).thenReturn("differentuser");
         wallet.setUser(differentUser);
 
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
         when(walletService.findByName("TestWallet")).thenReturn(wallet);
 
         assertThrows(WalletExceptions.WalletNoExists.class, () -> {
-            walletUseCase.getWalletByName("TestWallet", request);
+            walletUseCase.getWalletByName("TestWallet", userId);
         });
 
-        verify(userService).buscarPorId(1L);
+        verify(userService).buscarPorId(userId);
         verify(walletService).findByName("TestWallet");
     }
 
     @Test
     @DisplayName("Should update wallet successfully")
     void shouldUpdateWalletSuccessfully() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.of(user));
-        doNothing().when(walletService).updateWallet(1L, walletDTO);
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
+        doNothing().when(walletService).updateWallet(userId, updateDTO);
 
-        assertDoesNotThrow(() -> walletUseCase.updateWallet(walletDTO, request));
+        assertDoesNotThrow(() -> walletUseCase.updateWallet(updateDTO, userId));
 
-        verify(userService).buscarPorId(1L);
-        verify(walletService).updateWallet(1L, walletDTO);
+        verify(userService).buscarPorId(userId);
+        verify(walletService).updateWallet(userId, updateDTO);
     }
 
     @Test
     @DisplayName("Should throw exception when user not found during wallet update")
     void shouldThrowExceptionWhenUserNotFoundDuringWalletUpdate() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.buscarPorId(1L)).thenReturn(Optional.empty());
+        when(userService.buscarPorId(userId)).thenReturn(Optional.empty());
 
-        assertThrows(AuthExceptions.UserNoExists.class, () -> {
-            walletUseCase.updateWallet(walletDTO, request);
+        assertThrows(IllegalArgumentException.class, () -> {
+            walletUseCase.updateWallet(updateDTO, userId);
         });
 
-        verify(userService).buscarPorId(1L);
-        verify(walletService, never()).updateWallet(anyLong(), any(WalletDTO.class));
+        verify(userService).buscarPorId(userId);
+        verify(walletService, never()).updateWallet(anyLong(), any());
     }
 }

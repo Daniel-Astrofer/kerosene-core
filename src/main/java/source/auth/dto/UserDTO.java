@@ -1,9 +1,8 @@
 package source.auth.dto;
 
-
 import source.auth.dto.contracts.UserDTOContract;
+import source.auth.model.enums.AccountSecurityType;
 import com.fasterxml.jackson.annotation.JsonInclude;
-
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserDTO implements UserDTOContract {
@@ -12,23 +11,39 @@ public class UserDTO implements UserDTOContract {
     private String passphrase;
     private String totpSecret;
     private String totpCode;
-    private String ip;
-    private String deviceHash;
+    private String voucherCode;
+    private String challenge;
+    private String nonce;
 
-    public String getDeviceHash() {
-        return deviceHash;
+    /**
+     * Account security mode requested at signup.
+     * Defaults to STANDARD (password + TOTP).
+     * The platform co-signer secret is never stored here.
+     */
+    private AccountSecurityType accountSecurity = AccountSecurityType.STANDARD;
+
+    public String getChallenge() {
+        return challenge;
     }
 
-    public void setDeviceHash(String deviceHash) {
-        this.deviceHash = deviceHash;
+    public void setChallenge(String challenge) {
+        this.challenge = challenge;
     }
 
-    public String getIp() {
-        return ip;
+    public String getNonce() {
+        return nonce;
     }
 
-    public void setIp(String ip) {
-        this.ip = ip;
+    public void setNonce(String nonce) {
+        this.nonce = nonce;
+    }
+
+    public String getVoucherCode() {
+        return voucherCode;
+    }
+
+    public void setVoucherCode(String voucherCode) {
+        this.voucherCode = voucherCode;
     }
 
     @Override
@@ -69,5 +84,13 @@ public class UserDTO implements UserDTOContract {
     @Override
     public void setTotpCode(String totpCode) {
         this.totpCode = totpCode;
+    }
+
+    public AccountSecurityType getAccountSecurity() {
+        return accountSecurity;
+    }
+
+    public void setAccountSecurity(AccountSecurityType accountSecurity) {
+        this.accountSecurity = accountSecurity;
     }
 }

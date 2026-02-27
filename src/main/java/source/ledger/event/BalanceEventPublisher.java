@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 @Service
 public class BalanceEventPublisher {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BalanceEventPublisher.class);
+
     private final SimpMessagingTemplate messagingTemplate;
 
     public BalanceEventPublisher(SimpMessagingTemplate messagingTemplate) {
@@ -22,8 +24,7 @@ public class BalanceEventPublisher {
         // Publish to user-specific topic
         String destination = "/topic/balance/" + userId;
         messagingTemplate.convertAndSend(destination, event);
-
-        System.out.println("📡 [WEBSOCKET] Published balance update to " + destination +
-                " - Wallet: " + walletName + ", New Balance: " + newBalance);
+        log.info("[WS] Published balance update to {} - Wallet: {}, NewBalance: {}", destination, walletName,
+                newBalance);
     }
 }

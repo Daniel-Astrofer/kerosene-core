@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+    <property name="LOG_PATH" value="logs" />
+    <property name="MAX_HISTORY" value="7" />
+    <property name="MAX_FILE_SIZE" value="50MB" />
+    <property name="TOTAL_SIZE_CAP" value="1GB" />
+
+    <!-- ACCESS_APPENDER: Specific for HTTP requests interceptor -->
+    <appender name="ACCESS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/access.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archived/access-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>${MAX_FILE_SIZE}</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${TOTAL_SIZE_CAP}</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <value>(?i)(password|passphrase|private_key|mnemonic|secret|totp|totpSecret|jwt|token|authorization|bearer\s+)\s*[:=]\s*"?([^"&amp;\s,]+)"?</value>
+            </jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="ACCESS_APPENDER" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="ACCESS_FILE" />
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- APPLICATION_APPENDER: General system and error logs -->
+    <appender name="APPLICATION_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/application.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archived/application-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>${MAX_FILE_SIZE}</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${TOTAL_SIZE_CAP}</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <value>(?i)(password|passphrase|private_key|mnemonic|secret|totp|totpSecret|jwt|token|authorization|bearer\s+)\s*[:=]\s*"?([^"&amp;\s,]+)"?</value>
+            </jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="APPLICATION_APPENDER" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="APPLICATION_FILE" />
+        <queueSize>2048</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- AUDIT_APPENDER: Critical transactions and financial events -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/audit.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/archived/audit-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>${MAX_FILE_SIZE}</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${TOTAL_SIZE_CAP}</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <value>(?i)(password|passphrase|private_key|mnemonic|secret|totp|totpSecret|jwt|token|authorization|bearer\s+)\s*[:=]\s*"?([^"&amp;\s,]+)"?</value>
+            </jsonGeneratorDecorator>
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <version>@version</version>
+                <level>level</level>
+                <thread>thread_name</thread>
+                <logger>logger_name</logger>
+                <message>message</message>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <appender name="AUDIT_APPENDER" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="AUDIT_FILE" />
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold> <!-- Never discard audit logs -->
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Console Appender for development/dockers -->
+    <appender name="CONSOLE_SYNC" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeContext>true</includeContext>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <value>(?i)(password|passphrase|private_key|mnemonic|secret|totp|totpSecret|jwt|token|authorization|bearer\s+)\s*[:=]\s*"?([^"&amp;\s,]+)"?</value>
+            </jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="CONSOLE_SYNC" />
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+    </appender>
+
+    <!-- Loggers Configurations -->
+    <logger name="source.common.infra.logging.LoggingFilter" level="INFO" additivity="false">
+        <appender-ref ref="ACCESS_APPENDER" />
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
+    <logger name="source.ledger" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_APPENDER" />
+        <appender-ref ref="APPLICATION_APPENDER" />
+        <appender-ref ref="CONSOLE" />
+    </logger>
+
+    <logger name="source" level="INFO">
+        <appender-ref ref="APPLICATION_APPENDER" />
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="APPLICATION_APPENDER" />
+    </root>
+
+</configuration>

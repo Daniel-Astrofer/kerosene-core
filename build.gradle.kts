@@ -1,5 +1,3 @@
-
-
 plugins {
 
     java
@@ -11,6 +9,10 @@ plugins {
 group = "kerosene"
 version = "PRE-ALPHA"
 description = "backend"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+}
 
 repositories {
 	mavenCentral()
@@ -38,6 +40,13 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.postgresql:postgresql:42.7.7")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    implementation("com.bucket4j:bucket4j-core:8.7.0")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("com.yubico:webauthn-server-core:2.4.0")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.micrometer:micrometer-observation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
 }

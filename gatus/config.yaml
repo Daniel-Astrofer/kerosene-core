@@ -1,0 +1,21 @@
+metrics: true
+
+endpoints:
+  - name: kerosene-onion-health
+    group: backend
+    url: "http://${MASTER_ONION}/actuator/health"
+    interval: 60s
+    client:
+      proxy-url: socks5://kerosene-tor-se:9050 # Validating through the local Tor container directly 
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == UP"
+      - "[BODY].components.db.status == UP"
+      - "[BODY].components.tor.status == UP"
+
+web:
+  port: 8080
+
+ui:
+  title: Kerosene Uptime Monitor
+  header: Kerosene Status Dashboard

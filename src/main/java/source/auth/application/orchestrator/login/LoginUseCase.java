@@ -3,6 +3,7 @@ package source.auth.application.orchestrator.login;
 import source.auth.AuthExceptions;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.service.authentication.contracts.LoginVerifier;
+import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.device.UserDeviceService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
@@ -12,7 +13,6 @@ import source.auth.model.entity.UserDataBase;
 import source.auth.model.entity.UserDevice;
 import source.ledger.service.LedgerService;
 import source.wallet.service.WalletService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -30,13 +30,17 @@ public class LoginUseCase implements Login {
     private final TOTPVerifier totpVerifier;
     private final LedgerService ledgerService;
     private final WalletService walletService;
-    
+    private final source.notification.service.NotificationService notificationService;
+    private final RedisServicer redisService;
+
     // Saldo inicial de teste (100.000)
     private static final BigDecimal INITIAL_TEST_BALANCE = new BigDecimal("100000");
 
-    public LoginUseCase(LoginVerifier verifier, JwtServicer service, UserDeviceService deviceService, 
-                        UserServiceContract userService, TOTPVerifier totpVerifier,
-                        LedgerService ledgerService, WalletService walletService) {
+    public LoginUseCase(LoginVerifier verifier, JwtServicer service, UserDeviceService deviceService,
+            UserServiceContract userService, TOTPVerifier totpVerifier,
+            LedgerService ledgerService, WalletService walletService,
+            source.notification.service.NotificationService notificationService,
+            RedisServicer redisService) {
         this.verifier = verifier;
         this.service = service;
         this.deviceService = deviceService;
@@ -44,122 +48,115 @@ public class LoginUseCase implements Login {
         this.totpVerifier = totpVerifier;
         this.ledgerService = ledgerService;
         this.walletService = walletService;
+        this.notificationService = notificationService;
+        this.redisService = redisService;
     }
 
-
-    /*
-     * check if the jwt is correct and assigned and give back the id from user on jwt
-     * if the jwt is invalid the code check username and passphrase and throws RuntimeException if incorrect*/
     @Override
-    public String loginUser(UserDTOContract dto, HttpServletRequest request) {
+    public String loginUser(UserDTOContract dto) {
+        String username = dto.getUsername();
+        String key = "login_failures:" + username;
+
+        String failuresStr = redisService.getValue(key);
+        int failures = failuresStr != null ? Integer.parseInt(failuresStr) : 0;
+
+        if (failures >= 5) {
+            throw new AuthExceptions.InvalidCredentials("Muitas tentativas falhas. Conta bloqueada por 15 minutos.");
+        }
+
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (!auth.getName().equalsIgnoreCase("anonymousUser") ){
+        if (!auth.getName().equalsIgnoreCase("anonymousUser")) {
             Long id = Long.parseLong(auth.getName());
-            Optional<UserDevice>  dbDevice = deviceService.find(id);
-            if (dbDevice.isPresent() && service.extractDevice(auth.getCredentials().toString()).equals(dbDevice.get().getDeviceHash())){
-                return id + " " + service.generateToken(id,dbDevice.get().getDeviceHash()) ;
+            Optional<UserDevice> dbDevice = deviceService.find(id);
+            if (dbDevice.isPresent()) {
+                notifyLogin(id);
+                redisService.expire(key, 0); // Clear failures on success
+                return id + " " + service.generateToken(id, "");
             }
         }
 
-        UserDataBase user = verifier.matcher(dto, request);
-        Optional<UserDevice> device = deviceService.find(user.getId());
-        
-        // Inicializar saldo de teste para novas contas
-        initializeTestBalance(user.getId());
-        
-        return user.getId() + " " + service.generateToken(user.getId(),device.get().getDeviceHash()) ;
+        try {
+            UserDataBase user = verifier.matcherWithoutDevice(dto);
 
+            // Inicializar saldo de teste para novas contas
+            initializeTestBalance(user.getId());
 
+            notifyLogin(user.getId());
+            redisService.expire(key, 0); // Clear failures on success
+            return user.getId() + " "
+                    + service.generateToken(user.getId(), "");
+        } catch (Exception e) {
+            redisService.increment(key);
+            redisService.expire(key, 15 * 60); // 15 minutes
+            throw e;
+        }
     }
 
     @Override
-    public String loginTotpVerify(UserDTOContract dto, String deviceHash, HttpServletRequest request) {
-
-        // validate only credentials (username + passphrase) without device enforcement
+    public String loginTotpVerify(UserDTOContract dto) {
         UserDataBase user = verifier.matcherWithoutDevice(dto);
-        Optional<UserDevice> deviceOpt = deviceService.find(user.getId());
-
-
-        if (deviceOpt.isPresent() && deviceHash != null && deviceHash.equals(deviceOpt.get().getDeviceHash())) {
-            // Inicializar saldo de teste para novas contas
-            initializeTestBalance(user.getId());
-            
-            return user.getId() + " " + service.generateToken(user.getId(), deviceOpt.get().getDeviceHash());
-        }
 
         if (dto.getTotpCode() == null || dto.getTotpCode().isEmpty()) {
-            throw new AuthExceptions.incorrectTotp("TOTP code required when device is not recognized");
+            throw new AuthExceptions.incorrectTotp("TOTP code required.");
         }
-
 
         totpVerifier.totpVerify(user.getTOTPSecret(), dto.getTotpCode());
 
-        String ip = request.getRemoteAddr();
-        if (deviceHash != null && !deviceHash.isEmpty() && !deviceHash.equalsIgnoreCase("unknown")) {
+        // We removed device hashing because Tor nodes constantly change IP/Fingerprints
+        Optional<UserDevice> deviceOpt = deviceService.find(user.getId());
+        if (deviceOpt.isEmpty()) {
             UserDevice newDevice = new UserDevice();
             newDevice.setUser(user);
-            newDevice.setDeviceHash(deviceHash);
-            newDevice.setIpAddress(ip);
-
-            if (deviceOpt.isPresent()) {
-                deviceService.update(deviceOpt.get().getId(), newDevice);
-            } else {
-                deviceService.create(newDevice);
-            }
-
-            // Inicializar saldo de teste para novas contas
-            initializeTestBalance(user.getId());
-
-            return user.getId() + " " + service.generateToken(user.getId(), deviceHash);
-        }
-
-        if (deviceOpt.isPresent()) {
-            // Inicializar saldo de teste para novas contas
-            initializeTestBalance(user.getId());
-            
-            return user.getId() + " " + service.generateToken(user.getId(), deviceOpt.get().getDeviceHash());
+            deviceService.create(newDevice);
         }
 
         // Inicializar saldo de teste para novas contas
         initializeTestBalance(user.getId());
 
+        notifyLogin(user.getId());
         return user.getId() + " " + service.generateToken(user.getId(), "");
     }
-    
-    /**
-     * Inicializa saldo de teste (100.000) na primeira carteira do usuário
-     * Se o usuário já tem saldo, não faz nada (apenas na primeira vez)
-     */
+
+    private void notifyLogin(Long userId) {
+        try {
+            notificationService.notifyUser(userId, "Acesso Detectado",
+                    "Um novo acesso foi identificado em sua conta Kerosene. Caso não reconheça esta ação, verifique suas sessões ativas imediatamente.");
+        } catch (Exception e) {
+            // Silent failure for notifications to not break login
+        }
+    }
+
     private void initializeTestBalance(Long userId) {
         try {
-            // Obter wallets do usuário
             var wallets = walletService.findByUserId(userId);
-            
+
             if (wallets != null && !wallets.isEmpty()) {
-                // Usar a primeira wallet do usuário
                 var wallet = wallets.get(0);
-                
+
                 try {
-                    // Verificar se ledger já existe
                     var ledger = ledgerService.findByWalletId(wallet.getId());
-                    
-                    // Se o saldo for zero, adicionar o saldo de teste
+
                     if (ledger.getBalance().compareTo(BigDecimal.ZERO) == 0) {
                         ledgerService.updateBalance(wallet.getId(), INITIAL_TEST_BALANCE, "TEST_INITIAL_BALANCE");
-                        System.out.println("✅ Saldo de teste (100.000) adicionado para usuário " + userId);
+
+                        try {
+                            String title = "Boas-vindas ao Kerosene";
+                            String body = String.format(
+                                    "Para iniciar suas operações, foi adicionado um saldo inicial de %s BTC em sua carteira.",
+                                    INITIAL_TEST_BALANCE.toPlainString());
+                            notificationService.notifyUser(userId, title, body);
+                        } catch (Exception ne) {
+                            // Silent failure for notifications
+                        }
                     }
                 } catch (Exception e) {
-                    // Ledger não existe, criar novo com saldo de teste
                     var newLedger = ledgerService.createLedger(wallet, "TEST_INITIAL_BALANCE");
                     newLedger.setBalance(INITIAL_TEST_BALANCE);
-                    System.out.println("✅ Nova carteira criada com saldo de teste (100.000) para usuário " + userId);
                 }
             }
         } catch (Exception e) {
-            // Não impedir o login se houver erro ao inicializar saldo
-            System.err.println("⚠️  Erro ao inicializar saldo de teste: " + e.getMessage());
+            // //
         }
     }
 }
-
