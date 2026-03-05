@@ -66,14 +66,14 @@ class LedgerServiceTest {
     @DisplayName("Should create ledger successfully")
     void shouldCreateLedgerSuccessfully() {
         when(ledgerRepository.existsByWalletId(wallet.getId())).thenReturn(false);
-        when(hash.hash(anyString())).thenReturn("generated-hash");
+        when(hash.hash(any(char[].class))).thenReturn("generated-hash");
         when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
 
         LedgerEntity result = ledgerService.createLedger(wallet, "Initial ledger");
 
         assertNotNull(result);
         verify(ledgerRepository).existsByWalletId(wallet.getId());
-        verify(hash).hash(anyString());
+        verify(hash).hash(any(char[].class));
         verify(ledgerRepository).save(any(LedgerEntity.class));
     }
 
@@ -132,14 +132,14 @@ class LedgerServiceTest {
     void shouldUpdateBalanceWithCreditOperation() {
         BigDecimal creditAmount = new BigDecimal("100.00");
         when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
-        when(hash.hash(anyString())).thenReturn("new-hash");
+        when(hash.hash(any(char[].class))).thenReturn("new-hash");
         when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
 
         LedgerEntity result = ledgerService.updateBalance(wallet.getId(), creditAmount, "Credit transaction");
 
         assertNotNull(result);
         verify(ledgerRepository).findByWalletId(wallet.getId());
-        verify(hash).hash(anyString());
+        verify(hash).hash(any(char[].class));
         verify(ledgerRepository).save(any(LedgerEntity.class));
     }
 
@@ -148,9 +148,9 @@ class LedgerServiceTest {
     void shouldUpdateBalanceWithDebitOperationWhenSufficientBalance() {
         ledger.setBalance(new BigDecimal("200.00"));
         BigDecimal debitAmount = new BigDecimal("-50.00");
-        
+
         when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
-        when(hash.hash(anyString())).thenReturn("new-hash");
+        when(hash.hash(any(char[].class))).thenReturn("new-hash");
         when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
 
         LedgerEntity result = ledgerService.updateBalance(wallet.getId(), debitAmount, "Debit transaction");
@@ -165,7 +165,7 @@ class LedgerServiceTest {
     void shouldThrowExceptionWhenInsufficientBalanceForDebit() {
         ledger.setBalance(new BigDecimal("50.00"));
         BigDecimal debitAmount = new BigDecimal("-100.00");
-        
+
         when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
 
         assertThrows(LedgerExceptions.InsufficientBalanceException.class, () -> {
@@ -181,7 +181,7 @@ class LedgerServiceTest {
     void shouldGetBalanceSuccessfully() {
         BigDecimal expectedBalance = new BigDecimal("150.00");
         ledger.setBalance(expectedBalance);
-        
+
         when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
 
         BigDecimal result = ledgerService.getBalance(wallet.getId());

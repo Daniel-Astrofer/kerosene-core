@@ -83,4 +83,20 @@ public class LedgerExceptions {
             super(message);
         }
     }
+
+    public static class LedgerSyncException extends LedgerException {
+        public LedgerSyncException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Thrown when any financial operation receives an invalid amount (zero,
+     * negative, or null).
+     */
+    public static class InvalidAmountException extends LedgerException {
+        public InvalidAmountException(String message) {
+            super(message);
+        }
+    }
 }

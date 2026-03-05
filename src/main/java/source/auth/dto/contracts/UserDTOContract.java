@@ -4,7 +4,7 @@ public interface UserDTOContract {
 
     String getUsername();
 
-    String getPassphrase();
+    char[] getPassphrase();
 
     String getTotpSecret();
 
@@ -12,11 +12,14 @@ public interface UserDTOContract {
 
     void setUsername(String username);
 
-    void setPassphrase(String passphrase);
+    void setPassphrase(char[] passphrase);
 
     void setTotpSecret(String totpSecret);
 
     void setTotpCode(String totpCode);
 
+    String getPreAuthToken();
+
+    void setPreAuthToken(String preAuthToken);
 
 }

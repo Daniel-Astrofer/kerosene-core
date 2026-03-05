@@ -23,6 +23,7 @@ public class WalletEntity {
     @JoinColumn(name = "user_id", referencedColumnName = "id", nullable = false)
     private UserDataBase user;
 
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "address", nullable = false)
     private String passphraseHash;
 
@@ -39,6 +40,10 @@ public class WalletEntity {
 
     @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
     private Boolean isActive = true;
+
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
+    @Column(name = "totp_secret", nullable = false)
+    private String totpSecret;
 
     public void setId(Long id) {
         this.id = id;
@@ -94,5 +99,13 @@ public class WalletEntity {
 
     public void setIsActive(Boolean isActive) {
         this.isActive = isActive;
+    }
+
+    public String getTotpSecret() {
+        return totpSecret;
+    }
+
+    public void setTotpSecret(String totpSecret) {
+        this.totpSecret = totpSecret;
     }
 }

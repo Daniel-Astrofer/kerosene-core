@@ -4,7 +4,7 @@ import source.auth.dto.UserDTO;
 
 public interface Signup {
 
-    String signupUser(UserDTO dto);
+    source.auth.dto.SignupResponseDTO signupUser(UserDTO dto);
 
     String createUser(UserDTO dto);
 }

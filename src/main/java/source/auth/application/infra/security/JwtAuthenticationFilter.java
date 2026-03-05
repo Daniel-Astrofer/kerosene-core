@@ -1,12 +1,8 @@
 package source.auth.application.infra.security;
 
-import io.jsonwebtoken.JwtException;
-import org.springframework.http.HttpStatus;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import source.auth.AuthExceptions;
-import source.auth.application.service.device.UserDeviceService;
-import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.validation.jwt.JwtService;
 import jakarta.servlet.FilterChain;
@@ -17,14 +13,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.entity.UserDevice;
-import source.wallet.exceptions.WalletExceptions;
 
 import java.io.IOException;
-import java.security.SignatureException;
 import java.util.Collections;
-import java.util.Optional;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -60,22 +51,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (header != null && header.startsWith("Bearer ")) {
             token = header.substring(7);
-        } else if (request.getParameter("token") != null) {
-            token = request.getParameter("token");
         }
+        // ⚠️ JWT via query parameter (?token=...) was intentionally removed.
+        // Tokens in URLs appear in proxy logs, access logs, browser history, and
+        // HTTP Referer headers — all of which are high-risk forensic surfaces.
+        // Authentication MUST use the Authorization: Bearer header only.
 
         if (token != null) {
             UsernamePasswordAuthenticationToken auth = null;
             try {
                 Long userId = jwtService.extractId(token);
-                String deviceHash = ""; // Device hash is no longer enforced
 
                 auth = new UsernamePasswordAuthenticationToken(userId, token, Collections.singletonList(() -> "USER"));
 
-                // Verificar se o token precisa ser renovado
+                // Check if the token needs renewal
                 if (jwtServiceImpl.shouldRenewToken(token)) {
-                    String newToken = jwtService.generateToken(userId, deviceHash);
-                    // Adicionar novo token no header da resposta
+                    String newToken = jwtService.generateToken(userId);
                     response.setHeader("X-New-Token", newToken);
                 }
 
@@ -88,7 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.debug("Skipping JWT block for WS path: {}", request.getServletPath());
                 } else {
                     resolver.resolveException(request, response, null,
-                            new AuthExceptions.UnrrecognizedDevice("invalid session: " + e.getMessage()));
+                            new AuthExceptions.InvalidCredentials("invalid session: " + e.getMessage()));
                     return;
                 }
             }

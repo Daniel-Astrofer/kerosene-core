@@ -25,9 +25,11 @@ public class UserDataBase implements UserDB {
     @Column(name = "username", nullable = false, unique = true)
     private String username;
 
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "passphrase")
     private String passphrase;
 
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "totp_secret")
     private String totpSecret;
 
@@ -56,6 +58,9 @@ public class UserDataBase implements UserDB {
     @Column(name = "account_security", nullable = false, length = 20, columnDefinition = "VARCHAR(20) DEFAULT 'STANDARD'")
     private AccountSecurityType accountSecurity = AccountSecurityType.STANDARD;
 
+    @Column(name = "passkey_transaction_auth", nullable = false, columnDefinition = "boolean default false")
+    private Boolean passkeyEnabledForTransactions = false;
+
     /**
      * AES-256-GCM encrypted co-signer secret (Base64-encoded IV + ciphertext).
      * Only populated for SHAMIR and MULTISIG_2FA modes.
@@ -68,6 +73,11 @@ public class UserDataBase implements UserDB {
     @OneToOne
     @JoinColumn(name = "voucher_id", referencedColumnName = "id", unique = true)
     private Voucher voucher;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_backup_codes", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "code_hash")
+    private java.util.List<String> backupCodes = new java.util.ArrayList<>();
 
     public Voucher getVoucher() {
         return voucher;
@@ -167,5 +177,21 @@ public class UserDataBase implements UserDB {
 
     public void setPlatformCosignerSecret(String platformCosignerSecret) {
         this.platformCosignerSecret = platformCosignerSecret;
+    }
+
+    public Boolean getPasskeyEnabledForTransactions() {
+        return passkeyEnabledForTransactions;
+    }
+
+    public void setPasskeyEnabledForTransactions(Boolean passkeyEnabledForTransactions) {
+        this.passkeyEnabledForTransactions = passkeyEnabledForTransactions;
+    }
+
+    public java.util.List<String> getBackupCodes() {
+        return backupCodes;
+    }
+
+    public void setBackupCodes(java.util.List<String> backupCodes) {
+        this.backupCodes = backupCodes;
     }
 }

@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class LedgerPaymentRequestService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LedgerPaymentRequestService.class);
+
     private final RedisTemplate<String, InternalPaymentRequestDTO> redisTemplate;
     private final WalletContract walletService;
     private final UserService userService;
@@ -46,11 +48,18 @@ public class LedgerPaymentRequestService {
     }
 
     public InternalPaymentRequestDTO createRequest(Long requesterUserId, BigDecimal amount, String receiverWalletName) {
+        // Validate payment amount — must be strictly positive to prevent flow inversion
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new LedgerExceptions.InvalidAmountException(
+                    "O valor da solicitação de pagamento deve ser maior que zero.");
+        }
+
         userService.buscarPorId(requesterUserId).orElseThrow(
                 () -> new RuntimeException("Requester user not found"));
 
-        WalletEntity wallet = walletService.findByName(receiverWalletName);
-        if (wallet == null || !wallet.getUser().getId().equals(requesterUserId)) {
+        // Scoped lookup: only find the wallet if it belongs to the requester
+        WalletEntity wallet = walletService.findByNameAndUserId(receiverWalletName, requesterUserId);
+        if (wallet == null) {
             throw new LedgerExceptions.ReceiverNotFoundException(
                     "Receiver wallet not found or does not belong to you.");
         }
@@ -76,11 +85,11 @@ public class LedgerPaymentRequestService {
             history.setContext("Internal Payment Request: " + req.getId());
             history.setReceiverUserId(requesterUserId);
             history.setReceiverIdentifier(receiverWalletName);
-            history.setTransactionType("TRANSACTION_RECEIVE");
+            history.setTransactionType("PAYMENT_LINK");
             history.setStatus("PENDING");
             historyRepository.save(history);
         } catch (Exception e) {
-            System.err.println("Failed to save payment request history: " + e.getMessage());
+            log.warn("Failed to save payment request history: {}", e.getMessage());
         }
 
         // Notify creator
@@ -89,7 +98,7 @@ public class LedgerPaymentRequestService {
                     String.format("Um novo link de pagamento no valor de %s BTC foi criado para a carteira '%s'.",
                             amount.toPlainString(), receiverWalletName));
         } catch (Exception e) {
-            // Silent failure
+            log.warn("Payment request creation notification failed (non-blocking): {}", e.getMessage());
         }
 
         return req;
@@ -155,6 +164,13 @@ public class LedgerPaymentRequestService {
         req.setStatus("PAID");
         req.setPaidAt(LocalDateTime.now());
 
+        // Update history record
+        try {
+            historyRepository.updateStatus(UUID.fromString(linkId), "CONCLUDED");
+        } catch (Exception e) {
+            log.warn("Failed to update payment request history status for linkId={}: {}", linkId, e.getMessage());
+        }
+
         // Save back to redis with remaining TTL or extending if desired
         redisTemplate.opsForValue().set(key, req, 30, TimeUnit.MINUTES);
 
@@ -164,7 +180,7 @@ public class LedgerPaymentRequestService {
                     String.format("Seu pedido de pagamento no valor de %s BTC foi processado com sucesso.",
                             req.getAmount().toPlainString()));
         } catch (Exception e) {
-            // Silent failure
+            log.warn("payRequest notification failed (non-blocking): {}", e.getMessage());
         }
 
         // Real-time WebSocket push → /topic/payment-request/{linkId}
@@ -172,7 +188,7 @@ public class LedgerPaymentRequestService {
         try {
             paymentEventPublisher.publishPaymentPaid(req);
         } catch (Exception e) {
-            System.err.println("[WS-PAYMENT] Failed to push paid event: " + e.getMessage());
+            log.warn("[WS-PAYMENT] Failed to push paid event for linkId={}: {}", linkId, e.getMessage());
         }
 
         return req;

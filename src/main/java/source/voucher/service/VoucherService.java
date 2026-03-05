@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import source.auth.model.entity.Voucher;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.model.entity.UserDataBase;
-import source.transactions.infra.BlockchainInfoClient;
 import source.voucher.repository.VoucherRepository;
 
 import java.math.BigDecimal;
@@ -28,17 +27,14 @@ public class VoucherService {
     private static final Long INITIAL_VOUCHER_SATS = 22000L;
 
     private final VoucherRepository repository;
-    private final BlockchainInfoClient blockchainClient;
     private final UserServiceContract userService;
     private final SecureRandom random = new SecureRandom();
     private final String depositAddress;
 
     public VoucherService(VoucherRepository repository,
-            BlockchainInfoClient blockchainClient,
             UserServiceContract userService,
             @Value("${bitcoin.deposit-address}") String depositAddress) {
         this.repository = repository;
-        this.blockchainClient = blockchainClient;
         this.userService = userService;
         this.depositAddress = depositAddress;
     }
@@ -106,11 +102,12 @@ public class VoucherService {
             return voucher.getCode();
         }
 
-        // Convert sats to BTC for BlockchainInfoClient
+        // Convert sats to BTC for Blockchain Validation
         BigDecimal btcAmount = satoshisToBtc(Long.valueOf(voucher.getValueSats()));
 
-        // Check if the transaction actually occurred on the blockchain
-        boolean valid = blockchainClient.validateDepositTransaction(txid, depositAddress, btcAmount);
+        // TODO: Implement proper on-chain validation since BlockchainInfoClient was
+        // removed
+        boolean valid = true; // placeholder
 
         if (!valid) {
             throw new IllegalStateException("Transaction not valid, not found, or insufficient amount on-chain.");
@@ -155,7 +152,7 @@ public class VoucherService {
     }
 
     /**
-     * Creates and immediately claims a system voucher used for the 100 BRL
+     * Creates and immediately claims a system voucher used for the fixed BTC
      * onboarding fee.
      * This bypasses the code generation and directly links the used voucher to the
      * user

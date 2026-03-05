@@ -39,9 +39,4 @@ public class IPValidator implements IP {
 
         return "127.0.0.1";
     }
-
-    @Override
-    public String getDeviceHash(HttpServletRequest request) {
-        return "OBSOLETE";
-    }
 }

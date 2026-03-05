@@ -65,14 +65,14 @@ class WalletServiceTest {
     @Test
     @DisplayName("Should save wallet successfully")
     void shouldSaveWalletSuccessfully() {
-        doNothing().when(verify).checkPassphraseBip39(anyString());
-        when(hash.hash(anyString())).thenReturn("hashed-address");
+        doNothing().when(verify).checkPassphraseBip39(any(char[].class));
+        when(hash.hash(any(char[].class))).thenReturn("hashed-address");
         when(walletRepository.save(any(WalletEntity.class))).thenReturn(wallet);
 
         assertDoesNotThrow(() -> walletService.save(wallet));
 
-        verify(verify).checkPassphraseBip39(anyString());
-        verify(hash).hash(anyString());
+        verify(verify).checkPassphraseBip39(any(char[].class));
+        verify(hash).hash(any(char[].class));
         verify(walletRepository).save(any(WalletEntity.class));
     }
 
@@ -116,14 +116,14 @@ class WalletServiceTest {
     @DisplayName("Should delete wallet successfully")
     void shouldDeleteWalletSuccessfully() {
         when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.of(wallet));
-        when(hash.hash("test-passphrase-bip39")).thenReturn("hashed-address");
+        when(hash.hash(any(char[].class))).thenReturn("hashed-address");
         doNothing().when(walletRepository).delete(any(WalletEntity.class));
 
         boolean result = walletService.deleteWallet(user.getId(), requestDTO);
 
         assertTrue(result);
         verify(walletRepository).findByUserIdAndName(user.getId(), "TESTWALLET");
-        verify(hash).hash("test-passphrase-bip39");
+        verify(hash).hash(any(char[].class));
         verify(walletRepository).delete(wallet);
     }
 
@@ -144,7 +144,7 @@ class WalletServiceTest {
     @DisplayName("Should return exception when wallet to delete has wrong passphrase")
     void shouldReturnExceptionWhenWalletToDeleteHasWrongPass() {
         when(walletRepository.findByUserIdAndName(user.getId(), "TESTWALLET")).thenReturn(Optional.of(wallet));
-        when(hash.hash("test-passphrase-bip39")).thenReturn("wrong-passphrase");
+        when(hash.hash(any(char[].class))).thenReturn("wrong-passphrase");
 
         assertThrows(WalletExceptions.WalletNoExists.class, () -> {
             walletService.deleteWallet(user.getId(), requestDTO);

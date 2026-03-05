@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
 import source.auth.dto.UserDTO;
+import source.auth.dto.SignupResponseDTO;
 import source.auth.application.service.pow.PowService;
 import source.common.dto.ApiResponse;
 
@@ -44,9 +45,9 @@ public class UsuarioController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<String>> signup(@RequestBody UserDTO dto) {
+    public ResponseEntity<ApiResponse<SignupResponseDTO>> signup(@RequestBody UserDTO dto) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Account credentials validated. Please configure your authenticator app using the provided setup key.",
+                "Account credentials validated. Please configure your authenticator app using the provided setup key and safely store your backup codes.",
                 signup.signupUser(dto)));
     }
 

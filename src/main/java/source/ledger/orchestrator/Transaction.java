@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import source.auth.application.service.user.UserService;
 import source.auth.model.entity.UserDataBase;
 import source.ledger.dto.TransactionDTO;
-import source.ledger.entity.LedgerEntity;
 import source.ledger.exceptions.LedgerExceptions;
 import source.ledger.service.LedgerContract;
 import source.wallet.model.WalletEntity;
@@ -57,21 +56,30 @@ public class Transaction implements TransactionContract {
 
     private final WalletContract walletService;
     private final LedgerContract ledgerService;
-    private final UserService user;
+    private final UserService userService;
     private final source.notification.service.NotificationService notificationService;
     private final source.ledger.repository.LedgerTransactionHistoryRepository historyRepository;
     private final StringRedisTemplate redisTemplate;
+    private final source.auth.application.service.webauthn.WebAuthnService webAuthnService;
+    private final source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier;
+    private final source.auth.application.service.cripto.contracts.Hasher hasher;
 
-    public Transaction(WalletContract walletContract, LedgerContract ledgerContract, UserService user,
+    public Transaction(WalletContract walletContract, LedgerContract ledgerContract, UserService userService,
             source.notification.service.NotificationService notificationService,
             source.ledger.repository.LedgerTransactionHistoryRepository historyRepository,
-            StringRedisTemplate redisTemplate) {
+            StringRedisTemplate redisTemplate,
+            source.auth.application.service.webauthn.WebAuthnService webAuthnService,
+            source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier,
+            @org.springframework.beans.factory.annotation.Qualifier("Argon2Hasher") source.auth.application.service.cripto.contracts.Hasher hasher) {
         this.walletService = walletContract;
         this.ledgerService = ledgerContract;
-        this.user = user;
+        this.userService = userService;
         this.notificationService = notificationService;
         this.historyRepository = historyRepository;
         this.redisTemplate = redisTemplate;
+        this.webAuthnService = webAuthnService;
+        this.totpVerifier = totpVerifier;
+        this.hasher = hasher;
     }
 
     @Override
@@ -114,13 +122,18 @@ public class Transaction implements TransactionContract {
             log.warn("TX WARNING — no idempotencyKey provided. double-send protection disabled for this request.");
         }
 
-        // ── ③ Resolve sender & receiver ────────────────────────────────────
+        // ── ③ Resolve & Authenticate Sender ────────────────────────────────
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         Long senderUserId = Long.parseLong(auth.getName());
 
-        UserDataBase sender = user.buscarPorId(senderUserId).orElseThrow(
+        UserDataBase sender = userService.buscarPorId(senderUserId).orElseThrow(
                 () -> new LedgerExceptions.LedgerNotFoundException("Sender (authenticated user) not found"));
 
+        // Verify that the user has provided the required confirmation
+        // (Passkey/Passphrase/TOTP)
+        verifyTransactionAuthentication(sender, dto);
+
+        // ── ④ Resolve wallets ──────────────────────────────────────────────
         WalletEntity senderWallet = resolveSenderWallet(sender, dto.getSender());
         WalletEntity receiverWallet = resolveReceiverWallet(dto.getReceiver());
 
@@ -153,7 +166,7 @@ public class Transaction implements TransactionContract {
             senderHistory.setSenderIdentifier(senderWallet.getName());
             senderHistory.setReceiverUserId(receiverWallet.getUser().getId());
             senderHistory.setReceiverIdentifier(receiverWallet.getName());
-            senderHistory.setTransactionType("TRANSACTION_SEND");
+            senderHistory.setTransactionType("INTERNAL");
             senderHistory.setStatus("CONCLUDED");
             historyRepository.save(senderHistory);
 
@@ -166,7 +179,7 @@ public class Transaction implements TransactionContract {
             receiverHistory.setSenderIdentifier(senderWallet.getName());
             receiverHistory.setReceiverUserId(receiverWallet.getUser().getId());
             receiverHistory.setReceiverIdentifier(receiverWallet.getName());
-            receiverHistory.setTransactionType("TRANSACTION_RECEIVE");
+            receiverHistory.setTransactionType("INTERNAL");
             receiverHistory.setStatus("CONCLUDED");
             historyRepository.save(receiverHistory);
         } catch (Exception e) {
@@ -249,7 +262,7 @@ public class Transaction implements TransactionContract {
                     "Receiver wallet with address '" + receiverIdentifier + "' not found");
         }
 
-        UserDataBase receiver = user.findByUsername(receiverIdentifier);
+        UserDataBase receiver = userService.findByUsername(receiverIdentifier);
         if (receiver == null) {
             throw new LedgerExceptions.ReceiverNotFoundException(
                     "Receiver username '" + receiverIdentifier + "' not found");
@@ -268,5 +281,70 @@ public class Transaction implements TransactionContract {
         if (identifier == null || identifier.trim().isEmpty())
             return false;
         return identifier.matches("^[A-Za-z0-9+/]+=*$") && identifier.contains("=");
+    }
+
+    /**
+     * Verifies that the sender has provided the necessary cryptographic or 2FA
+     * proof for the transaction, based on their account security level and
+     * settings.
+     */
+    private void verifyTransactionAuthentication(UserDataBase sender, TransactionDTO dto) {
+        log.info("Verifying transaction auth for user: {} (Security: {})", sender.getUsername(),
+                sender.getAccountSecurity());
+
+        // 1. Check Passkey (FIDO2) - if enabled, it's the strongest factor
+        if (Boolean.TRUE.equals(sender.getPasskeyEnabledForTransactions())) {
+            if (dto.getPasskeyAssertionJson() == null || dto.getPasskeyAssertionJson().isEmpty()) {
+                throw new source.auth.AuthExceptions.InvalidCredentials(
+                        "Passkey authentication is required for transactions on this account.");
+            }
+
+            // We need the original challenge to verify. We assume the app fetched one
+            // and it's stored in Redis under "passkey_challenge:{username}"
+            String challengeKey = "passkey_challenge:" + sender.getUsername();
+            String assertionRequestJson = redisTemplate.opsForValue().get(challengeKey);
+
+            if (assertionRequestJson == null) {
+                throw new source.auth.AuthExceptions.InvalidCredentials(
+                        "Passkey challenge expired or not found. Please request a new challenge before signing.");
+            }
+
+            if (!webAuthnService.finishLogin(assertionRequestJson, dto.getPasskeyAssertionJson())) {
+                throw new source.auth.AuthExceptions.InvalidCredentials("Invalid Passkey signature for transaction.");
+            }
+
+            // Consume challenge
+            redisTemplate.delete(challengeKey);
+            log.info("Passkey transaction auth verified for {}", sender.getUsername());
+            return; // Passkey is sufficient
+        }
+
+        // 2. Check Multisig/Shamir Passphrase Confirmation
+        if (sender.getAccountSecurity() == source.auth.model.enums.AccountSecurityType.MULTISIG_2FA ||
+                sender.getAccountSecurity() == source.auth.model.enums.AccountSecurityType.SHAMIR) {
+
+            if (dto.getConfirmationPassphrase() == null || dto.getConfirmationPassphrase().isEmpty()) {
+                throw new source.auth.AuthExceptions.InvalidCredentials(
+                        "This account requires passphrase confirmation for all transactions.");
+            }
+
+            if (!hasher.verify(dto.getConfirmationPassphrase().toCharArray(), sender.getPassphrase())) {
+                throw new source.auth.AuthExceptions.InvalidPassphrase(
+                        "Invalid passphrase for transaction authorization.");
+            }
+
+            log.info("Mnemonic/Passphrase transaction auth verified for {}", sender.getUsername());
+        }
+
+        // 3. Optional/Fallback: TOTP Verification
+        // If TOTP is provided, we verify it. For some security levels, it might be
+        // explicitly required.
+        if (dto.getTotpCode() != null && !dto.getTotpCode().isEmpty()) {
+            if (sender.getTOTPSecret() == null) {
+                throw new source.auth.AuthExceptions.IncorrectTotpException("TOTP not configured for this account.");
+            }
+            totpVerifier.totpVerify(sender.getTOTPSecret(), dto.getTotpCode());
+            log.info("TOTP transaction auth verified for {}", sender.getUsername());
+        }
     }
 }

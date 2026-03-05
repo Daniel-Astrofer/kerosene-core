@@ -22,27 +22,14 @@ public class JwtService implements JwtServicer {
     }
 
     @Override
-    public String generateToken(long id, String devicehash) {
-
+    public String generateToken(long id) {
         return Jwts.builder()
-                .subject(devicehash)
+                .subject(String.valueOf(id))
                 .id(String.valueOf(id))
-                .claim("devicehash", devicehash)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + AuthConstants.JWT_EXPIRATION_TIME))
                 .signWith(getSecretKey())
                 .compact();
-
-    }
-
-    @Override
-    public String extractDevice(String token) {
-        return Jwts.parser()
-                .verifyWith(getSecretKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
     }
 
     @Override

@@ -21,4 +21,16 @@ public interface LedgerTransactionHistoryRepository extends JpaRepository<Ledger
 
     @Query("SELECT l FROM LedgerTransactionHistory l WHERE l.senderUserId = :userId OR l.receiverUserId = :userId ORDER BY l.createdAt DESC")
     java.util.List<LedgerTransactionHistory> findUserHistory(Long userId, Pageable pageable);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE LedgerTransactionHistory l SET l.status = :status WHERE l.id = :id")
+    void updateStatus(UUID id, String status);
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE LedgerTransactionHistory l SET l.status = :status, l.blockchainTxid = :txid WHERE l.id = :id")
+    void updateStatusAndTxid(UUID id, String status, String txid);
+
+    java.util.Optional<LedgerTransactionHistory> findByBlockchainTxid(String txid);
 }

@@ -1,9 +1,7 @@
 package source.auth.application.service.validation.jwt.contracts;
 
 public interface JwtServicer {
-    String generateToken(long id, String devicehash);
-
-    String extractDevice(String token);
+    String generateToken(long id);
 
     Long extractId(String token);
 

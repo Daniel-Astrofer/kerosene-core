@@ -11,28 +11,36 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+/**
+ * Pocket Network RPC Client.
+ * Decentralized Bitcoin RPC Provider.
+ */
 @Component
-public class AlchemyClient {
+public class PocketNetworkClient implements BlockchainClient {
 
-    private static final Logger log = LoggerFactory.getLogger(AlchemyClient.class);
-    private final String alchemyUrl;
+    private static final Logger log = LoggerFactory.getLogger(PocketNetworkClient.class);
+    private final String pocketUrl;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    public AlchemyClient(
-            @Value("${alchemy.bitcoin.url:https://btc-mainnet.g.alchemy.com/v2/}") String baseUrl,
-            @Value("${alchemy.api-key:}") String apiKey) {
-        this.alchemyUrl = baseUrl + apiKey;
-        this.restTemplate = new RestTemplate();
+    public PocketNetworkClient(
+            @Value("${pocket.bitcoin.url:https://bitcoin-mainnet.gateway.pokt.network/v1/lb/}") String baseUrl,
+            @Value("${pocket.api-key:}") String gatewayToken) {
+        this.pocketUrl = baseUrl + gatewayToken;
+        // Timeouts prevent thread stalls when Pocket Network is slow or unreachable.
+        // Connect: 5s (TCP handshake). Read: 15s (time for broadcast response).
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5_000);
+        factory.setReadTimeout(15_000);
+        this.restTemplate = new RestTemplate(factory);
         this.objectMapper = new ObjectMapper();
     }
 
-    /**
-     * Executes a JSON-RPC method on the Alchemy Bitcoin node.
-     */
+    @Override
     public JsonNode executeRpc(String method, Object... params) {
         try {
             ObjectNode request = objectMapper.createObjectNode();
@@ -59,37 +67,28 @@ public class AlchemyClient {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             HttpEntity<String> entity = new HttpEntity<>(request.toString(), headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(alchemyUrl, entity, String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(pocketUrl, entity, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
-                log.error("Alchemy RPC error: HTTP {}", response.getStatusCode());
+                log.error("Pocket RPC error: HTTP {}", response.getStatusCode());
                 return null;
             }
 
             JsonNode root = objectMapper.readTree(response.getBody());
-            if (root.has("error") && !root.get("error").isNull()) {
-                log.error("Alchemy RPC method error: {}", root.get("error").toString());
-                return null;
-            }
-
             return root.get("result");
         } catch (Exception e) {
-            log.error("Failed to execute Alchemy RPC: {}", e.getMessage());
+            log.warn("Pocket Network RPC failed: {}", e.getMessage());
             return null;
         }
     }
 
-    /**
-     * Broadcasts a signed raw transaction hex to the Bitcoin network.
-     */
+    @Override
     public String sendRawTransaction(String hex) {
         JsonNode result = executeRpc("sendrawtransaction", hex);
         return result != null ? result.asText() : null;
     }
 
-    /**
-     * Retrieves raw transaction data for a given TXID.
-     */
+    @Override
     public JsonNode getRawTransaction(String txid, boolean verbose) {
         return executeRpc("getrawtransaction", txid, verbose ? 1 : 0);
     }

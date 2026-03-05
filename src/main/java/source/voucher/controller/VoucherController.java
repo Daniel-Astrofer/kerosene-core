@@ -6,7 +6,6 @@ import source.common.dto.ApiResponse;
 import source.voucher.service.VoucherService;
 import source.voucher.service.VoucherService.VoucherRequestData;
 
-import source.transactions.infra.BlockchainInfoClient;
 import source.transactions.service.PaymentLinkService;
 import source.transactions.dto.PaymentLinkDTO;
 
@@ -20,20 +19,14 @@ public class VoucherController {
 
     private final VoucherService voucherService;
     private final PaymentLinkService paymentLinkService;
-    private final BlockchainInfoClient blockchainClient;
     private final source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract;
-    private final source.auth.application.orchestrator.signup.SignupUseCase signupUseCase;
 
     public VoucherController(VoucherService voucherService,
             PaymentLinkService paymentLinkService,
-            BlockchainInfoClient blockchainClient,
-            source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract,
-            source.auth.application.orchestrator.signup.SignupUseCase signupUseCase) {
+            source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract) {
         this.voucherService = voucherService;
         this.paymentLinkService = paymentLinkService;
-        this.blockchainClient = blockchainClient;
         this.redisContract = redisContract;
-        this.signupUseCase = signupUseCase;
     }
 
     /**
@@ -68,29 +61,40 @@ public class VoucherController {
     }
 
     /**
-     * Creates a mandatory 100 BRL onboarding payment link for inactive users.
+     * Creates a mandatory fixed BTC onboarding payment link for inactive users.
      */
     @PostMapping("/onboarding-link")
     public ResponseEntity<ApiResponse<PaymentLinkDTO>> onboardingLink(@RequestParam String sessionId) {
         try {
             source.auth.dto.SignupState state = redisContract.findSignupState(sessionId);
 
-            // ==== TEMPORARY OVERRIDE FOR TESTING ====
-            // Finalize the user immediately and return PAID to bypass creation fee
-            if (state != null) {
-                signupUseCase.finalizeUserFromRedis(sessionId, "TEST_TXID_BYPASS", BigDecimal.ZERO);
+            if (state == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("ONBOARDING_ERROR", "Session expired or finalized."));
             }
 
-            PaymentLinkDTO fakeLink = new PaymentLinkDTO();
-            fakeLink.setStatus("PAID");
-            fakeLink.setDepositAddress("bc1q_test_bypass");
-            fakeLink.setAmountBtc(BigDecimal.ZERO);
-            fakeLink.setId("TEST_LINK");
-            return ResponseEntity.ok(ApiResponse.success("Bypassing for testing.", fakeLink));
-            // ========================================
+            if (!state.isPasskeyRegistered() || state.getPasskeyCredentialJson() == null
+                    || state.getPasskeyCredentialJson().isEmpty()) {
+                throw new source.auth.AuthExceptions.MissingPasskey(
+                        "A Passkey (Biometrics/Hardware Key) has become MANDATORY. You must register it before attempting to generate the onboarding deposit link.");
+            }
 
+            // In production, we generate a real payment link and do NOT bypass user
+            // creation
+            PaymentLinkDTO paymentLink = paymentLinkService.createOnboardingPaymentLink(
+                    sessionId,
+                    new BigDecimal("0.00022000"), // Equivalent to the fixed SATOSHI fee
+                    "ONBOARDING_VOUCHER");
+
+            return ResponseEntity.ok(ApiResponse.success(
+                    "Deposit the exact amount of " + paymentLink.getAmountBtc()
+                            + " BTC to the address. Your account will be activated after 3 network confirmations.",
+                    paymentLink));
+        } catch (source.auth.AuthExceptions.MissingPasskey e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("ONBOARDING_MISSING_PASSKEY", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("ONBOARDING_ERROR", e.getMessage()));
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("ONBOARDING_SERVER_ERROR", e.getMessage()));
         }
     }
 }

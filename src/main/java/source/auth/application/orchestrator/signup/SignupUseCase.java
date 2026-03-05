@@ -1,5 +1,6 @@
 package source.auth.application.orchestrator.signup;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import source.auth.AuthConstants;
 import source.auth.AuthExceptions;
 import source.auth.application.infra.persistance.redis.contracts.RedisContract;
@@ -8,8 +9,10 @@ import source.auth.application.service.authentication.contracts.SignupVerifier;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.security.CosignerSecretService;
 import source.auth.application.service.validation.totp.contratcs.TOTPKeyGenerate;
+import source.auth.application.service.validation.totp.contratcs.TOTPVerifier;
 import source.auth.dto.UserDTO;
 import source.auth.dto.SignupState;
+import source.auth.dto.SignupResponseDTO;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.enums.AccountSecurityType;
@@ -31,6 +34,7 @@ public class SignupUseCase implements Signup {
     private static final Logger log = LoggerFactory.getLogger(SignupUseCase.class);
 
     private final TOTPKeyGenerate totpGenerator;
+    private final TOTPVerifier totpVerifier;
     private final SignupVerifier verifier;
     private final RedisServicer cache;
     private final RedisContract redisContract;
@@ -40,8 +44,10 @@ public class SignupUseCase implements Signup {
     private final source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyRepo;
     private final source.notification.service.NotificationService notificationService;
     private final CosignerSecretService cosignerSecretService;
+    private final source.auth.application.service.cripto.contracts.Hasher hasher;
 
     public SignupUseCase(TOTPKeyGenerate totpGenerator,
+            TOTPVerifier totpVerifier,
             SignupVerifier verifier,
             RedisServicer cache,
             RedisContract redisContract,
@@ -50,8 +56,10 @@ public class SignupUseCase implements Signup {
             source.auth.application.service.user.contract.UserServiceContract userService,
             source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyRepo,
             source.notification.service.NotificationService notificationService,
-            CosignerSecretService cosignerSecretService) {
+            CosignerSecretService cosignerSecretService,
+            @org.springframework.beans.factory.annotation.Qualifier("Argon2Hasher") source.auth.application.service.cripto.contracts.Hasher hasher) {
         this.totpGenerator = totpGenerator;
+        this.totpVerifier = totpVerifier;
         this.verifier = verifier;
         this.cache = cache;
         this.redisContract = redisContract;
@@ -61,17 +69,18 @@ public class SignupUseCase implements Signup {
         this.passkeyRepo = passkeyRepo;
         this.notificationService = notificationService;
         this.cosignerSecretService = cosignerSecretService;
+        this.hasher = hasher;
     }
 
     /**
      * Initiates the signup process by validating user credentials and generating
      * TOTP.
-     * 
+     *
      * @param dto the user data transfer object containing username and passphrase
      * @return TOTP URI for QR code generation
      */
     @Override
-    public String signupUser(UserDTO dto) {
+    public SignupResponseDTO signupUser(UserDTO dto) {
         if (!powService.verifyChallenge(dto.getChallenge(), dto.getNonce())) {
             throw new AuthExceptions.InvalidCredentials(
                     "Invalid or expired Proof of Work. Please request a new challenge and calculate the correct nonce.");
@@ -90,17 +99,34 @@ public class SignupUseCase implements Signup {
                 totpKey,
                 AuthConstants.APP_NAME);
 
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        java.util.List<String> rawCodes = new java.util.ArrayList<>();
+        java.util.List<String> hashedCodes = new java.util.ArrayList<>();
+
+        for (int i = 0; i < 10; i++) {
+            String code = String.format("%08d", random.nextInt(100000000));
+            rawCodes.add(code);
+            hashedCodes.add(hasher.hash(code.toCharArray()));
+        }
+
+        // Hash passphrase BEFORE storing in Redis (fix: plaintext passphrase in Redis)
+        String hashedPassphrase = hasher.hash(dto.getPassphrase());
+        java.util.Arrays.fill(dto.getPassphrase(), '\0');
+        // Store hashed passphrase as a char array in the DTO for Redis
+        dto.setPassphrase(hashedPassphrase.toCharArray());
+
         dto.setTotpSecret(totpKey);
+        dto.setBackupCodes(hashedCodes);
         cache.createTempUser(dto);
 
-        return otpUri;
+        return new SignupResponseDTO(otpUri, rawCodes);
     }
 
     /**
      * Completes the signup process by verifying TOTP and creating the Redis
      * SignupState.
      * Database creation is deferred until 3 Bitcoin Confirmations.
-     * 
+     *
      * @param dto the user data transfer object containing TOTP code
      * @return The sessionId to track the onboarding session
      */
@@ -112,10 +138,27 @@ public class SignupUseCase implements Signup {
             throw new AuthExceptions.TotpTimeExceededException(AuthConstants.ERR_TOTP_EXPIRED);
         }
 
-        // 1. Generate a secure session ID for the onboarding process
+        // 1. Verify the TOTP code the user submitted against the secret stored in Redis
+        if (dto.getTotpCode() == null || dto.getTotpCode().isEmpty()) {
+            throw new AuthExceptions.InvalidCredentials("TOTP code required to complete registration.");
+        }
+        totpVerifier.totpVerify(cachedUser.getTotpSecret(), dto.getTotpCode());
+
+        // 2. Generate a secure session ID for the onboarding process
         String sessionId = UUID.randomUUID().toString().replace("-", "");
 
-        // 2. Hydrate the SignupState object
+        // 3. Hydrate the SignupState object
+        SignupState state = getSignupState(sessionId, cachedUser);
+
+        // 4. Store the state in Redis for 24 hours (1440 minutes)
+        redisContract.saveSignupState(sessionId, state, 1440);
+
+        cache.deleteFromRedis(cachedUser);
+
+        return sessionId;
+    }
+
+    private static @NonNull SignupState getSignupState(String sessionId, UserDTO cachedUser) {
         SignupState state = new SignupState();
         state.setSessionId(sessionId);
         state.setUsername(cachedUser.getUsername());
@@ -130,19 +173,23 @@ public class SignupUseCase implements Signup {
                 : AccountSecurityType.STANDARD;
         state.setAccountSecurity(secMode);
 
-        // 3. Store the state in Redis for 24 hours (1440 minutes)
-        redisContract.saveSignupState(sessionId, state, 1440);
-
-        // Note: The previous logic of DB insertion is completely removed.
-        cache.deleteFromRedis(cachedUser);
-
-        return sessionId;
+        state.setBackupCodes(cachedUser.getBackupCodes());
+        return state;
     }
 
     public void finalizeUserFromRedis(String sessionId, String txid, BigDecimal amountPaid) {
-        SignupState state = redisContract.findSignupState(sessionId);
+        // Validate payment amount before doing anything
+        if (amountPaid == null || amountPaid.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("finalizeUserFromRedis: invalid amountPaid {} for session {}", amountPaid, sessionId);
+            throw new IllegalArgumentException("amountPaid deve ser maior que zero.");
+        }
+
+        // Atomic GETDEL: fetch + delete in one Redis operation, eliminating TOCTOU race
+        // condition
+        SignupState state = redisContract.getdelSignupState(sessionId);
         if (state == null) {
-            log.error("Could not finalize user because SignupState for session {} was not found or expired.",
+            log.warn(
+                    "finalizeUserFromRedis: SignupState for session {} not found — already finalized or expired. Skipping.",
                     sessionId);
             return;
         }
@@ -156,12 +203,14 @@ public class SignupUseCase implements Signup {
             // 1. Create native UserDataBase
             UserDataBase user = new UserDataBase();
             user.setUsername(state.getUsername());
-            user.setPassphrase(state.getPassphrase());
+            // Passphrase is already hashed (done at signup time)
+            user.setPassphrase(new String(state.getPassphrase()));
             user.setTOTPSecret(state.getTotpSecret());
-            user.setIsActive(false); // will be true after claim
+            user.setIsActive(false); // will be true after voucher claim
             user.setAccountSecurity(state.getAccountSecurity() != null
                     ? state.getAccountSecurity()
                     : AccountSecurityType.STANDARD);
+            user.setBackupCodes(state.getBackupCodes());
 
             // For co-signer modes: generate & store an encrypted platform secret
             if (user.getAccountSecurity() == AccountSecurityType.SHAMIR
@@ -172,8 +221,11 @@ public class SignupUseCase implements Signup {
                         sessionId, user.getAccountSecurity());
             }
 
-            // Persist User
-            userService.createUserInDataBase(user);
+            // Persist User and capture the returned entity with its generated ID
+            user = userService.createUserInDataBase(user);
+            if (user.getId() == null) {
+                throw new IllegalStateException("User was persisted but ID is null — aborting finalize.");
+            }
 
             // 2. Deserialize PasskeyCredential if user registered one
             if (state.isPasskeyRegistered() && state.getPasskeyCredentialJson() != null) {
@@ -186,14 +238,18 @@ public class SignupUseCase implements Signup {
             // 3. Create and Claim the onboarding voucher, giving them isActive = true
             voucherService.createAndClaimOnboardingVoucher(user.getId(), txid, amountPaid);
 
-            // 4. Clean up Redis
-            redisContract.deleteSignupState(sessionId);
-
-            // 5. Notify the user via Websocket/Push
+            // 4. Notify the user via Websocket/Push
             notificationService.notifyUser(user.getId(), "Account Created!",
                     "Your onboarding payment reached 3 confirmations. Your account is now active.");
 
             log.info("Successfully finalized user {} via onboarding session {}", user.getUsername(), sessionId);
+
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Extreme edge case: two distributed nodes both read Redis before either
+            // finished deleting it. User was already created — safe to ignore.
+            log.warn(
+                    "finalizeUserFromRedis: duplicate insert for session {} — concurrent request already created user.",
+                    sessionId);
         } catch (Exception e) {
             log.error("Failed to finalize user database insertion for session {}", sessionId, e);
         }

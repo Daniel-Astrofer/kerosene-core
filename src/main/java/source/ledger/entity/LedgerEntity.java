@@ -21,8 +21,12 @@ public class LedgerEntity {
     @JoinColumn(name = "wallet_id", nullable = false)
     private WalletEntity wallet;
 
-    @Column(name = "balance", precision = 38, scale = 16)
+    @Convert(converter = BalanceCryptoConverter.class)
+    @Column(name = "balance", columnDefinition = "TEXT")
     private BigDecimal balance;
+
+    @Column(name = "balance_signature", length = 256)
+    private String balanceSignature;
 
     @Column(name = "nonce", nullable = false)
     private Integer nonce;
@@ -82,6 +86,14 @@ public class LedgerEntity {
 
     public void setNonce(Integer nonce) {
         this.nonce = nonce;
+    }
+
+    public String getBalanceSignature() {
+        return balanceSignature;
+    }
+
+    public void setBalanceSignature(String balanceSignature) {
+        this.balanceSignature = balanceSignature;
     }
 
     public String getLastHash() {

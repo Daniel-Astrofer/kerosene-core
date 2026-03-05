@@ -2,25 +2,56 @@ package source.auth.dto;
 
 import source.auth.dto.contracts.UserDTOContract;
 import source.auth.model.enums.AccountSecurityType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserDTO implements UserDTOContract {
 
     private String username;
-    private String passphrase;
+
+    /**
+     * Passphrase in char[] to limit heap lifetime.
+     * WRITE_ONLY ensures it's read from request but never sent back.
+     */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private char[] passphrase;
+
+    /**
+     * TOTP seed — stored in Redis during signup, never sent to client.
+     */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String totpSecret;
+
+    /** TOTP code is short-lived input. */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String totpCode;
+
     private String voucherCode;
     private String challenge;
     private String nonce;
+    private String preAuthToken;
 
     /**
-     * Account security mode requested at signup.
      * Defaults to STANDARD (password + TOTP).
      * The platform co-signer secret is never stored here.
      */
     private AccountSecurityType accountSecurity = AccountSecurityType.STANDARD;
+
+    /**
+     * Backup codes — generated at signup, stored in Redis.
+     */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private java.util.List<String> backupCodes;
+
+    public java.util.List<String> getBackupCodes() {
+        return backupCodes;
+    }
+
+    public void setBackupCodes(java.util.List<String> backupCodes) {
+        this.backupCodes = backupCodes;
+    }
 
     public String getChallenge() {
         return challenge;
@@ -52,7 +83,7 @@ public class UserDTO implements UserDTOContract {
     }
 
     @Override
-    public String getPassphrase() {
+    public char[] getPassphrase() {
         return passphrase;
     }
 
@@ -72,7 +103,7 @@ public class UserDTO implements UserDTOContract {
     }
 
     @Override
-    public void setPassphrase(String passphrase) {
+    public void setPassphrase(char[] passphrase) {
         this.passphrase = passphrase;
     }
 
@@ -92,5 +123,15 @@ public class UserDTO implements UserDTOContract {
 
     public void setAccountSecurity(AccountSecurityType accountSecurity) {
         this.accountSecurity = accountSecurity;
+    }
+
+    @Override
+    public String getPreAuthToken() {
+        return preAuthToken;
+    }
+
+    @Override
+    public void setPreAuthToken(String preAuthToken) {
+        this.preAuthToken = preAuthToken;
     }
 }

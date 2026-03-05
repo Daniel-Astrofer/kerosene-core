@@ -2,105 +2,86 @@ package source.auth.application.service.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import source.auth.application.service.cripto.encrypter.AES256;
+import source.security.VaultKeyProvider;
 
-import jakarta.annotation.PostConstruct;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
 
 /**
- * Handles encryption and decryption of the platform's co-signer secret.
+ * Handles encryption and decryption of the platform's co-signer secret
+ * and all AES-protected data (balance fields, TOTP secrets, etc).
  *
- * <h2>Key</h2>
+ * <h2>Key Management</h2>
  * <p>
- * Reuses the same AES-256 master key already configured for the application
- * ({@code api.secret.aes.secret}), loaded as a Base64-encoded 256-bit value.
- * No separate environment variable is required.
+ * The master key is NO LONGER read from @Value / environment variables.
+ * It is fetched exclusively from {@link VaultKeyProvider}, which:
+ * <ol>
+ * <li>Performs TPM PCR attestation at boot time.</li>
+ * <li>Sends the signed Quote to the central Key Server (Vault).</li>
+ * <li>Receives the AES-256 master key ONLY in RAM — never on disk.</li>
+ * </ol>
  *
  * <h2>Cipher</h2>
  * <p>
  * Delegates to {@link AES256} (AES-256-GCM, random 12-byte IV prepended to
  * the ciphertext). Output is Base64-encoded for safe DB storage as TEXT.
  *
- * <h2>PII / Secret safety</h2>
+ * <h2>PII / Secret Safety</h2>
  * <ul>
- * <li>Plaintext secrets are never logged.</li>
- * <li>Generated secrets are zeroed out of memory immediately after
+ * <li>Plaintext secrets are NEVER logged.</li>
+ * <li>Generated secrets are zeroed from memory immediately after
  * encryption.</li>
- * <li>Startup fails fast ({@link IllegalStateException}) if the key is missing
- * or has incorrect length — no insecure fallback.</li>
+ * <li>Startup fails fast if the Vault key is unavailable — no insecure
+ * fallback.</li>
  * </ul>
  */
 @Service
 public class CosignerSecretService {
 
     private static final Logger log = LoggerFactory.getLogger(CosignerSecretService.class);
-    private static final int REQUIRED_KEY_BYTES = 32; // 256-bit
 
     private final AES256 aes;
-    private SecretKey masterKey;
-
-    /** Shared AES key, same one used by RedisService and TOTPValidator. */
-    @Value("${api.secret.aes.secret}")
-    private String aesSecretBase64;
-
-    public CosignerSecretService(AES256 aes) {
-        this.aes = aes;
-    }
+    private final VaultKeyProvider vaultKeyProvider;
 
     /**
-     * Validates and loads the master key at startup.
-     * Throws {@link IllegalStateException} if the key is absent or wrong length.
+     * Constructor injection only — no @Value, no disk reads.
+     * The masterKey lives in VaultKeyProvider's RAM.
      */
-    @PostConstruct
-    void init() {
-        if (aesSecretBase64 == null || aesSecretBase64.isBlank()) {
-            throw new IllegalStateException(
-                    "[Security] api.secret.aes.secret is not configured. " +
-                            "Please set the AES_SECRET environment variable.");
-        }
-        byte[] keyBytes = Base64.getDecoder().decode(aesSecretBase64);
-        if (keyBytes.length != REQUIRED_KEY_BYTES) {
-            throw new IllegalStateException(
-                    "[Security] api.secret.aes.secret must decode to exactly 32 bytes (256-bit). " +
-                            "Got " + keyBytes.length + " bytes.");
-        }
-        this.masterKey = new SecretKeySpec(keyBytes, "AES");
-        log.info("[CosignerSecretService] Co-signer encryption ready ({} bytes key).", REQUIRED_KEY_BYTES);
+    public CosignerSecretService(AES256 aes, VaultKeyProvider vaultKeyProvider) {
+        this.aes = aes;
+        this.vaultKeyProvider = vaultKeyProvider;
+        log.info("[CosignerSecretService] Initialized. Master key source: VaultKeyProvider (RAM-only).");
     }
 
     /**
-     * Encrypts a raw secret with AES-256-GCM.
+     * Encrypts raw bytes with AES-256-GCM using the RAM-resident master key.
      *
      * @param secretBytes raw secret bytes (never logged)
      * @return Base64-encoded AES-GCM ciphertext (IV + ciphertext), safe for DB
-     *         storage
      */
     public String encrypt(byte[] secretBytes) {
         try {
-            byte[] cipherText = aes.encrypt(secretBytes, masterKey);
+            byte[] cipherText = aes.encrypt(secretBytes, vaultKeyProvider.getMasterKey());
             return Base64.getEncoder().encodeToString(cipherText);
         } catch (Exception e) {
-            throw new CosignerEncryptionException("Failed to encrypt co-signer secret", e);
+            throw new CosignerEncryptionException("Failed to encrypt data", e);
         }
     }
 
     /**
      * Decrypts a Base64-encoded AES-GCM ciphertext back to raw bytes.
      *
-     * @param encryptedB64 the value stored in {@code platform_cosigner_secret}
-     * @return decrypted raw bytes (zero out after use)
+     * @param encryptedB64 Base64 ciphertext from DB
+     * @return decrypted raw bytes — CALLER MUST zero this array after use
      */
     public byte[] decrypt(String encryptedB64) {
         try {
             byte[] cipherBytes = Base64.getDecoder().decode(encryptedB64);
-            return aes.decrypt(cipherBytes, masterKey);
+            return aes.decrypt(cipherBytes, vaultKeyProvider.getMasterKey());
         } catch (Exception e) {
-            throw new CosignerEncryptionException("Failed to decrypt co-signer secret", e);
+            throw new CosignerEncryptionException("Failed to decrypt data", e);
         }
     }
 
@@ -125,5 +106,14 @@ public class CosignerSecretService {
         public CosignerEncryptionException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    /**
+     * Returns a defensive copy of the master AES key bytes for use in HMAC
+     * computations (e.g., StringCryptoConverter integrity tags).
+     * The caller MUST zero the returned array after use.
+     */
+    public byte[] getMasterKeyBytes() {
+        return vaultKeyProvider.getMasterKey().getEncoded();
     }
 }

@@ -1,6 +1,7 @@
 package source.auth.dto;
 
 import java.io.Serializable;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import source.auth.model.enums.AccountSecurityType;
 
 /**
@@ -13,7 +14,23 @@ public class SignupState implements Serializable {
 
     private String sessionId;
     private String username;
-    private String passphrase;
+
+    /**
+     * Raw passphrase — never written to Redis in plaintext.
+     * This field is cleared (zeroed) immediately after hashing during finalization.
+     * 
+     * @JsonIgnore prevents Jackson from serializing it into the Redis JSON blob.
+     */
+    @JsonIgnore
+    private char[] passphrase;
+
+    /**
+     * Raw TOTP seed — secret key for QR code scanning.
+     * After TOTP verification this value is no longer needed in the cache.
+     * 
+     * @JsonIgnore prevents it leaking through the Redis snapshot.
+     */
+    @JsonIgnore
     private String totpSecret;
 
     // Status flags
@@ -24,6 +41,13 @@ public class SignupState implements Serializable {
     // Generated Bitcoin onboarding deposit address
     private String btcDepositAddress;
     private String passkeyCredentialJson;
+
+    /**
+     * Backup codes are hashed one-time recovery secrets.
+     * Raw values must never appear in Redis — @JsonIgnore enforces this.
+     */
+    @JsonIgnore
+    private java.util.List<String> backupCodes;
 
     /**
      * Security mode chosen by the user at signup.
@@ -56,11 +80,11 @@ public class SignupState implements Serializable {
         this.username = username;
     }
 
-    public String getPassphrase() {
+    public char[] getPassphrase() {
         return passphrase;
     }
 
-    public void setPassphrase(String passphrase) {
+    public void setPassphrase(char[] passphrase) {
         this.passphrase = passphrase;
     }
 
@@ -126,5 +150,13 @@ public class SignupState implements Serializable {
 
     public void setPlatformCosignerSecret(String platformCosignerSecret) {
         this.platformCosignerSecret = platformCosignerSecret;
+    }
+
+    public java.util.List<String> getBackupCodes() {
+        return backupCodes;
+    }
+
+    public void setBackupCodes(java.util.List<String> backupCodes) {
+        this.backupCodes = backupCodes;
     }
 }

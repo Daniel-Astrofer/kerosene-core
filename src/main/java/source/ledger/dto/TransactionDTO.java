@@ -35,6 +35,24 @@ public class TransactionDTO {
      */
     private Long requestTimestamp;
 
+    /**
+     * JSON string containing the WebAuthn/Passkey assertion for transaction
+     * confirmation.
+     * Required if passkey transaction authentication is enabled for the sender.
+     */
+    private String passkeyAssertionJson;
+
+    /**
+     * Plaintext passphrase or mnemocode fragment for confirmation.
+     * Required for MULTISIG_2FA or SHAMIR accounts to authorize domestic movements.
+     */
+    private String confirmationPassphrase;
+
+    /**
+     * 6-digit TOTP code for extra security layer.
+     */
+    private String totpCode;
+
     public TransactionDTO() {
     }
 
@@ -91,6 +109,30 @@ public class TransactionDTO {
 
     public void setRequestTimestamp(Long requestTimestamp) {
         this.requestTimestamp = requestTimestamp;
+    }
+
+    public String getPasskeyAssertionJson() {
+        return passkeyAssertionJson;
+    }
+
+    public void setPasskeyAssertionJson(String passkeyAssertionJson) {
+        this.passkeyAssertionJson = passkeyAssertionJson;
+    }
+
+    public String getConfirmationPassphrase() {
+        return confirmationPassphrase;
+    }
+
+    public void setConfirmationPassphrase(String confirmationPassphrase) {
+        this.confirmationPassphrase = confirmationPassphrase;
+    }
+
+    public String getTotpCode() {
+        return totpCode;
+    }
+
+    public void setTotpCode(String totpCode) {
+        this.totpCode = totpCode;
     }
 
     /**

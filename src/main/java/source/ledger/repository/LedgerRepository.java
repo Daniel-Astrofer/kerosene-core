@@ -21,7 +21,8 @@ public interface LedgerRepository extends JpaRepository<LedgerEntity, Integer> {
     @Query("SELECT l FROM LedgerEntity l WHERE l.wallet.id = :walletId")
     Optional<LedgerEntity> findByWalletIdForUpdate(@Param("walletId") Long walletId);
 
-    List<LedgerEntity> findByWalletUserId(Long userId);
+    @Query("SELECT l FROM LedgerEntity l JOIN FETCH l.wallet WHERE l.wallet.user.id = :userId")
+    List<LedgerEntity> findByWalletUserId(@Param("userId") Long userId);
 
     boolean existsByWalletId(Long walletId);
 

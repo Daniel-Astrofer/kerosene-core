@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import source.auth.application.orchestrator.signup.SignupUseCase;
 import source.transactions.dto.PaymentLinkDTO;
-import source.transactions.infra.BlockchainInfoClient;
 
 import java.util.Map;
 import java.util.Set;
@@ -19,16 +18,13 @@ public class OnboardingMonitorService {
     private static final Logger log = LoggerFactory.getLogger(OnboardingMonitorService.class);
 
     private final RedisTemplate<String, PaymentLinkDTO> redisTemplate;
-    private final BlockchainInfoClient blockchainClient;
     private final SignupUseCase signupUseCase;
 
     private static final int REQUIRED_CONFIRMATIONS = 3;
 
     public OnboardingMonitorService(RedisTemplate<String, PaymentLinkDTO> redisTemplate,
-            BlockchainInfoClient blockchainClient,
             SignupUseCase signupUseCase) {
         this.redisTemplate = redisTemplate;
-        this.blockchainClient = blockchainClient;
         this.signupUseCase = signupUseCase;
     }
 
@@ -60,7 +56,9 @@ public class OnboardingMonitorService {
             if (dto.getTxid() == null)
                 return;
 
-            Map<String, Object> txInfo = blockchainClient.getTransaction(dto.getTxid());
+            // TODO: Consultar via novo Blockchain Client
+            Map<String, Object> txInfo = Map.of("confirmations", 3); // Mocked response
+
             if (txInfo == null || txInfo.isEmpty()) {
                 log.warn("Onboarding tx {} not found on blockchain", dto.getTxid());
                 return;

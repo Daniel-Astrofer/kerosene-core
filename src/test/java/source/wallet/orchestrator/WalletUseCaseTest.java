@@ -8,6 +8,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import source.auth.application.service.authentication.contracts.SignupVerifier;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.model.entity.UserDataBase;
 import source.ledger.service.LedgerService;
@@ -40,6 +41,9 @@ class WalletUseCaseTest {
 
     @Mock
     private LedgerService ledgerService;
+
+    @Mock
+    private SignupVerifier verifier;
 
     @InjectMocks
     private WalletUseCase walletUseCase;
@@ -79,6 +83,21 @@ class WalletUseCaseTest {
         verify(walletService).existsByUserIdAndName(userId, "TESTWALLET");
         verify(walletService).save(any(WalletEntity.class));
         verify(ledgerService).createLedger(any(WalletEntity.class), eq("Initial ledger for new wallet"));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when passphrase is not Bip39 during wallet creation")
+    void shouldThrowExceptionWhenPassphraseIsNotBip39DuringWalletCreation() {
+        when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
+        doThrow(new source.auth.AuthExceptions.InvalidPassphrase("invalid passphrase"))
+                .when(verifier).checkPassphraseBip39(any(char[].class));
+
+        assertThrows(source.auth.AuthExceptions.InvalidPassphrase.class, () -> {
+            walletUseCase.createWallet(requestDTO, userId);
+        });
+
+        verify(verifier).checkPassphraseBip39(requestDTO.passphrase().toCharArray());
+        verify(walletService, never()).save(any(WalletEntity.class));
     }
 
     @Test
@@ -139,7 +158,7 @@ class WalletUseCaseTest {
         when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
         when(walletService.findByUserId(userId)).thenReturn(wallets);
 
-        List<WalletEntity> result = walletUseCase.getAllWallets(userId);
+        List<source.wallet.dto.WalletResponseDTO> result = walletUseCase.getAllWallets(userId);
 
         assertNotNull(result);
         assertEquals(1, result.size());
@@ -166,10 +185,10 @@ class WalletUseCaseTest {
         when(userService.buscarPorId(userId)).thenReturn(Optional.of(user));
         when(walletService.findByName("TestWallet")).thenReturn(wallet);
 
-        WalletEntity result = walletUseCase.getWalletByName("TestWallet", userId);
+        source.wallet.dto.WalletResponseDTO result = walletUseCase.getWalletByName("TestWallet", userId);
 
         assertNotNull(result);
-        assertEquals("TESTWALLET", result.getName());
+        assertEquals("TESTWALLET", result.name());
         verify(userService).buscarPorId(userId);
         verify(walletService).findByName("TestWallet");
     }

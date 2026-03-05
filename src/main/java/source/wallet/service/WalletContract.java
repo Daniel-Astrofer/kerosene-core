@@ -11,6 +11,8 @@ public interface WalletContract {
 
     WalletEntity findByName(String name);
 
+    WalletEntity findByNameAndUserId(String name, Long userId);
+
     WalletEntity findById(Long id);
 
     WalletEntity findByPassphraseHash(String passphraseHash);

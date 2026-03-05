@@ -32,5 +32,11 @@ public enum AccountSecurityType {
      * Platform holds an encrypted co-signing key. Every sensitive operation
      * requires both the user to authenticate AND the platform to co-sign.
      */
-    MULTISIG_2FA
+    MULTISIG_2FA,
+
+    /**
+     * Passkey-only mode.
+     * Primary authentication is done via FIDO2/WebAuthn.
+     */
+    PASSKEY
 }

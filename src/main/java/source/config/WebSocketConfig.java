@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -29,10 +30,11 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
 import java.util.Map;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.messaging.MessageDeliveryException;
 
 import java.util.Collections;
 import java.util.List;
@@ -40,6 +42,8 @@ import java.util.List;
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
 
     @Autowired
     private JwtServicer jwtServicer;
@@ -67,7 +71,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             @Override
             protected String selectProtocol(List<String> requestedProtocols, WebSocketHandler webSocketHandler) {
                 if (requestedProtocols.isEmpty()) {
-                    System.out.println("⚠️ [WS-HANDSHAKE] No sub-protocol requested. Forcing v12.stomp");
+                    log.warn("[WS-HANDSHAKE] No sub-protocol requested. Forcing v12.stomp");
                     return "v12.stomp";
                 }
                 return super.selectProtocol(requestedProtocols, webSocketHandler);
@@ -122,7 +126,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .setHandshakeHandler(handshakeHandler)
                 .addInterceptors(tokenInterceptor);
 
-        System.out.println("🔌 [WEBSOCKET] Endpoints registered (SockJS enabled + Token Query Param supported)");
+        log.info("[WEBSOCKET] Endpoints registered (SockJS enabled + Token Query Param supported)");
     }
 
     @Override
@@ -142,14 +146,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             String preview = payload.replace("\n", "\\n").replace("\r", "\\r");
                             if (preview.length() > 80)
                                 preview = preview.substring(0, 80) + "...";
-                            System.out.println("🕸️ [WS-RAW-IN] " + preview);
+                            log.debug("[WS-RAW-IN] {}", preview);
                         }
                         super.handleMessage(session, message);
                     }
 
                     @Override
                     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-                        System.out.println("✅ [WS-SESSION] Established: " + session.getId());
+                        log.debug("[WS-SESSION] Established: {}", session.getId());
                         super.afterConnectionEstablished(session);
                     }
                 };
@@ -163,55 +167,63 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-                if (accessor != null) {
-                    StompCommand command = accessor.getCommand();
+                if (accessor == null)
+                    return message;
 
-                    if (StompCommand.CONNECT.equals(command)) {
-                        String token = null;
+                StompCommand command = accessor.getCommand();
 
-                        // 1. Try from Native Headers (STOMP frames)
-                        List<String> authorization = accessor.getNativeHeader("Authorization");
-                        if (authorization != null && !authorization.isEmpty()) {
-                            token = authorization.get(0).replace("Bearer ", "");
-                        }
+                if (StompCommand.CONNECT.equals(command)) {
+                    String token = null;
 
-                        // 2. Fallback to Session Attributes (Handshake query param)
-                        if (token == null && accessor.getSessionAttributes() != null) {
-                            token = (String) accessor.getSessionAttributes().get("token");
-                        }
-
-                        if (token != null) {
-                            try {
-                                Long userId = jwtServicer.extractId(token);
-
-                                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                        userId.toString(), null, Collections.emptyList());
-                                SecurityContextHolder.getContext().setAuthentication(auth);
-                                accessor.setUser(auth);
-                                System.out.println("✅ [STOMP-AUTH] Connect authenticated for User: " + userId);
-                            } catch (Exception e) {
-                                System.err.println("❌ [STOMP-AUTH] Invalid JWT token: " + e.getMessage());
-                            }
-                        } else {
-                            System.out.println("⚠️ [STOMP-AUTH] No Token found in headers or query params.");
-                        }
+                    // 1. Try from Native Headers (STOMP frames)
+                    List<String> authorization = accessor.getNativeHeader("Authorization");
+                    if (authorization != null && !authorization.isEmpty()) {
+                        token = authorization.get(0).replace("Bearer ", "");
                     }
 
-                    // Enforce security on SUBSCRIBE
-                    if (StompCommand.SUBSCRIBE.equals(command)) {
-                        if (accessor.getUser() == null) {
-                            System.err.println(
-                                    "❌ [STOMP-AUTH] Unauthorized SUBSCRIBE attempt to: " + accessor.getDestination());
-                            throw new MessageDeliveryException("Unauthorized: Please connect with a valid JWT token");
-                        }
+                    // 2. Fallback to Session Attributes (Handshake query param)
+                    if (token == null && accessor.getSessionAttributes() != null) {
+                        token = (String) accessor.getSessionAttributes().get("token");
                     }
 
-                    if (command != null) {
-                        System.out.println("📥 [STOMP-IN] " + command + " | Session: " + accessor.getSessionId()
-                                + " | User: "
-                                + (accessor.getUser() != null ? accessor.getUser().getName() : "UNAUTHENTICATED"));
+                    if (token == null) {
+                        // No token at all — reject immediately, do not let connection proceed.
+                        // This prevents resource exhaustion from unauthenticated WebSocket sessions.
+                        log.warn("[STOMP-AUTH] CONNECT rejected: no token in headers or query params. Session: {}",
+                                accessor.getSessionId());
+                        throw new MessageDeliveryException("Unauthorized: JWT token is required to connect.");
+                    }
+
+                    try {
+                        Long userId = jwtServicer.extractId(token);
+                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                                userId.toString(), null, Collections.emptyList());
+                        SecurityContextHolder.getContext().setAuthentication(auth);
+                        accessor.setUser(auth);
+                        log.debug("[STOMP-AUTH] CONNECT authenticated for user: {}", userId);
+                    } catch (Exception e) {
+                        // Invalid or expired JWT — hard-reject the CONNECT frame.
+                        // Previously this was swallowed silently, allowing unauthenticated sessions.
+                        log.warn("[STOMP-AUTH] CONNECT rejected: invalid JWT. Session: {}. Reason: {}",
+                                accessor.getSessionId(), e.getMessage());
+                        throw new MessageDeliveryException(
+                                "Unauthorized: Invalid or expired JWT token. Connection refused.");
                     }
                 }
+
+                // Enforce security on SUBSCRIBE — user must be set from CONNECT
+                if (StompCommand.SUBSCRIBE.equals(command)) {
+                    if (accessor.getUser() == null) {
+                        log.warn("[STOMP-AUTH] Unauthorized SUBSCRIBE to: {}", accessor.getDestination());
+                        throw new MessageDeliveryException("Unauthorized: Please connect with a valid JWT token");
+                    }
+                }
+
+                if (command != null) {
+                    log.debug("[STOMP-IN] {} | Session: {} | User: {}", command, accessor.getSessionId(),
+                            accessor.getUser() != null ? accessor.getUser().getName() : "UNAUTHENTICATED");
+                }
+
                 return message;
             }
         });
@@ -227,9 +239,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     StompCommand command = accessor.getCommand();
                     if (command != null) {
                         if (StompCommand.ERROR.equals(command)) {
-                            System.err.println("❌ [STOMP-ERROR] " + accessor.getMessage());
+                            log.warn("[STOMP-ERROR] {}", accessor.getMessage());
                         } else if (StompCommand.CONNECTED.equals(command)) {
-                            System.out.println("📤 [STOMP-OUT] CONNECTED | Session: " + accessor.getSessionId());
+                            log.debug("[STOMP-OUT] CONNECTED | Session: {}", accessor.getSessionId());
                         }
                     }
                 }

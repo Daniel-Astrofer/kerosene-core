@@ -10,10 +10,12 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "transaction_history", schema = "financial", indexes = {
-        @jakarta.persistence.Index(name = "idx_tx_history_sender", columnList = "sender_user_id"),
-        @jakarta.persistence.Index(name = "idx_tx_history_receiver", columnList = "receiver_user_id"),
-        @jakarta.persistence.Index(name = "idx_tx_history_created_at", columnList = "created_at")
+@Table(name = "ledger_transaction_history", schema = "financial", indexes = {
+        @jakarta.persistence.Index(name = "idx_ledger_history_sender", columnList = "sender_identifier"),
+        @jakarta.persistence.Index(name = "idx_ledger_history_receiver", columnList = "receiver_user_id"),
+        @jakarta.persistence.Index(name = "idx_ledger_history_created", columnList = "created_at"),
+        @jakarta.persistence.Index(name = "idx_ledger_history_txid", columnList = "blockchain_txid"),
+        @jakarta.persistence.Index(name = "idx_ledger_history_status", columnList = "status")
 })
 public class LedgerTransactionHistory {
 
@@ -53,6 +55,9 @@ public class LedgerTransactionHistory {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "confirmations")
+    private Integer confirmations;
 
     public LedgerTransactionHistory() {
     }
@@ -151,5 +156,13 @@ public class LedgerTransactionHistory {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Integer getConfirmations() {
+        return confirmations;
+    }
+
+    public void setConfirmations(Integer confirmations) {
+        this.confirmations = confirmations;
     }
 }

@@ -16,6 +16,11 @@ public interface RedisContract {
 
     SignupState findSignupState(String sessionId);
 
+    /**
+     * Atomically fetches and deletes the SignupState in a single Redis GETDEL call.
+     */
+    SignupState getdelSignupState(String sessionId);
+
     void deleteSignupState(String sessionId);
 
     // Generic methods for security features

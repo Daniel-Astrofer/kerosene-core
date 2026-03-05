@@ -55,8 +55,8 @@ public class SignupValidator implements SignupVerifier {
     }
 
     @Override
-    public void checkPassphraseNotNull(String passphrase) {
-        if (passphrase == null) {
+    public void checkPassphraseNotNull(char[] passphrase) {
+        if (passphrase == null || passphrase.length == 0) {
             throw new AuthExceptions.PassphraseCantBeNull(AuthConstants.ERR_PASSPHRASE_NULL);
         }
     }
@@ -76,8 +76,8 @@ public class SignupValidator implements SignupVerifier {
     }
 
     @Override
-    public void checkPassphraseLength(String passphrase) {
-        if (passphrase.length() > AuthConstants.PASSPHRASE_MAX_LENGTH) {
+    public void checkPassphraseLength(char[] passphrase) {
+        if (passphrase.length > AuthConstants.PASSPHRASE_MAX_LENGTH) {
             throw new AuthExceptions.CharacterLimitException(AuthConstants.ERR_PASSPHRASE_TOO_LONG);
         }
     }
@@ -90,8 +90,8 @@ public class SignupValidator implements SignupVerifier {
      * If that fails, try Portuguese. Only throw if BOTH fail.
      */
     @Override
-    public void checkPassphraseBip39(String passphrase) {
-        String normalizedPhrase = passphrase.trim().replaceAll("[\\s\\u00A0]+", " ");
+    public void checkPassphraseBip39(char[] passphrase) {
+        String normalizedPhrase = normalizePassphrase(passphrase);
         List<String> words = Arrays.asList(normalizedPhrase.split(" "));
 
         if (isValidEnglish(words) || isValidPortuguese(words)) {
@@ -102,6 +102,25 @@ public class SignupValidator implements SignupVerifier {
         deriveAndThrowError(words);
     }
 
+    private String normalizePassphrase(char[] input) {
+        if (input == null)
+            return "";
+        StringBuilder sb = new StringBuilder();
+        boolean inSpace = false;
+        for (char c : input) {
+            if (Character.isWhitespace(c) || c == '\u00A0') {
+                if (!inSpace) {
+                    sb.append(' ');
+                    inSpace = true;
+                }
+            } else {
+                sb.append(c);
+                inSpace = false;
+            }
+        }
+        return sb.toString().trim();
+    }
+
     @Override
     public void checkUsernameExists(String username) {
         if (repository.findByUsername(username) != null) {
@@ -110,7 +129,7 @@ public class SignupValidator implements SignupVerifier {
     }
 
     @Override
-    public boolean verify(String username, String passphrase) {
+    public boolean verify(String username, char[] passphrase) {
         checkUsernameNotNull(username);
         checkPassphraseNotNull(passphrase);
         checkUsernameFormat(username);

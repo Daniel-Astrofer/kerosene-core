@@ -62,14 +62,14 @@ public class RestResponseErrors extends ResponseEntityExceptionHandler {
         }
 
         @ExceptionHandler(AuthExceptions.UnrrecognizedDevice.class)
-        public ResponseEntity<ResponseError> unrecognizedDevice(AuthExceptions.UnrrecognizedDevice ex,
+        public ResponseEntity<ResponseError> invalidSession(AuthExceptions.UnrrecognizedDevice ex,
                         HttpServletRequest request) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).header("Next-Endpoint", "auth/login/totp/verify")
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                                 .body(
                                                 new ResponseError(
                                                                 LocalDateTime.now(),
-                                                                HttpStatus.SEE_OTHER,
-                                                                "Unrecognized Device",
+                                                                HttpStatus.UNAUTHORIZED,
+                                                                "Invalid Session",
                                                                 ex.getMessage(),
                                                                 request.getRequestURI()));
         }
@@ -118,18 +118,6 @@ public class RestResponseErrors extends ResponseEntityExceptionHandler {
                                                 LocalDateTime.now(),
                                                 HttpStatus.CONFLICT,
                                                 "you are using this name",
-                                                ex.getMessage(),
-                                                request.getRequestURI()));
-        }
-
-        @ExceptionHandler
-        public ResponseEntity<ResponseError> PassphraseNotBIP39(AuthExceptions.InvalidPassphrase ex,
-                        HttpServletRequest request) {
-                return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(
-                                new ResponseError(
-                                                LocalDateTime.now(),
-                                                HttpStatus.NOT_ACCEPTABLE,
-                                                "this passphrase is not BIP39",
                                                 ex.getMessage(),
                                                 request.getRequestURI()));
         }

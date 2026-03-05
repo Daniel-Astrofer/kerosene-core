@@ -5,12 +5,10 @@ import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.cripto.contracts.Cryptography;
 import source.auth.application.service.cripto.contracts.Hasher;
 import source.auth.dto.UserDTO;
+import source.security.VaultKeyProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -20,35 +18,32 @@ public class RedisService implements RedisServicer {
     private final Cryptography cryptography;
     private final RedisContract repository;
     private final Hasher hasher;
+    private final VaultKeyProvider vaultKeyProvider;
     private static final String key = "signup:";
-    private String keybase;
-    private SecretKey secretKey;
 
     public RedisService(
             RedisContract repository,
             @Qualifier("aes256") Cryptography cryptography,
-            @Qualifier("SHAHasher") Hasher hasher,
-            @Value("${api.secret.aes.secret}") String keybase) {
+            @Qualifier("Argon2Hasher") Hasher hasher,
+            VaultKeyProvider vaultKeyProvider) {
         this.repository = repository;
         this.cryptography = cryptography;
         this.hasher = hasher;
-        this.keybase = keybase;
-
-        byte[] decodedKey = Base64.getDecoder().decode(keybase);
-        this.secretKey = new SecretKeySpec(decodedKey, "AES");
+        this.vaultKeyProvider = vaultKeyProvider;
+        // Chave AES vive no VaultKeyProvider (RAM-only, pós-atestação TPM)
     }
 
     @Override
     public void createTempUser(UserDTO userDTO) {
 
-        String normalizedPassphrase = userDTO.getPassphrase().trim().replaceAll("[\\s\\u00A0]+", " ");
-        userDTO.setPassphrase(hasher.hash(normalizedPassphrase));
+        String normalizedPassphrase = new String(userDTO.getPassphrase()).trim().replaceAll("[\\s\\u00A0]+", " ");
+        userDTO.setPassphrase(hasher.hash(normalizedPassphrase.toCharArray()).toCharArray());
 
         try {
             String base64 = Base64.getEncoder()
                     .encodeToString(
                             cryptography.encrypt(userDTO.getTotpSecret()
-                                    .getBytes(StandardCharsets.UTF_8), secretKey));
+                                    .getBytes(StandardCharsets.UTF_8), vaultKeyProvider.getMasterKey()));
             userDTO.setTotpSecret(base64);
 
         } catch (Exception e) {

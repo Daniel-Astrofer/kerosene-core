@@ -8,7 +8,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import source.ledger.service.LedgerService;
 import source.transactions.dto.PaymentLinkDTO;
-import source.transactions.infra.BlockchainInfoClient;
+
 import source.wallet.service.WalletService;
 import source.wallet.model.WalletEntity;
 
@@ -33,9 +33,6 @@ public class PaymentLinkServiceRedisTest {
 
     @MockBean
     private WalletService walletService;
-
-    @MockBean
-    private BlockchainInfoClient blockchainInfoClient;
 
     @BeforeEach
     public void setup() {
@@ -104,10 +101,6 @@ public class PaymentLinkServiceRedisTest {
         WalletEntity mockWallet = new WalletEntity();
         mockWallet.setId(999L);
         when(walletService.findByUserId(userId)).thenReturn(Collections.singletonList(mockWallet));
-
-        // Mock Blockchain validation
-        when(blockchainInfoClient.validateDepositTransaction(anyString(), anyString(), any(BigDecimal.class)))
-                .thenReturn(true);
 
         PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, amount, description);
         String txid = "tx_mock_123";

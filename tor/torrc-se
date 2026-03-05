@@ -1,9 +1,0 @@
-## Tor Hidden Service Configuration - Sweden (SE)
-SocksPort 0
-HiddenServiceDir /var/lib/tor/kerosene_service/
-HiddenServiceVersion 3
-HiddenServicePort 80 kerosene-app-se:8080
-HiddenServiceOnionBalanceInstance 1
-Log notice stdout
-DataDirectory /var/lib/tor
-NumCPUs 1

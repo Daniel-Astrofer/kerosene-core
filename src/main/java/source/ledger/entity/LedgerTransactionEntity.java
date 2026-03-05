@@ -18,12 +18,14 @@ public class LedgerTransactionEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "to_address")
     private String toAddress;
 
     @Column(name = "amount", precision = 19, scale = 8)
     private BigDecimal amount;
 
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "message")
     private String message;
 

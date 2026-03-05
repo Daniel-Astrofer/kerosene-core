@@ -1,103 +1,76 @@
 services:
   # ══════════════════════════════════════════════════════════════════
+  # KEROSENE SECURE VAULT (Central Hardware Attestation Node)
+  # ══════════════════════════════════════════════════════════════════
+  kerosene-vault:
+    build:
+      context: ../../vault
+      dockerfile: Dockerfile
+    container_name: kerosene-vault
+    restart: unless-stopped
+    # ⚠️ No 'ports:' mapping — Vault is ONLY reachable via kerosene-tor-vault on
+    # the net_vault network. Exposing any TCP port would deanonymize the real IP.
+    environment:
+      # No default value — Docker Compose will fail loudly if this is not in .env
+      - FOUNDER_TOTP_SECRET=${FOUNDER_TOTP_SECRET}
+    networks:
+      - net_vault
+    cap_add:
+      - IPC_LOCK
+
+  kerosene-tor-vault:
+    image: debian:bookworm-slim
+    container_name: kerosene-tor-vault
+    volumes:
+      - ./tor/torrc-vault:/etc/tor/torrc:ro
+      - ./tor/entrypoint.sh:/entrypoint.sh:ro
+      - tor_keys_vault:/var/lib/tor/kerosene_service
+      - ./tor/authorized_clients:/var/lib/tor/kerosene_service/authorized_clients:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    networks: [net_vault, tor_egress]
+    depends_on: [kerosene-vault]
+
+  # ══════════════════════════════════════════════════════════════════
   # Distributed Infrastructure: SWEDEN (Primary Node)
   # ══════════════════════════════════════════════════════════════════
 
-  db-se:
-    image: postgres:17-alpine
-    container_name: kerosene_db_se
-    restart: unless-stopped
-    environment:
-      - POSTGRES_DB=kerosene
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - pg_data_se:/var/lib/postgresql/data
-      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-    networks:
-      - kerosene_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d kerosene"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis-se:
-    image: redis:7-alpine
-    container_name: kerosene_redis_se
-    restart: unless-stopped
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --appendonly yes
-    volumes:
-      - redis_data_se:/data
-    networks:
-      - kerosene_net
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ══════════════════════════════════════════════════════════════════
-  # Distributed Infrastructure: ESTONIA (Standby Node)
-  # ══════════════════════════════════════════════════════════════════
-
-  db-ee:
-    image: postgres:17-alpine
-    container_name: kerosene_db_ee
-    restart: unless-stopped
-    environment:
-      - POSTGRES_DB=kerosene
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - pg_data_ee:/var/lib/postgresql/data
-      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-    networks:
-      - kerosene_net
-    depends_on:
-      db-se:
-        condition: service_healthy
-
-  redis-ee:
-    image: redis:7-alpine
-    container_name: kerosene_redis_ee
-    restart: unless-stopped
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --replicaof redis-se 6379
-      --masterauth ${REDIS_PASSWORD}
-    volumes:
-      - redis_data_ee:/data
-    networks:
-      - kerosene_net
-    depends_on:
-      redis-se:
-        condition: service_healthy
-
-  # ══════════════════════════════════════════════════════════════════
-  # Distributed Infrastructure: ICELAND (Standby Node)
+  # Distributed Infrastructure: ICELAND (is)
   # ══════════════════════════════════════════════════════════════════
 
   db-is:
     image: postgres:17-alpine
     container_name: kerosene_db_is
     restart: unless-stopped
+    entrypoint: >
+      sh -c "
+      cp /certs/* /tmp/ &&
+      chown postgres:postgres /tmp/server.key &&
+      chmod 600 /tmp/server.key &&
+      exec docker-entrypoint.sh postgres 
+      -c ssl=on 
+      -c ssl_cert_file=/tmp/server.crt 
+      -c ssl_key_file=/tmp/server.key 
+      -c ssl_ca_file=/tmp/rootCA.crt
+      "
     environment:
       - POSTGRES_DB=kerosene
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
     volumes:
       - pg_data_is:/var/lib/postgresql/data
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./certs:/certs:ro
     networks:
-      - kerosene_net
-    depends_on:
-      db-se:
-        condition: service_healthy
+      - net_db_is
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_system -d kerosene"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 
   redis-is:
     image: redis:7-alpine
@@ -106,112 +79,244 @@ services:
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD}
-      --replicaof redis-se 6379
-      --masterauth ${REDIS_PASSWORD}
+      --appendonly yes
     volumes:
       - redis_data_is:/data
     networks:
-      - kerosene_net
-    depends_on:
-      redis-se:
-        condition: service_healthy
+      - net_db_is
 
-  # ══════════════════════════════════════════════════════════════════
-  # Hydra Nodes Applications
-  # ══════════════════════════════════════════════════════════════════
+  mpc-sidecar-is:
+    build:
+      context: ../../mpc-sidecar
+    container_name: mpc-sidecar-is
+    restart: unless-stopped
+    tmpfs:
+      - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
+    environment:
+      - MPC_RUNTIME_MODE=HARDWARE_ENCLAVE
+    networks:
+      - net_mpc
 
-  kerosene-app-se:
+  kerosene-app-is:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kerosene-app-se
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-se:5432,db-ee:5432,db-is:5432/kerosene?targetServerType=primary&hostRecheckSeconds=10
-      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
-      - SPRING_DATA_REDIS_HOST=redis-se
-      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REGION=SE
-    volumes:
-      - ./service-account.json:/app/service-account.json:ro
-    networks:
-      - kerosene_net
-    depends_on:
-      db-se: { condition: service_healthy }
-      redis-se: { condition: service_healthy }
-
-  kerosene-app-ee:
-    build: .
-    container_name: kerosene-app-ee
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-ee:5432,db-se:5432,db-is:5432/kerosene?targetServerType=any&hostRecheckSeconds=10
-      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
-      - SPRING_DATA_REDIS_HOST=redis-se
-      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REGION=EE
-    volumes:
-      - ./service-account.json:/app/service-account.json:ro
-    networks:
-      - kerosene_net
-    depends_on:
-      db-ee: { condition: service_started }
-      redis-ee: { condition: service_started }
-
-  kerosene-app-is:
-    build: .
     container_name: kerosene-app-is
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - IPC_LOCK  # required for mlock() to pin key material in RAM
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:seccomp-profile.json
+    tmpfs:
+      - /opt/kerosene:rw,noexec,nosuid,size=10m
+    volumes:
+      - ../../panic.sh:/opt/kerosene/panic.sh:ro
+      - ./certs:/certs:ro
+      - tor_socks_is:/var/run/tor/socks
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db-is:5432,db-se:5432,db-ee:5432/kerosene?targetServerType=any&hostRecheckSeconds=10
-      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
-      - SPRING_DATA_REDIS_HOST=redis-se
-      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://kerosene_db_is:5432/kerosene?targetServerType=primary&ssl=true&sslmode=verify-ca&sslrootcert=/certs/rootCA.crt&sslcert=/certs/client.crt&sslkey=/certs/client.key.der
       - REGION=IS
-    volumes:
-      - ./service-account.json:/app/service-account.json:ro
+      - MPC_SIDECAR_HOST=mpc-sidecar-is
+      - SPRING_DATA_REDIS_HOST=kerosene_redis_is
+      - vault.enabled=true
+      - vault.url=http://kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion
+      - vault.proxy.path=/var/run/tor/socks/tor.sock
     networks:
-      - kerosene_net
+      - net_db_is
+      - net_mpc
+      - net_tor
     depends_on:
-      db-is: { condition: service_started }
-      redis-is: { condition: service_started }
+      db-is: { condition: service_healthy }
+      mpc-sidecar-is: { condition: service_started }
+
+  # ══════════════════════════════════════════════════════════════════
+  # Distributed Infrastructure: SWITZERLAND (ch)
+  # ══════════════════════════════════════════════════════════════════
+
+  db-ch:
+    image: postgres:17-alpine
+    container_name: kerosene_db_ch
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+      cp /certs/* /tmp/ &&
+      chown postgres:postgres /tmp/server.key &&
+      chmod 600 /tmp/server.key &&
+      exec docker-entrypoint.sh postgres 
+      -c ssl=on 
+      -c ssl_cert_file=/tmp/server.crt 
+      -c ssl_key_file=/tmp/server.key 
+      -c ssl_ca_file=/tmp/rootCA.crt
+      "
+    environment:
+      - POSTGRES_DB=kerosene
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    volumes:
+      - pg_data_ch:/var/lib/postgresql/data
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./certs:/certs:ro
+    networks:
+      - net_db_ch
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_system -d kerosene"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis-ch:
+    image: redis:7-alpine
+    container_name: kerosene_redis_ch
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+    volumes:
+      - redis_data_ch:/data
+    networks:
+      - net_db_ch
+
+  mpc-sidecar-ch:
+    build:
+      context: ../../mpc-sidecar
+    container_name: mpc-sidecar-ch
+    restart: unless-stopped
+    tmpfs:
+      - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
+    environment:
+      - MPC_RUNTIME_MODE=HARDWARE_ENCLAVE
+    networks:
+      - net_mpc
+
+  kerosene-app-ch:
+    build: .
+    container_name: kerosene-app-ch
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    tmpfs:
+      - /opt/kerosene:rw,noexec,nosuid,size=10m
+    volumes:
+      - ../../panic.sh:/opt/kerosene/panic.sh:ro
+      - ./certs:/certs:ro
+    env_file: .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://kerosene_db_ch:5432/kerosene?targetServerType=primary&ssl=true&sslmode=verify-ca&sslrootcert=/certs/rootCA.crt&sslcert=/certs/client.crt&sslkey=/certs/client.key.der
+      - REGION=CH
+      - MPC_SIDECAR_HOST=mpc-sidecar-ch
+      - SPRING_DATA_REDIS_HOST=kerosene_redis_ch
+      - vault.enabled=true
+      - vault.url=http://kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion
+      - vault.proxy.path=/var/run/tor/socks/tor.sock
+    networks:
+      - net_db_ch
+      - net_mpc
+      - net_tor
+    depends_on:
+      db-ch: { condition: service_healthy }
+      mpc-sidecar-ch: { condition: service_started }
+
+  # ══════════════════════════════════════════════════════════════════
+  # Distributed Infrastructure: SINGAPORE (sg)
+  # ══════════════════════════════════════════════════════════════════
+
+  db-sg:
+    image: postgres:17-alpine
+    container_name: kerosene_db_sg
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+      cp /certs/* /tmp/ &&
+      chown postgres:postgres /tmp/server.key &&
+      chmod 600 /tmp/server.key &&
+      exec docker-entrypoint.sh postgres 
+      -c ssl=on 
+      -c ssl_cert_file=/tmp/server.crt 
+      -c ssl_key_file=/tmp/server.key 
+      -c ssl_ca_file=/tmp/rootCA.crt
+      "
+    environment:
+      - POSTGRES_DB=kerosene
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid
+    volumes:
+      - pg_data_sg:/var/lib/postgresql/data
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./certs:/certs:ro
+    networks:
+      - net_db_sg
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_system -d kerosene"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis-sg:
+    image: redis:7-alpine
+    container_name: kerosene_redis_sg
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+    volumes:
+      - redis_data_sg:/data
+    networks:
+      - net_db_sg
+
+  mpc-sidecar-sg:
+    build:
+      context: ../../mpc-sidecar
+    container_name: mpc-sidecar-sg
+    restart: unless-stopped
+    tmpfs:
+      - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
+    environment:
+      - MPC_RUNTIME_MODE=HARDWARE_ENCLAVE
+    networks:
+      - net_mpc
+
+  kerosene-app-sg:
+    build: .
+    container_name: kerosene-app-sg
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    tmpfs:
+      - /opt/kerosene:rw,noexec,nosuid,size=10m
+    volumes:
+      - ../../panic.sh:/opt/kerosene/panic.sh:ro
+      - ./certs:/certs:ro
+    env_file: .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://kerosene_db_sg:5432/kerosene?targetServerType=primary&ssl=true&sslmode=verify-ca&sslrootcert=/certs/rootCA.crt&sslcert=/certs/client.crt&sslkey=/certs/client.key.der
+      - REGION=SG
+      - MPC_SIDECAR_HOST=mpc-sidecar-sg
+      - SPRING_DATA_REDIS_HOST=kerosene_redis_sg
+      - vault.enabled=true
+      - vault.url=http://kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion
+      - vault.proxy.path=/var/run/tor/socks/tor.sock
+    networks:
+      - net_db_sg
+      - net_mpc
+      - net_tor
+    depends_on:
+      db-sg: { condition: service_healthy }
+      mpc-sidecar-sg: { condition: service_started }
 
   # Tor nodes (Identity redundancy)
-  kerosene-tor-se:
-    image: debian:bookworm-slim
-    container_name: kerosene-tor-se
-    environment:
-      - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
-    volumes:
-      - ./tor/torrc-se:/etc/tor/torrc:ro
-      - ./tor/entrypoint.sh:/entrypoint.sh:ro
-      - tor_keys_se:/var/lib/tor/kerosene_service
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    networks: [kerosene_net, tor_egress]
-    depends_on: [kerosene-app-se]
-
-  kerosene-tor-ee:
-    image: debian:bookworm-slim
-    container_name: kerosene-tor-ee
-    environment:
-      - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
-    volumes:
-      - ./tor/torrc-ee:/etc/tor/torrc:ro
-      - ./tor/entrypoint.sh:/entrypoint.sh:ro
-      - tor_keys_ee:/var/lib/tor/kerosene_service
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    networks: [kerosene_net, tor_egress]
-    depends_on: [kerosene-app-ee]
-
   kerosene-tor-is:
     image: debian:bookworm-slim
     container_name: kerosene-tor-is
@@ -221,90 +326,62 @@ services:
       - ./tor/torrc-is:/etc/tor/torrc:ro
       - ./tor/entrypoint.sh:/entrypoint.sh:ro
       - tor_keys_is:/var/lib/tor/kerosene_service
+      - tor_socks_is:/var/run/tor/socks
+      - ./tor/onion_auth_is:/var/lib/tor/onion_auth:ro
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    networks: [kerosene_net, tor_egress]
+    networks: [net_tor, tor_egress]
     depends_on: [kerosene-app-is]
 
-  kerosene-onionbalance:
+  kerosene-tor-ch:
     image: debian:bookworm-slim
-    container_name: kerosene-onionbalance
-    volumes:
-      - ./tor/onionbalance-entrypoint.sh:/entrypoint.sh:ro
-      - ./tor/keys/master:/var/lib/onionbalance/master
-      - tor_keys_se:/var/lib/tor/backends/se:ro
-      - tor_keys_ee:/var/lib/tor/backends/ee:ro
-      - tor_keys_is:/var/lib/tor/backends/is:ro
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    networks: [kerosene_net, tor_egress]
-    depends_on:
-      - kerosene-tor-se
-      - kerosene-tor-ee
-      - kerosene-tor-is
-
-  gatus:
-    image: twinproduction/gatus:latest
-    container_name: kerosene_gatus
-    restart: always
+    container_name: kerosene-tor-ch
     environment:
       - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
-    ports:
-      - "8080:8080"
     volumes:
-      - ./gatus/config.yaml:/config/config.yaml:ro
-    networks:
-      - kerosene_net
-    depends_on:
-      - kerosene-tor-se
-      - kerosene-app-se
+      - ./tor/torrc-ch:/etc/tor/torrc:ro
+      - ./tor/entrypoint.sh:/entrypoint.sh:ro
+      - tor_keys_ch:/var/lib/tor/kerosene_service
+      - tor_socks_ch:/var/run/tor/socks
+      - ./tor/onion_auth_ch:/var/lib/tor/onion_auth:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    networks: [net_tor, tor_egress]
+    depends_on: [kerosene-app-ch]
 
-  loki:
-    image: grafana/loki:latest
-    container_name: kerosene_loki
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - kerosene_net
-
-  promtail:
-    image: grafana/promtail:latest
-    container_name: kerosene_promtail
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./prometheus/promtail-config.yaml:/etc/promtail/config.yml:ro
-    command: -config.file=/etc/promtail/config.yml
-    networks:
-      - kerosene_net
-    depends_on:
-      - loki
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: kerosene_grafana
-    ports:
-      - "3000:3000"
+  kerosene-tor-sg:
+    image: debian:bookworm-slim
+    container_name: kerosene-tor-sg
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
     volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    networks:
-      - kerosene_net
-    depends_on:
-      - loki
+      - ./tor/torrc-sg:/etc/tor/torrc:ro
+      - ./tor/entrypoint.sh:/entrypoint.sh:ro
+      - tor_keys_sg:/var/lib/tor/kerosene_service
+      - tor_socks_sg:/var/run/tor/socks
+      - ./tor/onion_auth_sg:/var/lib/tor/onion_auth:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    networks: [net_tor, tor_egress]
+    depends_on: [kerosene-app-sg]
 
 networks:
-  kerosene_net:
+  net_db_is:
+  net_db_ch:
+  net_db_sg:
+  net_vault:
+  net_mpc:
+  net_tor:
   tor_egress: {}
 
 volumes:
-  pg_data_se:
-  pg_data_ee:
   pg_data_is:
-  redis_data_se:
-  redis_data_ee:
+  pg_data_ch:
+  pg_data_sg:
   redis_data_is:
-  tor_keys_se:
-  tor_keys_ee:
+  redis_data_ch:
+  redis_data_sg:
   tor_keys_is:
-  grafana_data:
+  tor_keys_ch:
+  tor_keys_sg:
+  tor_keys_vault:
+  tor_socks_is:
+  tor_socks_ch:
+  tor_socks_sg:

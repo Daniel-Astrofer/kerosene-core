@@ -1,16 +1,5 @@
 package source.auth.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.yubico.webauthn.AssertionRequest;
-import com.yubico.webauthn.AssertionResult;
-import com.yubico.webauthn.RegistrationResult;
-import com.yubico.webauthn.data.AuthenticatorAssertionResponse;
-import com.yubico.webauthn.data.AuthenticatorAttestationResponse;
-import com.yubico.webauthn.data.ByteArray;
-import com.yubico.webauthn.data.ClientAssertionExtensionOutputs;
-import com.yubico.webauthn.data.ClientRegistrationExtensionOutputs;
-import com.yubico.webauthn.data.PublicKeyCredential;
-import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -133,8 +122,8 @@ public class WebAuthnController {
                 // Assuming username format is "{username}" mapped to userId in auth/login
                 long userId = Long.parseLong(username.replace("user", ""));
 
-                // Device Hash is no longer used, passing empty string or null is fine.
-                String token = jwtServicer.generateToken(userId, "");
+                // Device Hash is no longer used in JWT tokens.
+                String token = jwtServicer.generateToken(userId);
                 return ResponseEntity.ok(ApiResponse.success("Passkey login successful", token));
             } else {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

@@ -23,6 +23,41 @@ if $DOWN; then
   exit 0
 fi
 
+# ── mTLS Certificate Guard ────────────────────────────────────────────────────
+# CRITICAL: In a multi-node setup (Iceland + Singapore + Switzerland), the CA
+# MUST be generated exactly ONCE in an air-gapped environment and DISTRIBUTED
+# to all nodes. If each node generates its own CA, nodes will not trust each other
+# and quorum mTLS will fail completely.
+#
+# This guard:
+#  1. In PRODUCTION mode → BLOCKS startup if certs are not pre-provisioned.
+#  2. In DEV mode → Generates certs locally (single-node only).
+# ─────────────────────────────────────────────────────────────────────────────
+ENV_MODE="${KEROSENE_ENV:-dev}"
+
+if [ "$ENV_MODE" = "production" ]; then
+  # ── Production: Certs must be pre-distributed from the air-gapped CA host ──
+  if [ ! -d "../../certs" ] || [ ! -f "../../certs/rootCA.crt" ]; then
+    echo "[KEROSENE] ❌ FATAL: Production mode requires pre-provisioned mTLS certificates."
+    echo "           Certs must be generated ONCE on an air-gapped machine and distributed"
+    echo "           to all nodes. DO NOT generate them locally on each shard."
+    echo "           See: docs/CERT_PROVISIONING.md for the procedure."
+    exit 1
+  fi
+  echo "[Kerosene] ✅ mTLS certificates verified (production, pre-distributed)."
+else
+  # ── Dev/Test: Generate locally for single-node testing ────────────────────
+  if [ ! -d "../../certs" ]; then
+    echo "[Kerosene] DEV MODE: mTLS certificates not found. Generating for local testing..."
+    echo "           ⚠️  WARNING: These certs are for single-node dev ONLY."
+    echo "           ⚠️  For multi-node production, use a shared air-gapped CA."
+    chmod +x ../../cert-generator.sh
+    ../../cert-generator.sh
+  else
+    echo "[Kerosene] DEV MODE: Existing certs found — skipping cert generation."
+  fi
+fi
+
 # ── Start stack ───────────────────────────────────────────────────
 if $BUILD; then
   echo "[Kerosene] Building images and starting stack..."

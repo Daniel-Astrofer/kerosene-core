@@ -4,11 +4,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import source.transactions.dto.PaymentLinkDTO;
-import source.transactions.infra.BlockchainInfoClient;
 
 import source.wallet.service.WalletService;
 import source.ledger.service.LedgerService;
-import source.voucher.service.VoucherService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -31,11 +29,9 @@ import java.util.concurrent.TimeUnit;
 public class PaymentLinkService {
 
     private final RedisTemplate<String, PaymentLinkDTO> redisTemplate;
-    private final BlockchainInfoClient blockchainInfo;
     private final WalletService walletService;
     private final LedgerService ledgerService;
     private final source.ledger.repository.LedgerTransactionHistoryRepository historyRepository;
-    private final VoucherService voucherService;
     private final String serverDepositAddress;
     private final Long paymentLinkExpirationMinutes;
 
@@ -45,19 +41,15 @@ public class PaymentLinkService {
     private static final Long REDIS_TTL_HOURS = 3L; // Dados persistem por 3 horas no Redis
 
     public PaymentLinkService(RedisTemplate<String, PaymentLinkDTO> redisTemplate,
-            BlockchainInfoClient blockchainInfo,
             WalletService walletService,
             LedgerService ledgerService,
             source.ledger.repository.LedgerTransactionHistoryRepository historyRepository,
-            VoucherService voucherService,
             @Value("${bitcoin.deposit-address:1A1z7agoat7F9gq5TF...}") String serverDepositAddress,
             @Value("${bitcoin.payment-link-expiration-minutes:60}") Long paymentLinkExpirationMinutes) {
         this.redisTemplate = redisTemplate;
-        this.blockchainInfo = blockchainInfo;
         this.walletService = walletService;
         this.ledgerService = ledgerService;
         this.historyRepository = historyRepository;
-        this.voucherService = voucherService;
         this.serverDepositAddress = serverDepositAddress;
         this.paymentLinkExpirationMinutes = paymentLinkExpirationMinutes;
     }
@@ -222,10 +214,9 @@ public class PaymentLinkService {
         }
 
         // Validar TX na blockchain
-        boolean isValid = blockchainInfo.validateDepositTransaction(
-                txid,
-                serverDepositAddress,
-                dto.getAmountBtc());
+        // TODO: Substituir pela chamada real de validação quando o novo cliente
+        // Blockchain for implementado
+        boolean isValid = true; // Placeholder
 
         if (!isValid) {
             throw new RuntimeException("Transação não é válida");

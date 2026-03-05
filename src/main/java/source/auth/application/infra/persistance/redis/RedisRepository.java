@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit;
 
 @Repository
 public class RedisRepository implements RedisContract {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RedisRepository.class);
     private final ObjectMapper mapper;
     private final StringRedisTemplate redis;
 
@@ -24,24 +23,31 @@ public class RedisRepository implements RedisContract {
 
     @Override
     public void save(String key, UserDTO dto, long expirationInMinutes) {
-
         try {
             String json = mapper.writeValueAsString(dto);
             redis.opsForValue().set(key + dto.getUsername(), json, expirationInMinutes, TimeUnit.MINUTES);
-
         } catch (JsonProcessingException e) {
-            throw new AuthExceptions.InvalidCredentials("Incompatible username or passphrase");
+            // Serialisation failure = infrastructure error, NOT an auth failure.
+            // Throwing InvalidCredentials (401) here is semantically wrong and hides bugs.
+            throw new IllegalStateException(
+                    "[Redis] Failed to serialise UserDTO for key '" + key + "': " + e.getMessage(), e);
         }
     }
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RedisRepository.class);
 
     @Override
     public UserDTO find(String key, UserDTO dto) {
         try {
-            System.out.println(dto.getUsername());
-            return mapper.readValue(redis.opsForValue().get("signup:" + dto.getUsername()),
-                    source.auth.dto.UserDTO.class);
+            log.debug("[RedisRepository] find() called for signup lookup");
+            String json = redis.opsForValue().get(key + dto.getUsername());
+            if (json == null) {
+                return null;
+            }
+            return mapper.readValue(json, source.auth.dto.UserDTO.class);
         } catch (JsonProcessingException e) {
-            throw new AuthExceptions.InvalidCredentials("User not found");
+            throw new IllegalStateException(
+                    "[Redis] Failed to deserialise UserDTO for user '" + dto.getUsername() + "': " + e.getMessage(), e);
         }
     }
 
@@ -57,7 +63,8 @@ public class RedisRepository implements RedisContract {
             String json = mapper.writeValueAsString(state);
             redis.opsForValue().set("signup:" + sessionId, json, expirationInMinutes, TimeUnit.MINUTES);
         } catch (JsonProcessingException e) {
-            throw new AuthExceptions.InvalidCredentials("Failed to serialize SignupState");
+            throw new IllegalStateException(
+                    "[Redis] Failed to serialise SignupState for session '" + sessionId + "': " + e.getMessage(), e);
         }
     }
 
@@ -69,7 +76,28 @@ public class RedisRepository implements RedisContract {
                 return null;
             return mapper.readValue(json, SignupState.class);
         } catch (JsonProcessingException e) {
-            throw new AuthExceptions.InvalidCredentials("Failed to parse SignupState");
+            throw new IllegalStateException(
+                    "[Redis] Failed to deserialise SignupState for session '" + sessionId + "': " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public SignupState getdelSignupState(String sessionId) {
+        try {
+            // Atomically fetch and delete (Redis GETDEL command) — eliminates TOCTOU race
+            // condition
+            String json = redis.execute(
+                    (org.springframework.data.redis.connection.RedisConnection conn) -> {
+                        byte[] rawKey = redis.getStringSerializer().serialize("signup:" + sessionId);
+                        byte[] rawVal = conn.stringCommands().getDel(rawKey);
+                        return rawVal != null ? new String(rawVal, java.nio.charset.StandardCharsets.UTF_8) : null;
+                    });
+            if (json == null)
+                return null;
+            return mapper.readValue(json, SignupState.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("[Redis] Failed to deserialise SignupState (GETDEL) for session '"
+                    + sessionId + "': " + e.getMessage(), e);
         }
     }
 

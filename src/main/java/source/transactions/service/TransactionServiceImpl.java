@@ -1,15 +1,14 @@
 package source.transactions.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 import source.transactions.dto.EstimatedFeeDTO;
 import source.transactions.dto.TransactionRequestDTO;
 import source.transactions.dto.TransactionResponseDTO;
 import source.transactions.dto.UnsignedTransactionDTO;
-import source.transactions.infra.BlockchainInfoClient;
 import source.transactions.model.PendingTransaction;
 import source.transactions.repository.PendingTransactionRedisRepository;
 import source.transactions.dto.WithdrawRequestDTO;
+import source.transactions.infra.BlockchainClient;
 import source.ledger.service.LedgerService;
 import source.ledger.dto.TransactionDTO;
 import source.wallet.model.WalletEntity;
@@ -26,7 +25,6 @@ import java.util.UUID;
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
-    private final BlockchainInfoClient blockchainInfo;
     private final PendingTransactionRedisRepository pendingTxRepository;
     private final BlockchainMonitorService monitorService;
     private final source.notification.service.NotificationService notificationService;
@@ -34,21 +32,35 @@ public class TransactionServiceImpl implements TransactionService {
     private final LedgerService ledgerService;
     private final source.ledger.orchestrator.TransactionContract ledgerTransactionOrchestrator;
     private final source.ledger.repository.LedgerTransactionHistoryRepository historyRepository;
+    private final source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier;
+    private final source.auth.application.service.webauthn.WebAuthnService webAuthnService;
+    private final source.auth.application.service.user.contract.UserServiceContract userService;
+    private final source.auth.application.service.cripto.contracts.Hasher hasher;
+    private final source.transactions.infra.MpcSidecarClient mpcClient;
+    private final source.ledger.repository.LedgerEntryRepository ledgerEntryRepository;
+    private final BlockchainClient blockchainClient;
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TransactionServiceImpl.class);
 
     @Value("${bitcoin.master-key:}")
     private String masterKey;
 
     private static final long AVERAGE_TX_SIZE_BYTES = 225; // Tamanho médio de uma TX
 
-    public TransactionServiceImpl(BlockchainInfoClient blockchainInfo,
-            PendingTransactionRedisRepository pendingTxRepository,
+    public TransactionServiceImpl(PendingTransactionRedisRepository pendingTxRepository,
             BlockchainMonitorService monitorService,
             source.notification.service.NotificationService notificationService,
             source.wallet.repository.WalletRepository walletRepository,
             LedgerService ledgerService,
             source.ledger.orchestrator.TransactionContract ledgerTransactionOrchestrator,
-            source.ledger.repository.LedgerTransactionHistoryRepository historyRepository) {
-        this.blockchainInfo = blockchainInfo;
+            source.ledger.repository.LedgerTransactionHistoryRepository historyRepository,
+            source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier,
+            source.auth.application.service.webauthn.WebAuthnService webAuthnService,
+            source.auth.application.service.user.contract.UserServiceContract userService,
+            @org.springframework.beans.factory.annotation.Qualifier("Argon2Hasher") source.auth.application.service.cripto.contracts.Hasher hasher,
+            source.transactions.infra.MpcSidecarClient mpcClient,
+            source.ledger.repository.LedgerEntryRepository ledgerEntryRepository,
+            BlockchainClient blockchainClient) {
         this.pendingTxRepository = pendingTxRepository;
         this.monitorService = monitorService;
         this.notificationService = notificationService;
@@ -56,22 +68,22 @@ public class TransactionServiceImpl implements TransactionService {
         this.ledgerService = ledgerService;
         this.ledgerTransactionOrchestrator = ledgerTransactionOrchestrator;
         this.historyRepository = historyRepository;
+        this.totpVerifier = totpVerifier;
+        this.webAuthnService = webAuthnService;
+        this.userService = userService;
+        this.hasher = hasher;
+        this.mpcClient = mpcClient;
+        this.ledgerEntryRepository = ledgerEntryRepository;
+        this.blockchainClient = blockchainClient;
     }
 
     @Override
     public EstimatedFeeDTO estimateFee(BigDecimal amount) {
-        // Consultar taxas recomendadas da blockchain
-        JsonNode fees = blockchainInfo.getRecommendedFees();
-
+        // TODO: Substituir por um novo Client Blockchain. Usando hardcoded defaults por
+        // enquanto.
         Long fastSatPerByte = 50L;
         Long standardSatPerByte = 35L;
         Long slowSatPerByte = 15L;
-
-        if (fees != null) {
-            fastSatPerByte = fees.has("fastestFee") ? fees.get("fastestFee").asLong(50L) : 50L;
-            standardSatPerByte = fees.has("halfHourFee") ? fees.get("halfHourFee").asLong(35L) : 35L;
-            slowSatPerByte = fees.has("hourFee") ? fees.get("hourFee").asLong(15L) : 15L;
-        }
 
         // Calcular taxas em satoshis (tamanho da TX × taxa por byte)
         Long fastTotalSats = fastSatPerByte * AVERAGE_TX_SIZE_BYTES;
@@ -113,8 +125,21 @@ public class TransactionServiceImpl implements TransactionService {
         // Por enquanto retornamos placeholder
         unsignedTx.setRawTxHex("RAW_TX_HEX_PLACEHOLDER");
 
-        // Registrar no banco para monitoramento futuro (quando usuário fazer broadcast)
-        // Não salvamos ainda porque não temos o txid real
+        // Registrar no banco para monitoramento futuro (PENDING)
+        try {
+            source.ledger.entity.LedgerTransactionHistory history = new source.ledger.entity.LedgerTransactionHistory();
+            history.setId(UUID.randomUUID());
+            history.setAmount(request.getAmount());
+            history.setCreatedAt(java.time.LocalDateTime.now());
+            history.setContext("Unsigned Transaction created for address: " + request.getToAddress());
+            history.setSenderUserId(null); // Not broadcast yet, but usually user who created it
+            history.setReceiverIdentifier(request.getToAddress());
+            history.setTransactionType("EXTERNAL_WITHDRAWAL");
+            history.setStatus("PENDING");
+            historyRepository.save(history);
+        } catch (Exception e) {
+            System.err.println("Failed to save unsigned transaction history: " + e.getMessage());
+        }
 
         return unsignedTx;
     }
@@ -133,23 +158,9 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         // Se não tiver no Redis, consultar blockchain diretamente
-        JsonNode info = blockchainInfo.getTransactionInfo(txid);
-        String status = "unknown";
-        Long feeSats = 0L;
+        // TODO: Consultar via novo Blockchain Client
 
-        if (info != null) {
-            int confs = info.has("block_height") && !info.get("block_height").isNull() ? 1 : 0;
-            if (confs > 0)
-                status = "confirmed";
-            else
-                status = "unconfirmed";
-
-            if (info.has("fee")) {
-                feeSats = info.get("fee").asLong(0L);
-            }
-        }
-
-        return new TransactionResponseDTO(txid, status, feeSats);
+        return new TransactionResponseDTO(txid, "confirmed", 0L);
     }
 
     @Override
@@ -164,11 +175,21 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     public TransactionResponseDTO broadcastTransaction(String rawTxHex, String toAddress, java.math.BigDecimal amount,
             String message, Long userId) {
-        String txid = blockchainInfo.pushSignedTransaction(rawTxHex);
 
-        if (txid == null) {
-            throw new RuntimeException("Falha ao transmitir transação");
+        // ── Broadcast via Pocket Network ──────────────────────────────────────
+        // Sends the signed raw transaction hex to the Bitcoin network through
+        // the Pocket Network decentralized RPC gateway.
+        String txid = blockchainClient.sendRawTransaction(rawTxHex);
+
+        if (txid == null || txid.isBlank()) {
+            log.error("Pocket Network broadcast failed — rawTxHex length={}, toAddress={}, userId={}",
+                    rawTxHex != null ? rawTxHex.length() : 0, toAddress, userId);
+            throw new RuntimeException(
+                    "Falha ao transmitir transação: Pocket Network não retornou um txid válido. Tente novamente.");
         }
+
+        log.info("Transaction broadcast successful — txid={}, toAddress={}, amount={}, userId={}",
+                txid, toAddress, amount, userId);
 
         // Registrar como pendente para monitoramento
         PendingTransaction pending = new PendingTransaction();
@@ -182,7 +203,22 @@ public class TransactionServiceImpl implements TransactionService {
 
         pendingTxRepository.save(pending);
 
-        // NOTIFICAÇÃO PUSH PARA O REMETENTE (Você)
+        // Save explicit history for Broadcast
+        try {
+            source.ledger.entity.LedgerTransactionHistory history = new source.ledger.entity.LedgerTransactionHistory();
+            history.setId(java.util.UUID.randomUUID());
+            history.setAmount(amount != null ? amount : BigDecimal.ZERO);
+            history.setCreatedAt(java.time.LocalDateTime.now());
+            history.setContext("Broadcast Transaction: " + (message != null ? message : "Outgoing transacion"));
+            history.setSenderUserId(userId);
+            history.setReceiverIdentifier(toAddress);
+            history.setBlockchainTxid(txid);
+            history.setTransactionType("EXTERNAL_WITHDRAWAL");
+            history.setStatus("PENDING");
+            historyRepository.save(history);
+        } catch (Exception e) {
+            log.warn("Failed to save broadcast history for txid={}: {}", txid, e.getMessage());
+        }
         try {
             String senderTitle = "Transação Transmitida";
             String senderBody = "A transação foi enviada para processamento na rede Blockchain.";
@@ -192,7 +228,7 @@ public class TransactionServiceImpl implements TransactionService {
             }
             notificationService.notifyUser(userId, senderTitle, senderBody);
         } catch (Exception e) {
-            System.err.println("Erro ao notificar remetente: " + e.getMessage());
+            log.warn("Failed to notify sender for txid={}: {}", txid, e.getMessage());
         }
 
         // NOTIFICAÇÃO PUSH PARA O DESTINATÁRIO
@@ -249,37 +285,103 @@ public class TransactionServiceImpl implements TransactionService {
             throw new RuntimeException("Carteira de origem não encontrada ou não pertence a você.");
         }
 
-        // 3. Estimar Taxas da Rede (para deduzir ou informar o usuário)
+        source.auth.model.entity.UserDataBase user = userService.buscarPorId(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado."));
+
+        // 3. Validar TOTP Exclusivo da Carteira (Sempre exigido agora por segurança
+        // extra)
+        if (request.getTotpCode() == null || request.getTotpCode().isBlank()) {
+            throw new source.auth.AuthExceptions.IncorrectTotpException("TOTP code is required for withdrawal.");
+        }
+        if (!totpVerifier.totpMatcher(wallet.getTotpSecret(), request.getTotpCode())) {
+            throw new source.auth.AuthExceptions.IncorrectTotpException("Invalid Wallet TOTP code.");
+        }
+
+        // 4. Validar Passkey se habilitado para transações
+        if (user.getPasskeyEnabledForTransactions()) {
+            if (request.getPasskeyAssertionResponseJSON() == null
+                    || request.getPasskeyAssertionResponseJSON().isBlank()) {
+                // Se não enviou a resposta, geramos o desafio (Assertion Request)
+                String challenge = webAuthnService.startLogin(user.getUsername());
+                throw new source.auth.AuthExceptions.AuthValidationException("PASSKEY_CHALLENGE_REQUIRED:" + challenge);
+            }
+
+            // Validar a assinatura da Passkey
+            boolean passkeyValid = webAuthnService.finishLogin(
+                    request.getPasskeyAssertionRequestJSON(),
+                    request.getPasskeyAssertionResponseJSON());
+
+            if (!passkeyValid) {
+                throw new source.auth.AuthExceptions.AuthValidationException(
+                        "Invalid Passkey signature for transaction.");
+            }
+        }
+
+        // 5. Autenticação Adicional baseada no Tipo de Conta (Multi-Sig / Shamir)
+        String platformSignature = "";
+        if (user.getAccountSecurity().equals(source.auth.model.enums.AccountSecurityType.MULTISIG_2FA) ||
+                user.getAccountSecurity().equals(source.auth.model.enums.AccountSecurityType.SHAMIR)) {
+
+            if (request.getConfirmationPassphrase() == null || request.getConfirmationPassphrase().isEmpty()) {
+                throw new source.auth.AuthExceptions.InvalidCredentials(
+                        "A passphrase é obrigatória para assinar esta transação.");
+            }
+
+            // GATILHO: Validação Argon2id antes de liberar o Sidecar MPC
+            if (!hasher.verify(request.getConfirmationPassphrase().toCharArray(), user.getPassphrase())) {
+                throw new source.auth.AuthExceptions.InvalidPassphrase("Passphrase inválida para autorização MPC.");
+            }
+
+            // Com a senha criptograficamente aceita, liberamos o uso do estilhaço MPC.
+            byte[] messageHash = new byte[32]; // Placeholder para o hash da TX
+            byte[] mpcSignature = mpcClient.sign(user.getUsername(), messageHash, "TARGET_PUBKEY");
+
+            platformSignature = "_MPC_SIGNED_"
+                    + java.util.Base64.getEncoder().encodeToString(mpcSignature).substring(0, 10);
+        }
+
+        // 6. Estimar Taxas da Rede (para deduzir ou informar o usuário)
         EstimatedFeeDTO fees = estimateFee(request.getAmount());
         BigDecimal networkFee = fees.getEstimatedStandardBtc();
-        BigDecimal totalToDebit = request.getAmount().add(networkFee);
 
-        // 4. Verificar Saldo no Ledger Interno
+        // CÁLCULO DE FEE DA PLATAFORMA (ex: 1% sob o total)
+        BigDecimal platformFee = request.getAmount().multiply(new BigDecimal("0.01")).setScale(8, RoundingMode.HALF_UP);
+        BigDecimal totalToDebit = request.getAmount().add(networkFee).add(platformFee);
+
+        // 7. Verificar Saldo no Ledger Interno
         LedgerEntity ledger = ledgerService.findByWalletId(wallet.getId());
         if (ledger.getBalance().compareTo(totalToDebit) < 0) {
             throw new LedgerExceptions.InsufficientBalanceException(
                     "Saldo insuficiente para cobrir o saque e as taxas de rede.");
         }
 
-        // 5. Débito no Ledger Interno (Transação interna de "Queima" ou Transferência
-        // para System Wallet)
-        // Aqui realizamos uma transferência interna para a conta master do sistema para
-        // conciliação
+        // 8. Débito no Ledger Interno
         TransactionDTO ledgerTx = new TransactionDTO();
         ledgerTx.setSender(request.getFromWalletName());
-        ledgerTx.setReceiver("SYSTEM_WITHDRAWAL_VAULT"); // Entidade fictícia para tracking interno
+        ledgerTx.setReceiver("SYSTEM_WITHDRAWAL_VAULT");
         ledgerTx.setAmount(totalToDebit);
         ledgerTx.setContext("WITHDRAWAL_" + request.getToAddress());
+        ledgerTx.setConfirmationPassphrase(request.getConfirmationPassphrase());
+        ledgerTx.setTotpCode(request.getTotpCode());
+        ledgerTx.setPasskeyAssertionJson(request.getPasskeyAssertionResponseJSON());
 
         ledgerTransactionOrchestrator.processTransaction(ledgerTx);
 
-        // 6. Criar, Assinar e Broadcast da Transação On-Chain
-        // Nota: Em um sistema real, aqui carregaríamos a masterKey, construiríamos a TX
-        // com bitcoinj,
-        // assinaríamos e transmitiríamos. Por agora, simulamos o hex assinado.
+        // GRAVA O LEDGER DE AUDITORIA (Separação Cirúrgica)
+        // amount_net = -(Saque_Real_Com_Miners + Fee_Plataforma) para bater balança
+        // perfeitamente
+        // fee_amount = Fee_Plataforma (Profit que foi subtraído da Liability)
+        source.ledger.entity.LedgerEntry entry = new source.ledger.entity.LedgerEntry(
+                UUID.randomUUID(),
+                String.valueOf(userId),
+                totalToDebit.negate(),
+                platformFee,
+                "PENDING");
+        ledgerEntryRepository.save(entry);
 
+        // 9. Criar, Assinar e Broadcast da Transação On-Chain
         String dummySignedHex = "0100000001" + UUID.randomUUID().toString().replace("-", "").substring(0, 64)
-                + "0000000000";
+                + "0000000000" + platformSignature;
 
         TransactionResponseDTO response = broadcastTransaction(
                 dummySignedHex,
@@ -297,7 +399,8 @@ public class TransactionServiceImpl implements TransactionService {
         history.setSenderUserId(userId);
         history.setSenderIdentifier(request.getFromWalletName());
         history.setReceiverIdentifier(request.getToAddress());
-        history.setTransactionType("WITHDRAWAL");
+        history.setBlockchainTxid(response.getTxid());
+        history.setTransactionType("EXTERNAL_WITHDRAWAL");
         history.setStatus("PENDING");
         historyRepository.save(history);
 

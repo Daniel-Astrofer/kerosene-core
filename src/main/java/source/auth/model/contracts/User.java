@@ -12,5 +12,4 @@ public interface User {
 
     void setPassphrase(String passphrase);
 
-
 }
