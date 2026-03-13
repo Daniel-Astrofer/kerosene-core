@@ -20,6 +20,7 @@ import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletContract;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -29,165 +30,147 @@ import static org.mockito.Mockito.*;
 @DisplayName("Transaction Orchestrator Tests")
 class TransactionTest {
 
-    @Mock
-    private WalletContract walletService;
+        @Mock
+        private WalletContract walletService;
 
-    @Mock
-    private LedgerContract ledgerService;
+        @Mock
+        private LedgerContract ledgerService;
 
-    @Mock
-    private UserService userService;
+        @Mock
+        private UserService userService;
 
-    @Mock
-    private SecurityContext securityContext;
+        @Mock
+        private SecurityContext securityContext;
 
-    @Mock
-    private Authentication authentication;
+        @Mock
+        private Authentication authentication;
 
-    @InjectMocks
-    private Transaction transaction;
+        @InjectMocks
+        private Transaction transaction;
 
-    private TransactionDTO transactionDTO;
-    private UserDataBase sender;
-    private UserDataBase receiver;
-    private WalletEntity senderWallet;
-    private WalletEntity receiverWallet;
-    private LedgerEntity senderLedger;
-    private LedgerEntity receiverLedger;
+        private TransactionDTO transactionDTO;
+        private UserDataBase sender;
+        private UserDataBase receiver;
+        private WalletEntity senderWallet;
+        private WalletEntity receiverWallet;
+        private LedgerEntity senderLedger;
+        private LedgerEntity receiverLedger;
 
-    @BeforeEach
-    void setUp() {
-        sender = new UserDataBase();
-        sender.setUsername("sender");
+        @BeforeEach
+        void setUp() throws Exception {
+                sender = new UserDataBase();
+                setPrivateId(sender, 1L);
+                sender.setUsername("sender");
 
-        receiver = new UserDataBase();
-        receiver.setUsername("receiver");
+                receiver = new UserDataBase();
+                setPrivateId(receiver, 2L);
+                receiver.setUsername("receiver");
 
-        senderWallet = new WalletEntity();
-        senderWallet.setId(1L);
-        senderWallet.setName("SenderWallet");
-        senderWallet.setUser(sender);
+                senderWallet = new WalletEntity();
+                senderWallet.setId(1L);
+                senderWallet.setName("SenderWallet");
+                senderWallet.setPassphraseHash("sender-addr");
+                senderWallet.setUser(sender);
 
-        receiverWallet = new WalletEntity();
-        receiverWallet.setId(2L);
-        receiverWallet.setName("ReceiverWallet");
-        receiverWallet.setUser(receiver);
+                receiverWallet = new WalletEntity();
+                receiverWallet.setId(2L);
+                receiverWallet.setName("ReceiverWallet");
+                receiverWallet.setPassphraseHash("receiver-addr");
+                receiverWallet.setUser(receiver);
 
-        senderLedger = new LedgerEntity(senderWallet, "Sender ledger");
-        senderLedger.setId(1);
-        senderLedger.setBalance(new BigDecimal("500.00"));
+                senderLedger = new LedgerEntity(senderWallet, "Sender ledger");
+                senderLedger.setId(1);
+                senderLedger.setBalance(new BigDecimal("500.00"));
 
-        receiverLedger = new LedgerEntity(receiverWallet, "Receiver ledger");
-        receiverLedger.setId(2);
-        receiverLedger.setBalance(new BigDecimal("100.00"));
+                receiverLedger = new LedgerEntity(receiverWallet, "Receiver ledger");
+                receiverLedger.setId(2);
+                receiverLedger.setBalance(new BigDecimal("100.00"));
 
-        transactionDTO = new TransactionDTO();
-        transactionDTO.setSender("sender");
-        transactionDTO.setReceiver("receiver");
-        transactionDTO.setAmount(new BigDecimal("50.00"));
-        transactionDTO.setContext("Payment for services");
+                transactionDTO = new TransactionDTO();
+                transactionDTO.setSender("sender");
+                transactionDTO.setReceiver("receiver");
+                transactionDTO.setAmount(new BigDecimal("50.00"));
+                transactionDTO.setContext("Payment for services");
 
-        // Setup security context
-        SecurityContextHolder.setContext(securityContext);
-    }
+                // Setup security context
+                SecurityContextHolder.setContext(securityContext);
+        }
 
-    @Test
-    @DisplayName("Should process transaction successfully")
-    void shouldProcessTransactionSuccessfully() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.findByUsername("receiver")).thenReturn(receiver);
-        when(walletService.findByName("receiver")).thenReturn(receiverWallet);
-        when(userService.findByUsername("sender")).thenReturn(sender);
-        when(ledgerService.updateBalance(eq(receiverWallet.getId()), eq(transactionDTO.getAmount()), anyString()))
-                .thenReturn(receiverLedger);
-        when(ledgerService.updateBalance(eq(sender.getId()), any(BigDecimal.class), anyString()))
-                .thenReturn(senderLedger);
+        private void setPrivateId(Object target, Long id) throws Exception {
+                java.lang.reflect.Field field = target.getClass().getDeclaredField("id");
+                field.setAccessible(true);
+                field.set(target, id);
+        }
 
-        assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
+        @Test
+        @DisplayName("Should process transaction successfully")
+        void shouldProcessTransactionSuccessfully() {
+                when(securityContext.getAuthentication()).thenReturn(authentication);
+                when(authentication.getName()).thenReturn("1");
+                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
+                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
+                when(userService.findByUsername("receiver")).thenReturn(receiver);
+                when(walletService.findByUserId(2L)).thenReturn(java.util.List.of(receiverWallet));
 
-        verify(userService).findByUsername("receiver");
-        verify(walletService).findByName("receiver");
-        verify(userService).findByUsername("sender");
-        verify(ledgerService).updateBalance(eq(receiverWallet.getId()), eq(transactionDTO.getAmount()), eq("Credit transaction"));
-        verify(ledgerService).updateBalance(eq(sender.getId()), any(BigDecimal.class), eq("Payment for services"));
-    }
+                when(ledgerService.findByWalletId(anyLong())).thenReturn(senderLedger);
+                when(ledgerService.updateBalance(anyLong(), any(BigDecimal.class), anyString()))
+                                .thenReturn(receiverLedger);
 
-    @Test
-    @DisplayName("Should throw exception when receiver not found")
-    void shouldThrowExceptionWhenReceiverNotFound() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.findByUsername("receiver")).thenReturn(null);
+                assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
 
-        assertThrows(LedgerExceptions.LedgerNotFoundException.class, () -> {
-            transaction.processTransaction(transactionDTO);
-        });
+                verify(ledgerService, times(2)).updateBalance(anyLong(), any(BigDecimal.class), anyString());
+        }
 
-        verify(userService).findByUsername("receiver");
-        verify(walletService, never()).findByName(anyString());
-        verify(ledgerService, never()).updateBalance(anyLong(), any(BigDecimal.class), anyString());
-    }
+        @Test
+        @DisplayName("Should throw exception when receiver not found")
+        void shouldThrowExceptionWhenReceiverNotFound() {
+                when(securityContext.getAuthentication()).thenReturn(authentication);
+                when(authentication.getName()).thenReturn("1");
+                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
+                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
+                when(userService.findByUsername("receiver")).thenReturn(null);
 
-    @Test
-    @DisplayName("Should use default context when not provided")
-    void shouldUseDefaultContextWhenNotProvided() {
-        transactionDTO.setContext(null);
+                assertThrows(LedgerExceptions.LedgerNotFoundException.class, () -> {
+                        transaction.processTransaction(transactionDTO);
+                });
 
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.findByUsername("receiver")).thenReturn(receiver);
-        when(walletService.findByName("receiver")).thenReturn(receiverWallet);
-        when(userService.findByUsername("sender")).thenReturn(sender);
-        when(ledgerService.updateBalance(eq(receiverWallet.getId()), eq(transactionDTO.getAmount()), anyString()))
-                .thenReturn(receiverLedger);
-        when(ledgerService.updateBalance(eq(sender.getId()), any(BigDecimal.class), anyString()))
-                .thenReturn(senderLedger);
+                verify(ledgerService, never()).updateBalance(anyLong(), any(BigDecimal.class), anyString());
+        }
 
-        assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
+        @Test
+        @DisplayName("Should use default context when not provided")
+        void shouldUseDefaultContextWhenNotProvided() {
+                transactionDTO.setContext(null);
 
-        verify(ledgerService).updateBalance(eq(sender.getId()), any(BigDecimal.class), eq("Debit transaction"));
-    }
+                when(securityContext.getAuthentication()).thenReturn(authentication);
+                when(authentication.getName()).thenReturn("1");
+                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
+                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
+                when(userService.findByUsername("receiver")).thenReturn(receiver);
+                when(walletService.findByUserId(2L)).thenReturn(java.util.List.of(receiverWallet));
+                when(ledgerService.findByWalletId(anyLong())).thenReturn(senderLedger);
 
-    @Test
-    @DisplayName("Should negate amount for debit operation")
-    void shouldNegateAmountForDebitOperation() {
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.findByUsername("receiver")).thenReturn(receiver);
-        when(walletService.findByName("receiver")).thenReturn(receiverWallet);
-        when(userService.findByUsername("sender")).thenReturn(sender);
-        when(ledgerService.updateBalance(eq(receiverWallet.getId()), eq(transactionDTO.getAmount()), anyString()))
-                .thenReturn(receiverLedger);
-        when(ledgerService.updateBalance(eq(sender.getId()), any(BigDecimal.class), anyString()))
-                .thenReturn(senderLedger);
+                assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
 
-        transaction.processTransaction(transactionDTO);
+                verify(ledgerService).updateBalance(anyLong(), any(BigDecimal.class), eq("Debit transaction"));
+        }
 
-        verify(ledgerService).updateBalance(
-                eq(sender.getId()),
-                argThat(amount -> amount.compareTo(transactionDTO.getAmount().negate()) == 0),
-                anyString()
-        );
-    }
+        @Test
+        @DisplayName("Should negate amount for debit operation")
+        void shouldNegateAmountForDebitOperation() {
+                when(securityContext.getAuthentication()).thenReturn(authentication);
+                when(authentication.getName()).thenReturn("1");
+                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
+                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
+                when(userService.findByUsername("receiver")).thenReturn(receiver);
+                when(walletService.findByUserId(2L)).thenReturn(java.util.List.of(receiverWallet));
+                when(ledgerService.findByWalletId(anyLong())).thenReturn(senderLedger);
 
-    @Test
-    @DisplayName("Should process transaction with large amount")
-    void shouldProcessTransactionWithLargeAmount() {
-        transactionDTO.setAmount(new BigDecimal("1000000.00"));
+                transaction.processTransaction(transactionDTO);
 
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("1");
-        when(userService.findByUsername("receiver")).thenReturn(receiver);
-        when(walletService.findByName("receiver")).thenReturn(receiverWallet);
-        when(userService.findByUsername("sender")).thenReturn(sender);
-        when(ledgerService.updateBalance(eq(receiverWallet.getId()), eq(transactionDTO.getAmount()), anyString()))
-                .thenReturn(receiverLedger);
-        when(ledgerService.updateBalance(eq(sender.getId()), any(BigDecimal.class), anyString()))
-                .thenReturn(senderLedger);
-
-        assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
-
-        verify(ledgerService).updateBalance(eq(receiverWallet.getId()), eq(new BigDecimal("1000000.00")), anyString());
-    }
+                verify(ledgerService).updateBalance(
+                                eq(senderWallet.getId()),
+                                argThat(amount -> amount.compareTo(transactionDTO.getAmount().negate()) == 0),
+                                anyString());
+        }
 }

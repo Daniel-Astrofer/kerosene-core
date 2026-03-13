@@ -1,10 +1,12 @@
 package source.ledger.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
-
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "ledger", schema = "financial")
@@ -19,8 +21,12 @@ public class LedgerEntity {
     @JoinColumn(name = "wallet_id", nullable = false)
     private WalletEntity wallet;
 
-    @Column(name = "balance", precision = 38, scale = 16)
+    @Convert(converter = BalanceCryptoConverter.class)
+    @Column(name = "balance", columnDefinition = "TEXT")
     private BigDecimal balance;
+
+    @Column(name = "balance_signature", length = 256)
+    private String balanceSignature;
 
     @Column(name = "nonce", nullable = false)
     private Integer nonce;
@@ -31,6 +37,13 @@ public class LedgerEntity {
     @Column(name = "context", nullable = false, length = 256)
     private String context;
 
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 
     public LedgerEntity() {
         this.balance = BigDecimal.ZERO;
@@ -42,7 +55,6 @@ public class LedgerEntity {
         this.wallet = wallet;
         this.context = context;
     }
-
 
     public Integer getId() {
         return id;
@@ -76,6 +88,14 @@ public class LedgerEntity {
         this.nonce = nonce;
     }
 
+    public String getBalanceSignature() {
+        return balanceSignature;
+    }
+
+    public void setBalanceSignature(String balanceSignature) {
+        this.balanceSignature = balanceSignature;
+    }
+
     public String getLastHash() {
         return lastHash;
     }
@@ -106,6 +126,22 @@ public class LedgerEntity {
      */
     public void updateBalance(BigDecimal amount) {
         this.balance = this.balance.add(amount);
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
     @Override

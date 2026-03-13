@@ -1,6 +1,7 @@
 package source.wallet.service;
 
-import source.wallet.dto.WalletDTO;
+import source.wallet.dto.WalletRequestDTO;
+import source.wallet.dto.WalletUpdateDTO;
 import source.wallet.model.WalletEntity;
 
 import java.util.List;
@@ -10,11 +11,17 @@ public interface WalletContract {
 
     WalletEntity findByName(String name);
 
-    boolean existsByName(String name);
+    WalletEntity findByNameAndUserId(String name, Long userId);
+
+    WalletEntity findById(Long id);
+
+    WalletEntity findByPassphraseHash(String passphraseHash);
+
+    boolean existsByUserIdAndName(Long id, String name);
 
     List<WalletEntity> findByUserId(Long userId);
 
-    boolean deleteWallet(Long id, WalletDTO wallet);
+    boolean deleteWallet(Long id, WalletRequestDTO wallet);
 
-    void updateWallet(Long userId, WalletDTO dto);
+    void updateWallet(Long userId, WalletUpdateDTO dto);
 }

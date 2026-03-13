@@ -16,6 +16,8 @@ public class AES256 implements Cryptography {
     public byte[] encrypt(byte[] totpSecret, SecretKey key) throws Exception {
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+
+
         byte[] totp = totpSecret;
 
         byte[] iv = new byte[12];
@@ -27,7 +29,6 @@ public class AES256 implements Cryptography {
         System.arraycopy(iv, 0, combined, 0, iv.length);
         System.arraycopy(criptoText, 0, combined, iv.length, criptoText.length);
         return combined;
-
 
     }
 

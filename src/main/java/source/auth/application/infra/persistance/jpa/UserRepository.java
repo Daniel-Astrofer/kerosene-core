@@ -13,7 +13,12 @@ public interface UserRepository extends JpaRepository<UserDataBase, Long> {
 
     boolean existsByUsername(String username);
 
-    boolean existsByUsernameAndPassphrase(String username, String passphrase);
-
+    // ⚠️ existsByUsernameAndPassphrase was intentionally removed.
+    // Passing a raw passphrase as a String into JPA leaks it into the JVM String
+    // Pool.
+    // Password verification MUST occur at the service layer:
+    // 1. Retrieve entity with findByUsername(username)
+    // 2. Validate with Argon2 / BCrypt against the stored hash using char[]
+    // 3. Zero the char[] immediately after validation
 
 }

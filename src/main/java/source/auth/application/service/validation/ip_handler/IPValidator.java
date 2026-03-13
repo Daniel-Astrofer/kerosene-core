@@ -7,10 +7,8 @@ import org.springframework.stereotype.Component;
 @Component("IPValidator")
 public class IPValidator implements IP {
 
-
     @Override
     public String getIP(HttpServletRequest request) {
-        String ip = "null";
         String[] headers = {
                 "X-Forwarded-For",
                 "Proxy-Client-IP",
@@ -21,36 +19,24 @@ public class IPValidator implements IP {
                 "HTTP_CLIENT_IP",
                 "HTTP_FORWARDED_FOR",
                 "HTTP_FORWARDED",
-                "HTTP_VIA",
-                "REMOTE_ADDR"
+                "HTTP_VIA"
         };
 
         for (String header : headers) {
-
-            ip = request.getHeader(header);
+            String ip = request.getHeader(header);
             if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-
-                if ("X-Forwarded-for".equalsIgnoreCase(header)) {
-                    ip = ip.split(",")[0];
+                if ("X-Forwarded-For".equalsIgnoreCase(header)) {
+                    return ip.split(",")[0].trim();
                 }
-
-                break;
-
+                return ip;
             }
-
         }
-        return ip;
 
-    }
-
-    @Override
-    public String getDeviceHash(HttpServletRequest request) {
-        String data = request.getHeader("X-Device-Hash");
-
-        if (!data.isEmpty() && !data.equalsIgnoreCase("unknown")) {
-            return data;
-
+        String remoteAddr = request.getRemoteAddr();
+        if (remoteAddr != null && !remoteAddr.isEmpty()) {
+            return remoteAddr;
         }
-        return "NOT FOUND";
+
+        return "127.0.0.1";
     }
 }

@@ -52,4 +52,12 @@ public final class AuthConstants {
     public static final String APP_NAME = "Kerosene";
 
     public static final String TOTP_URI_FORMAT = "otpauth://totp/%s:%s?secret=%s&issuer=%s";
+
+    // ==================== JWT CONFIGURATION ====================
+    
+    // JWT Token expiration in milliseconds (24 hours)
+    public static final long JWT_EXPIRATION_TIME = 86400000L; // 24 * 60 * 60 * 1000
+    
+    // JWT Token renewal time check (renew if less than 1 hour remaining)
+    public static final long JWT_RENEWAL_THRESHOLD = 3600000L; // 1 * 60 * 60 * 1000
 }

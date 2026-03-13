@@ -1,6 +1,5 @@
 package source.auth.application.service.user;
 
-import jakarta.transaction.Transactional;
 import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.dto.UserDTO;
@@ -9,7 +8,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
-
 
 @Service("ServiceFromUser")
 public class UserService implements UserServiceContract {
@@ -34,9 +32,9 @@ public class UserService implements UserServiceContract {
         return repository.findByUsername(username);
     }
 
-    public void createUserInDataBase(UserDataBase user) {
+    public UserDataBase createUserInDataBase(UserDataBase user) {
         user.setUsername(user.getUsername().toLowerCase());
-        repository.save(user);
+        return repository.save(user);
     }
 
     public void deletar(Long id) {
@@ -45,13 +43,11 @@ public class UserService implements UserServiceContract {
 
     public UserDataBase fromDTO(UserDTO userDTO) {
         UserDataBase user = new UserDataBase();
-        user.setPassphrase(userDTO.getPassphrase());
+        user.setPassphrase(new String(userDTO.getPassphrase()));
         user.setUsername(userDTO.getUsername());
         user.setTOTPSecret(userDTO.getTotpSecret());
 
-
         return user;
     }
-
 
 }

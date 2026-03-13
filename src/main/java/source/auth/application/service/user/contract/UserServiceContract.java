@@ -12,7 +12,7 @@ public interface UserServiceContract {
 
     Optional<UserDataBase> buscarPorId(Long id);
 
-    void createUserInDataBase(UserDataBase user);
+    UserDataBase createUserInDataBase(UserDataBase user);
 
     void deletar(Long id);
 

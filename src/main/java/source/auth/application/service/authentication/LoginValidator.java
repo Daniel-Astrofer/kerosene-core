@@ -5,16 +5,10 @@ import source.auth.AuthExceptions;
 import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.application.service.authentication.contracts.LoginVerifier;
 import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.device.UserDeviceService;
-import source.auth.application.service.validation.ip_handler.contracts.IP;
 import source.auth.dto.contracts.UserDTOContract;
 import source.auth.model.entity.UserDataBase;
-import source.auth.model.entity.UserDevice;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 /**
  * Service responsible for authenticating users during login.
@@ -25,33 +19,14 @@ public class LoginValidator implements LoginVerifier {
 
     private final UserRepository repository;
     private final Hasher hasher;
-    private final IP ip;
-    private final UserDeviceService deviceService;
+    private final source.auth.application.service.cache.contracts.RedisServicer redisService;
 
     public LoginValidator(UserRepository repository,
-                          @Qualifier("SHAHasher") Hasher hasher,
-                          @Qualifier("IPValidator") IP ip,
-                          UserDeviceService deviceService) {
+            @Qualifier("Argon2Hasher") Hasher hasher,
+            source.auth.application.service.cache.contracts.RedisServicer redisService) {
         this.repository = repository;
         this.hasher = hasher;
-        this.ip = ip;
-        this.deviceService = deviceService;
-    }
-
-    /**
-     * Matches user credentials and validates device information.
-     *
-     * @param dto the user credentials
-     * @param request the HTTP request containing device information
-     * @return the authenticated user entity
-     * @throws AuthExceptions.InvalidCredentials if credentials are invalid
-     * @throws AuthExceptions.UnrecognizedDeviceException if device is not recognized
-     */
-    @Override
-    public UserDataBase matcher(UserDTOContract dto, HttpServletRequest request) {
-        UserDataBase user = matcherWithoutDevice(dto);
-        validateDevice(user.getId(), request);
-        return user;
+        this.redisService = redisService;
     }
 
     /**
@@ -63,7 +38,19 @@ public class LoginValidator implements LoginVerifier {
     @Override
     public UserDataBase matcherWithoutDevice(UserDTOContract dto) {
         String username = dto.getUsername();
-        String hashedPassphrase = hasher.hash(dto.getPassphrase());
+
+        // 3. DoS Protection - Pre-Argon2id Rate Limiter
+        if (username == null) {
+            throw new AuthExceptions.InvalidCredentials(AuthConstants.ERR_INVALID_CREDENTIALS);
+        }
+        String rlKey = "rl:login:" + username.toLowerCase();
+        Long attempts = redisService.increment(rlKey);
+        if (attempts == 1L) {
+            redisService.expire(rlKey, 60); // 1 minuto de janela
+        }
+        if (attempts > 5L) {
+            throw new AuthExceptions.InvalidCredentials("Muitas tentativas. O motor anti-brute force foi ativado.");
+        }
 
         UserDataBase user = repository.findByUsername(username);
 
@@ -71,43 +58,58 @@ public class LoginValidator implements LoginVerifier {
             throw new AuthExceptions.InvalidCredentials(AuthConstants.ERR_INVALID_CREDENTIALS);
         }
 
-        validatePassphrase(user.getPassphrase(), hashedPassphrase);
+        char[] normalizedPassphrase = normalizePassphrase(dto.getPassphrase());
+
+        // Use verify() correctly because Argon2 always generates a random salt per hash
+        boolean isValid = hasher.verify(normalizedPassphrase, user.getPassphrase());
+        java.util.Arrays.fill(normalizedPassphrase, '\0');
+        java.util.Arrays.fill(dto.getPassphrase(), '\0');
+
+        if (!isValid) {
+            throw new AuthExceptions.InvalidCredentials(AuthConstants.ERR_INVALID_CREDENTIALS);
+        }
+
+        // Sucesso: resetamos o limitador
+        redisService.deleteValue(rlKey);
+
         return user;
     }
 
     /**
-     * Validates that the provided passphrase matches the stored passphrase.
-     *
-     * @param storedPassphrase the passphrase stored in the database
-     * @param providedPassphrase the hashed passphrase from the request
-     * @throws AuthExceptions.InvalidCredentials if passphrases don't match
+     * Finds a user by username only — used by the TOTP verification step
+     * where the passphrase was already validated in the initial login request.
      */
-    private void validatePassphrase(String storedPassphrase, String providedPassphrase) {
-        if (!storedPassphrase.equals(providedPassphrase)) {
+    @Override
+    public UserDataBase findByUsernameOnly(String username) {
+        UserDataBase user = repository.findByUsername(username);
+        if (user == null) {
             throw new AuthExceptions.InvalidCredentials(AuthConstants.ERR_INVALID_CREDENTIALS);
         }
+        return user;
     }
 
-    /**
-     * Validates that the device making the request is recognized.
-     *
-     * @param userId the user ID
-     * @param request the HTTP request
-     * @throws AuthExceptions.UnrecognizedDeviceException if device is not recognized
-     */
-    private void validateDevice(Long userId, HttpServletRequest request) {
-        Optional<UserDevice> deviceOptional = deviceService.find(userId);
-
-        if (deviceOptional.isEmpty()) {
-            throw new AuthExceptions.UnrecognizedDeviceException(AuthConstants.ERR_DEVICE_NOT_RECOGNIZED);
+    private char[] normalizePassphrase(char[] input) {
+        if (input == null)
+            return new char[0];
+        StringBuilder sb = new StringBuilder();
+        boolean inSpace = false;
+        for (char c : input) {
+            if (Character.isWhitespace(c) || c == '\u00A0') {
+                if (!inSpace) {
+                    sb.append(' ');
+                    inSpace = true;
+                }
+            } else {
+                sb.append(c);
+                inSpace = false;
+            }
         }
-
-        UserDevice device = deviceOptional.get();
-        String requestDeviceHash = ip.getDeviceHash(request);
-        String storedDeviceHash = device.getDeviceHash();
-
-        if (!storedDeviceHash.equals(requestDeviceHash)) {
-            throw new AuthExceptions.UnrecognizedDeviceException(AuthConstants.ERR_DEVICE_NOT_RECOGNIZED);
-        }
+        String stringRef = sb.toString().trim();
+        // For a true zero-allocation we should iterate in a newly sized char[].
+        char[] clean = new char[stringRef.length()];
+        for (int i = 0; i < clean.length; i++)
+            clean[i] = stringRef.charAt(i);
+        return clean;
     }
+
 }

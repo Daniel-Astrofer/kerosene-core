@@ -6,7 +6,4 @@ public interface IP {
 
     String getIP(HttpServletRequest request);
 
-    String getDeviceHash(HttpServletRequest request);
-
-
 }

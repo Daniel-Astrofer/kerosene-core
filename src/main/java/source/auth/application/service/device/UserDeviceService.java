@@ -1,9 +1,6 @@
 package source.auth.application.service.device;
 
-
-import jakarta.transaction.Transactional;
 import source.auth.application.infra.persistance.jpa.UserDeviceRepository;
-import source.auth.model.entity.UserDataBase;
 import source.auth.model.entity.UserDevice;
 import org.springframework.stereotype.Service;
 
@@ -14,13 +11,11 @@ public class UserDeviceService {
 
     private final UserDeviceRepository deviceRepository;
 
-
     public UserDeviceService(UserDeviceRepository deviceRepository) {
 
         this.deviceRepository = deviceRepository;
 
     }
-
 
     public void create(UserDevice userDevice) {
 
@@ -32,15 +27,13 @@ public class UserDeviceService {
         return deviceRepository.findByUserId(userId);
     }
 
-
     public boolean delete(UserDevice userDevice) {
 
-        if (deviceRepository.findByIdAndDeviceHash(userDevice.getId(), userDevice.getDeviceHash()).isPresent()) {
+        if (deviceRepository.findById(userDevice.getId()).isPresent()) {
             deviceRepository.delete(userDevice);
             return true;
         }
         return false;
-
 
     }
 
@@ -56,6 +49,5 @@ public class UserDeviceService {
         return false;
 
     }
-
 
 }

@@ -1,7 +1,8 @@
 package source.auth;
 
 /**
- * Centralized exception classes for authentication and authorization operations.
+ * Centralized exception classes for authentication and authorization
+ * operations.
  * All exceptions extend AuthValidationException for consistent error handling.
  */
 public class AuthExceptions {
@@ -11,6 +12,15 @@ public class AuthExceptions {
      */
     public static class AuthValidationException extends RuntimeException {
         public AuthValidationException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Thrown when user fails to register a Passkey which is mandatory.
+     */
+    public static class MissingPasskey extends AuthValidationException {
+        public MissingPasskey(String message) {
             super(message);
         }
     }
@@ -114,7 +124,8 @@ public class AuthExceptions {
         }
     }
 
-    // Deprecated exceptions - mantidos para compatibilidade, serão removidos em versão futura
+    // Deprecated exceptions - mantidos para compatibilidade, serão removidos em
+    // versão futura
     /**
      * @deprecated Use {@link CharacterLimitException} instead
      */

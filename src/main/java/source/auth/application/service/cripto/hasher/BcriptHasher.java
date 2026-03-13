@@ -1,6 +1,5 @@
 package source.auth.application.service.cripto.hasher;
 
-
 import source.auth.application.service.cripto.contracts.Hasher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,17 +14,17 @@ public class BcriptHasher implements Hasher {
     }
 
     @Override
-    public String hash(String passphrase) {
+    public String hash(char[] passphrase) {
         String pass = sha256.hash(passphrase);
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
         return passwordEncoder.encode(pass);
     }
 
     @Override
-    public Boolean verify(String passphrase, String hash) {
+    public Boolean verify(char[] passphrase, String hash) {
+        String pass = sha256.hash(passphrase);
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-        return passwordEncoder.matches(passphrase, hash);
-
+        return passwordEncoder.matches(pass, hash);
     }
 
 }
