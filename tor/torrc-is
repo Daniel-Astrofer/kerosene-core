@@ -1,5 +1,5 @@
 User kerosene
-SocksPort unix:/var/run/tor/socks/tor.sock
+SocksPort unix:/var/run/tor/socks/tor.sock WorldWritable
 HiddenServiceDir /var/lib/tor/kerosene_service/
 HiddenServiceVersion 3
 HiddenServicePort 80 kerosene-app-is:8080

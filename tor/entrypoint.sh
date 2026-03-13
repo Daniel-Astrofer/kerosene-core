@@ -42,13 +42,20 @@ if ! id kerosene >/dev/null 2>&1; then
     useradd -r -u 65532 -g 65532 -M -s /usr/sbin/nologin kerosene 2>/dev/null || true
 fi
 
-# Tor is extremely selective about directory permissions for SOCKS Unix sockets.
-# It MUST be 0700 and owned by the user running Tor.
+# Tor requires 0700 on its HiddenServiceDir, but the SOCKS socket directory
+# must be accessible by the Java app containers (UID 1000) via shared Docker volume.
+# We keep HiddenServiceDir strict and relax only the SOCKS socket path.
+# NOTE: Some subdirs (authorized_clients, onion_auth) may be read-only Docker
+# volume mounts. We must NOT fail on chown/chmod for those.
 mkdir -p /var/run/tor/socks
-mkdir -p /var/lib/tor/kerosene_service
-chown -R kerosene:kerosene /var/run/tor /var/lib/tor
-chmod 700 /var/run/tor/socks
-chmod 700 /var/lib/tor/kerosene_service
+mkdir -p /var/lib/tor/kerosene_service/authorized_clients
+# chown only top-level — avoid recursing into read-only mounted subdirs
+chown kerosene:kerosene /var/run/tor /var/run/tor/socks 2>/dev/null || true
+chown kerosene:kerosene /var/lib/tor 2>/dev/null || true
+chown kerosene:kerosene /var/lib/tor/kerosene_service 2>/dev/null || true
+chown kerosene:kerosene /var/lib/tor/kerosene_service/authorized_clients 2>/dev/null || true
+chmod 700 /var/lib/tor/kerosene_service 2>/dev/null || true
+chmod 755 /var/run/tor/socks 2>/dev/null || true
 
 echo "==> Starting Tor hidden service for Kerosene..."
 echo "==> Once connected, .onion address will be in:"
@@ -63,12 +70,12 @@ tor -f /etc/tor/torrc &
 TOR_PID=$!
 
 echo "==> Waiting for Tor to establish UDS socket..."
-while [ ! -S /var/run/tor/socks/tor.sock ]; do
-  sleep 1
-done
-
-# Secure the created socket just in case, though User 65532 in torrc handles it.
-chown kerosene:kerosene /var/run/tor/socks/tor.sock
-chmod 660 /var/run/tor/socks/tor.sock
+# Only wait for socket if torrc configures a UDS SocksPort (vault has SocksPort 0)
+if grep -q 'SocksPort unix:' /etc/tor/torrc; then
+  while [ ! -S /var/run/tor/socks/tor.sock ]; do
+    sleep 1
+  done
+  echo "==> UDS socket ready."
+fi
 
 wait $TOR_PID

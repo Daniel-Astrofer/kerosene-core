@@ -26,10 +26,12 @@ FROM gcr.io/distroless/java21-debian12 AS runtime
 WORKDIR /app
 
 # The distroless image doesn't have chown/adduser. We copy with explicit ownership.
-COPY --chown=1000:1000 --from=builder /workspace/build/libs/*.jar /app/app.jar
+# UID 65532 is the Google Distroless standard 'nonroot' user.
+COPY --chown=65532:65532 --from=builder /workspace/build/libs/*.jar /app/app.jar
 
-# Run as UID 1000 to match the Tor UDS socket permissions (Phase 3 hardening)
-USER 1000:1000
+# Run as UID 65532 (Distroless nonroot) to match the Tor 'kerosene' user.
+# This ensures access to shared volumes (like /vault-onion) where Tor enforces 0700.
+USER 65532:65532
 
 # Do NOT expose 8080 to the host — Tor handles ingress.
 # The port is only reachable inside the Docker network (app:8080).

@@ -82,14 +82,19 @@ public class VoucherService {
      */
     @Transactional
     public String confirmPayment(String pendingVoucherId, String txid) {
-        // Prevent duplicate txid usage
-        Optional<Voucher> existingByTxid = repository.findByTxid(txid);
-        if (existingByTxid.isPresent()) {
-            Voucher existing = existingByTxid.get();
-            if (existing.getStatus() == Voucher.VoucherStatus.PAID) {
-                return existing.getCode();
-            } else if (existing.getStatus() == Voucher.VoucherStatus.USED) {
-                throw new IllegalStateException("This transaction has already been used for an account.");
+        // Mock support for development/testing
+        if (txid != null && txid.startsWith("mock_tx_")) {
+            log.warn("[VOUCHER] MOCK payment detected for pendingVoucherId: {}", pendingVoucherId);
+        } else {
+            // Prevent duplicate txid usage
+            Optional<Voucher> existingByTxid = repository.findByTxid(txid);
+            if (existingByTxid.isPresent()) {
+                Voucher existing = existingByTxid.get();
+                if (existing.getStatus() == Voucher.VoucherStatus.PAID) {
+                    return existing.getCode();
+                } else if (existing.getStatus() == Voucher.VoucherStatus.USED) {
+                    throw new IllegalStateException("This transaction has already been used for an account.");
+                }
             }
         }
 

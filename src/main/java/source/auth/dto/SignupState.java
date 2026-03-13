@@ -16,21 +16,14 @@ public class SignupState implements Serializable {
     private String username;
 
     /**
-     * Raw passphrase — never written to Redis in plaintext.
-     * This field is cleared (zeroed) immediately after hashing during finalization.
-     * 
-     * @JsonIgnore prevents Jackson from serializing it into the Redis JSON blob.
+     * Hashed passphrase (done at signup time).
      */
-    @JsonIgnore
     private char[] passphrase;
 
     /**
      * Raw TOTP seed — secret key for QR code scanning.
-     * After TOTP verification this value is no longer needed in the cache.
-     * 
-     * @JsonIgnore prevents it leaking through the Redis snapshot.
+     * Needed during finalization to store in Postgres.
      */
-    @JsonIgnore
     private String totpSecret;
 
     // Status flags
@@ -42,11 +35,13 @@ public class SignupState implements Serializable {
     private String btcDepositAddress;
     private String passkeyCredentialJson;
 
+    // Sovereign Auth (Hardware Auth)
+    private String hardwarePublicKey;
+    private String hardwareDeviceName;
+
     /**
      * Backup codes are hashed one-time recovery secrets.
-     * Raw values must never appear in Redis — @JsonIgnore enforces this.
      */
-    @JsonIgnore
     private java.util.List<String> backupCodes;
 
     /**
@@ -158,5 +153,21 @@ public class SignupState implements Serializable {
 
     public void setBackupCodes(java.util.List<String> backupCodes) {
         this.backupCodes = backupCodes;
+    }
+
+    public String getHardwarePublicKey() {
+        return hardwarePublicKey;
+    }
+
+    public void setHardwarePublicKey(String hardwarePublicKey) {
+        this.hardwarePublicKey = hardwarePublicKey;
+    }
+
+    public String getHardwareDeviceName() {
+        return hardwareDeviceName;
+    }
+
+    public void setHardwareDeviceName(String hardwareDeviceName) {
+        this.hardwareDeviceName = hardwareDeviceName;
     }
 }

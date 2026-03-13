@@ -57,10 +57,19 @@ public class UdsSocks5Transport {
     private static final byte SOCKS5_ATYP_DOMAINNAME = 0x03;
     private static final byte SOCKS5_REPLY_SUCCESS = 0x00;
 
+    private static final int DEFAULT_TIMEOUT_MS = 30000; // Increased for Tor circuits
+ // 10 seconds
+
     private final String udsPath;
+    private final int timeoutMs;
 
     public UdsSocks5Transport(String udsPath) {
+        this(udsPath, DEFAULT_TIMEOUT_MS);
+    }
+
+    public UdsSocks5Transport(String udsPath, int timeoutMs) {
         this.udsPath = udsPath;
+        this.timeoutMs = timeoutMs;
     }
 
     /**
@@ -85,7 +94,21 @@ public class UdsSocks5Transport {
 
         // Step 1: Open UDS SocketChannel — Java 16+ native UDS support
         try (SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
-            channel.connect(UnixDomainSocketAddress.of(udsPath));
+            // Set non-blocking mode to enable Selector-based timeouts
+            channel.configureBlocking(false);
+            
+            // Connect with timeout
+            if (!channel.connect(UnixDomainSocketAddress.of(udsPath))) {
+                try (java.nio.channels.Selector selector = java.nio.channels.Selector.open()) {
+                    channel.register(selector, java.nio.channels.SelectionKey.OP_CONNECT);
+                    if (selector.select(timeoutMs) == 0) {
+                        throw new IOException("[UdsSocks5] Connection timeout to Tor at: " + udsPath);
+                    }
+                    if (!channel.finishConnect()) {
+                        throw new IOException("[UdsSocks5] Failed to finish connection to: " + udsPath);
+                    }
+                }
+            }
 
             // Step 2: SOCKS5 greeting — offer no-auth (0x00)
             performSocks5Greeting(channel);
@@ -121,7 +144,7 @@ public class UdsSocks5Transport {
         writeAll(channel, ByteBuffer.wrap(greeting));
 
         // Read server choice: [VER, METHOD]
-        ByteBuffer response = readExactly(channel, 2);
+        ByteBuffer response = readExactly(channel, 2, "Greeting response");
         byte ver = response.get();
         byte method = response.get();
 
@@ -161,7 +184,7 @@ public class UdsSocks5Transport {
 
         // Read server response: [VER][REP][RSV][ATYP][BADDR...][BPORT]
         // Minimum 10 bytes for IPv4 response
-        ByteBuffer replyHeader = readExactly(channel, 4);
+        ByteBuffer replyHeader = readExactly(channel, 4, "CONNECT reply header");
         byte repVer = replyHeader.get();
         byte repCode = replyHeader.get();
         replyHeader.get(); // RSV — skip
@@ -181,13 +204,13 @@ public class UdsSocks5Transport {
             case 0x01 -> 4;
             case 0x04 -> 16;
             case 0x03 -> {
-                ByteBuffer lenBuf = readExactly(channel, 1);
+                ByteBuffer lenBuf = readExactly(channel, 1, "CONNECT domain length");
                 yield lenBuf.get() & 0xFF;
             }
             default -> throw new IOException("[UdsSocks5] Unknown ATYP in CONNECT reply: " + atyp);
         };
         // Read remaining address bytes + 2 port bytes
-        readExactly(channel, addrLen + 2);
+        readExactly(channel, addrLen + 2, "CONNECT bound address/port");
 
         logger.debug("[UdsSocks5] SOCKS5 CONNECT success. Tunnel is active.");
     }
@@ -201,12 +224,14 @@ public class UdsSocks5Transport {
             Map<String, String> extraHeaders) {
 
         StringBuilder sb = new StringBuilder();
-        // Use HTTP/1.0 to prevent Chunked Transfer Encoding in the response
-        sb.append(method).append(' ').append(url.path).append(" HTTP/1.0\r\n");
+        // Use HTTP/1.1
+        sb.append(method).append(' ').append(url.path).append(" HTTP/1.1\r\n");
         sb.append("Host: ").append(url.host);
         if (url.port != 80 && url.port != 443)
             sb.append(':').append(url.port);
         sb.append("\r\n");
+        // Don't close immediately to allow Content-Length sensing if possible, 
+        // though our current implementation closes anyway.
         sb.append("Connection: close\r\n");
         sb.append("User-Agent: Kerosene-Shard/1.0\r\n");
 
@@ -229,67 +254,256 @@ public class UdsSocks5Transport {
     }
 
     /**
-     * Reads an HTTP/1.1 response from the channel.
-     * Handles both Content-Length and Connection: close chunking patterns.
+     * Reads an HTTP response from the channel.
+     * Robust implementation that handles:
+     * 1. Header parsing to find Content-Length.
+     * 2. Reading exactly Content-Length bytes once found.
+     * 3. Fallback to reading until EOF (connection close).
      */
     private HttpResult readHttpResponse(SocketChannel channel) throws IOException {
-        // Read all bytes until connection close
         var accumulator = new java.io.ByteArrayOutputStream();
-        ByteBuffer buf = ByteBuffer.allocate(8192);
+        ByteBuffer buf = ByteBuffer.allocate(4096);
+        boolean headersComplete = false;
+        boolean isChunked = false;
+        int statusCode = -1;
+        long contentLength = -1;
+        int headerLength = -1;
+
+        try (java.nio.channels.Selector selector = java.nio.channels.Selector.open()) {
+            channel.register(selector, java.nio.channels.SelectionKey.OP_READ);
+
+            // 1. Read Headers
+            while (!headersComplete) {
+                if (selector.select(timeoutMs) == 0) {
+                    throw new IOException("[UdsSocks5] Read timeout waiting for HTTP headers after " + timeoutMs + "ms");
+                }
+                
+                buf.clear();
+                int n = channel.read(buf);
+                if (n < 0) break;
+                if (n == 0) continue;
+
+                buf.flip();
+                byte[] chunk = new byte[buf.remaining()];
+                buf.get(chunk);
+                accumulator.write(chunk);
+                selector.selectedKeys().clear();
+
+                // Check for double CRLF
+                byte[] currentData = accumulator.toByteArray();
+                String currentStr = new String(currentData, StandardCharsets.UTF_8);
+                int headerEndIndex = currentStr.indexOf("\r\n\r\n");
+                if (headerEndIndex != -1) {
+                    headersComplete = true;
+                    headerLength = headerEndIndex + 4;
+                    
+                    String headersPart = currentStr.substring(0, headerEndIndex);
+                    String[] lines = headersPart.split("\r\n");
+                    
+                    // Parse Status Line
+                    if (lines.length > 0) {
+                        String statusLine = lines[0];
+                        String[] statusParts = statusLine.split(" ", 3);
+                        if (statusParts.length >= 2) {
+                            try {
+                                statusCode = Integer.parseInt(statusParts[1]);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
+
+                    // Parse Content-Length and Transfer-Encoding
+                    for (String line : lines) {
+                        String lower = line.toLowerCase();
+                        if (lower.startsWith("content-length:")) {
+                            try {
+                                contentLength = Long.parseLong(line.substring(15).trim());
+                            } catch (NumberFormatException ignored) {}
+                        } else if (lower.startsWith("transfer-encoding:") && lower.contains("chunked")) {
+                            isChunked = true;
+                        }
+                    }
+                }
+            }
+
+            if (statusCode == -1) {
+                throw new IOException("[UdsSocks5] Failed to receive valid HTTP status line.");
+            }
+
+            // 2. Read Body
+            byte[] decodedBody;
+            if (isChunked) {
+                decodedBody = decodeChunkedBody(channel, selector, accumulator, headerLength);
+            } else if (contentLength >= 0) {
+                decodedBody = readFixedLengthBody(channel, selector, accumulator, headerLength, contentLength);
+            } else {
+                decodedBody = readUntilEofBody(channel, selector, accumulator, headerLength);
+            }
+
+            return new HttpResult(statusCode, decodedBody);
+        }
+    }
+
+    private byte[] decodeChunkedBody(SocketChannel channel, java.nio.channels.Selector selector, 
+                                   java.io.ByteArrayOutputStream accumulator, int headerLength) throws IOException {
+        var bodyOut = new java.io.ByteArrayOutputStream();
+        byte[] initialData = accumulator.toByteArray();
+        
+        // Use a wrapper to read bytes efficiently from the already-read buffer + socket
+        java.io.InputStream in = new java.io.InputStream() {
+            int offset = headerLength;
+            ByteBuffer buf = ByteBuffer.allocate(8192);
+
+            @Override
+            public int read() throws IOException {
+                if (offset < initialData.length) {
+                    return initialData[offset++] & 0xFF;
+                }
+                if (!buf.hasRemaining()) {
+                    buf.clear();
+                    if (selector.select(timeoutMs) == 0) {
+                        throw new IOException("[UdsSocks5] Read timeout (chunked body) after " + timeoutMs + "ms");
+                    }
+                    int n = channel.read(buf);
+                    if (n < 0) return -1;
+                    if (n == 0) return read(); // Retry if nothing read but not EOF
+                    buf.flip();
+                }
+                return buf.get() & 0xFF;
+            }
+        };
+
         while (true) {
+            String line = readLine(in);
+            if (line == null) throw new IOException("[UdsSocks5] Unexpected EOF in chunked header");
+            
+            // Hex size might have extras (chunk extensions)
+            int firstSemi = line.indexOf(';');
+            String hex = (firstSemi != -1) ? line.substring(0, firstSemi).trim() : line.trim();
+            if (hex.isEmpty()) continue; // Skip empty lines if any
+            
+            int chunkSize = Integer.parseInt(hex, 16);
+            if (chunkSize == 0) break; // Final chunk
+            
+            // Read chunkSize bytes
+            for (int i = 0; i < chunkSize; i++) {
+                int b = in.read();
+                if (b == -1) throw new IOException("[UdsSocks5] Unexpected EOF in chunk data");
+                bodyOut.write(b);
+            }
+            
+            // Read trial CRLF
+            readLine(in); 
+        }
+        return bodyOut.toByteArray();
+    }
+
+    private String readLine(java.io.InputStream in) throws IOException {
+        java.io.ByteArrayOutputStream lout = new java.io.ByteArrayOutputStream();
+        int b;
+        while ((b = in.read()) != -1) {
+            if (b == '\r') {
+                int next = in.read();
+                if (next == '\n') break;
+                lout.write(b);
+                if (next != -1) lout.write(next);
+            } else {
+                lout.write(b);
+            }
+        }
+        return lout.size() == 0 && b == -1 ? null : lout.toString(StandardCharsets.UTF_8);
+    }
+
+    private byte[] readFixedLengthBody(SocketChannel channel, java.nio.channels.Selector selector,
+                                     java.io.ByteArrayOutputStream accumulator, int headerLength, long contentLength) throws IOException {
+        long currentBodyLength = accumulator.size() - headerLength;
+        long remainingToRead = contentLength - currentBodyLength;
+        ByteBuffer buf = ByteBuffer.allocate(4096);
+        
+        while (remainingToRead > 0) {
+            if (selector.select(timeoutMs) == 0) {
+                throw new IOException("[UdsSocks5] Read timeout waiting for HTTP body after " + timeoutMs + "ms");
+            }
+            
+            buf.clear();
+            if (remainingToRead < buf.capacity()) {
+                buf.limit((int) remainingToRead);
+            }
+            int n = channel.read(buf);
+            if (n < 0) break; // Unexpected EOF
+            if (n == 0) continue;
+
+            buf.flip();
+            remainingToRead -= buf.remaining();
+            byte[] chunk = new byte[buf.remaining()];
+            buf.get(chunk);
+            accumulator.write(chunk);
+            selector.selectedKeys().clear();
+        }
+
+        byte[] allBytes = accumulator.toByteArray();
+        byte[] body = new byte[(int) contentLength];
+        System.arraycopy(allBytes, headerLength, body, 0, body.length);
+        return body;
+    }
+
+    private byte[] readUntilEofBody(SocketChannel channel, java.nio.channels.Selector selector,
+                                  java.io.ByteArrayOutputStream accumulator, int headerLength) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate(4096);
+        while (true) {
+            if (selector.select(timeoutMs) == 0) {
+                throw new IOException("[UdsSocks5] Read timeout waiting for EOF after " + timeoutMs + "ms");
+            }
+            
             buf.clear();
             int n = channel.read(buf);
-            if (n < 0)
-                break;
+            if (n < 0) break;
+            if (n == 0) continue;
+
             buf.flip();
             byte[] chunk = new byte[buf.remaining()];
             buf.get(chunk);
             accumulator.write(chunk);
+            selector.selectedKeys().clear();
         }
 
-        byte[] rawResponse = accumulator.toByteArray();
-        String responseStr = new String(rawResponse, StandardCharsets.UTF_8);
-
-        // Parse status line: "HTTP/1.1 200 OK\r\n..."
-        int firstLineEnd = responseStr.indexOf("\r\n");
-        if (firstLineEnd < 0) {
-            throw new IOException("[UdsSocks5] Malformed HTTP response: no CRLF in first 8192 bytes.");
-        }
-        String statusLine = responseStr.substring(0, firstLineEnd);
-        String[] parts = statusLine.split(" ", 3);
-        if (parts.length < 2) {
-            throw new IOException("[UdsSocks5] Cannot parse HTTP status line: " + statusLine);
-        }
-        int statusCode;
-        try {
-            statusCode = Integer.parseInt(parts[1]);
-        } catch (NumberFormatException e) {
-            throw new IOException("[UdsSocks5] Non-numeric HTTP status: " + parts[1]);
-        }
-
-        // Split header/body at the blank line
-        int headerEnd = responseStr.indexOf("\r\n\r\n");
-        byte[] body = headerEnd >= 0
-                ? responseStr.substring(headerEnd + 4).getBytes(StandardCharsets.UTF_8)
-                : new byte[0];
-
-        return new HttpResult(statusCode, body);
+        byte[] allBytes = accumulator.toByteArray();
+        byte[] body = new byte[allBytes.length - headerLength];
+        System.arraycopy(allBytes, headerLength, body, 0, body.length);
+        return body;
     }
 
     // ── NIO Helpers ───────────────────────────────────────────────────────────
 
     private void writeAll(SocketChannel channel, ByteBuffer buf) throws IOException {
-        while (buf.hasRemaining()) {
-            channel.write(buf);
+        try (java.nio.channels.Selector selector = java.nio.channels.Selector.open()) {
+            channel.register(selector, java.nio.channels.SelectionKey.OP_WRITE);
+            while (buf.hasRemaining()) {
+                if (selector.select(timeoutMs) == 0) {
+                    throw new IOException("[UdsSocks5] Write timeout after " + timeoutMs + "ms");
+                }
+                int n = channel.write(buf);
+                if (n == 0) {
+                    // This shouldn't happen if select says it's writable
+                    selector.selectedKeys().clear();
+                }
+                selector.selectedKeys().clear();
+            }
         }
     }
 
-    private ByteBuffer readExactly(SocketChannel channel, int n) throws IOException {
+    private ByteBuffer readExactly(SocketChannel channel, int n, String context) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(n);
-        while (buf.hasRemaining()) {
-            int read = channel.read(buf);
-            if (read < 0) {
-                throw new IOException("[UdsSocks5] Unexpected EOF while reading " + n + " bytes from SOCKS5 server.");
+        try (java.nio.channels.Selector selector = java.nio.channels.Selector.open()) {
+            channel.register(selector, java.nio.channels.SelectionKey.OP_READ);
+            while (buf.hasRemaining()) {
+                if (selector.select(timeoutMs) == 0) {
+                    throw new IOException("[UdsSocks5] Read timeout for " + context + " after " + timeoutMs + "ms");
+                }
+                int read = channel.read(buf);
+                if (read < 0) {
+                    throw new IOException("[UdsSocks5] Unexpected EOF while reading " + n + " bytes for " + context);
+                }
+                selector.selectedKeys().clear();
             }
         }
         buf.flip();

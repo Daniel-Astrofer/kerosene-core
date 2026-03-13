@@ -77,6 +77,9 @@ public class TOTPValidator implements TOTPVerifier {
     @Override
     public String totpDecryptedToString(String totpSecret, SecretKey secretKey) {
 
+        if (totpSecret == null) {
+            throw new IllegalStateException("TOTP secret is missing from Redis. Registration session may have expired.");
+        }
         byte[] totpCoded = Base64.getDecoder().decode(totpSecret);
         try {
             byte[] totp = cryptography.decrypt(totpCoded, secretKey);

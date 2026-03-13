@@ -214,9 +214,14 @@ public class PaymentLinkService {
         }
 
         // Validar TX na blockchain
-        // TODO: Substituir pela chamada real de validação quando o novo cliente
-        // Blockchain for implementado
-        boolean isValid = true; // Placeholder
+        // Mock support for development/testing
+        boolean isValid = true;
+        if (txid != null && txid.startsWith("mock_tx_")) {
+            System.out.println("⚠️  MOCK payment detected for link: " + linkId);
+        } else {
+            // TODO: Substituir pela chamada real de validação quando o novo cliente Blockchain for implementado
+            isValid = true; // Placeholder
+        }
 
         if (!isValid) {
             throw new RuntimeException("Transação não é válida");

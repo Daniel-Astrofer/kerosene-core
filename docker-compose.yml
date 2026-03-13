@@ -25,7 +25,6 @@ services:
       - ./tor/torrc-vault:/etc/tor/torrc:ro
       - ./tor/entrypoint.sh:/entrypoint.sh:ro
       - tor_keys_vault:/var/lib/tor/kerosene_service
-      - ./tor/authorized_clients:/var/lib/tor/kerosene_service/authorized_clients:ro
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks: [net_vault, tor_egress]
     depends_on: [kerosene-vault]
@@ -103,19 +102,20 @@ services:
       dockerfile: Dockerfile
     container_name: kerosene-app-is
     restart: unless-stopped
+    mem_limit: 768m
     cap_drop:
       - ALL
     cap_add:
       - IPC_LOCK  # required for mlock() to pin key material in RAM
     security_opt:
       - no-new-privileges:true
-      - seccomp:seccomp-profile.json
     tmpfs:
       - /opt/kerosene:rw,noexec,nosuid,size=10m
     volumes:
       - ../../panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_is:/var/run/tor/socks
+      - tor_keys_vault:/vault-onion:ro
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
@@ -123,9 +123,11 @@ services:
       - REGION=IS
       - MPC_SIDECAR_HOST=mpc-sidecar-is
       - SPRING_DATA_REDIS_HOST=kerosene_redis_is
-      - vault.enabled=true
-      - vault.url=http://kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion
-      - vault.proxy.path=/var/run/tor/socks/tor.sock
+      - VAULT_ENABLED=true
+      - VAULT_ONION_FILE=/vault-onion/hostname
+      - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
       - net_db_is
       - net_mpc
@@ -200,6 +202,7 @@ services:
     build: .
     container_name: kerosene-app-ch
     restart: unless-stopped
+    mem_limit: 768m
     cap_add:
       - IPC_LOCK
     tmpfs:
@@ -207,6 +210,8 @@ services:
     volumes:
       - ../../panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
+      - tor_socks_ch:/var/run/tor/socks
+      - tor_keys_vault:/vault-onion:ro
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
@@ -214,9 +219,11 @@ services:
       - REGION=CH
       - MPC_SIDECAR_HOST=mpc-sidecar-ch
       - SPRING_DATA_REDIS_HOST=kerosene_redis_ch
-      - vault.enabled=true
-      - vault.url=http://kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion
-      - vault.proxy.path=/var/run/tor/socks/tor.sock
+      - VAULT_ENABLED=true
+      - VAULT_ONION_FILE=/vault-onion/hostname
+      - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
       - net_db_ch
       - net_mpc
@@ -291,6 +298,7 @@ services:
     build: .
     container_name: kerosene-app-sg
     restart: unless-stopped
+    mem_limit: 768m
     cap_add:
       - IPC_LOCK
     tmpfs:
@@ -298,6 +306,8 @@ services:
     volumes:
       - ../../panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
+      - tor_socks_sg:/var/run/tor/socks
+      - tor_keys_vault:/vault-onion:ro
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
@@ -305,9 +315,11 @@ services:
       - REGION=SG
       - MPC_SIDECAR_HOST=mpc-sidecar-sg
       - SPRING_DATA_REDIS_HOST=kerosene_redis_sg
-      - vault.enabled=true
-      - vault.url=http://kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion
-      - vault.proxy.path=/var/run/tor/socks/tor.sock
+      - VAULT_ENABLED=true
+      - VAULT_ONION_FILE=/vault-onion/hostname
+      - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
       - net_db_sg
       - net_mpc

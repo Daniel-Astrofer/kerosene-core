@@ -8,6 +8,7 @@ import source.voucher.service.VoucherService.VoucherRequestData;
 
 import source.transactions.service.PaymentLinkService;
 import source.transactions.dto.PaymentLinkDTO;
+import source.auth.application.orchestrator.signup.SignupUseCase;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -20,13 +21,16 @@ public class VoucherController {
     private final VoucherService voucherService;
     private final PaymentLinkService paymentLinkService;
     private final source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract;
+    private final SignupUseCase signupUseCase;
 
     public VoucherController(VoucherService voucherService,
             PaymentLinkService paymentLinkService,
-            source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract) {
+            source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract,
+            SignupUseCase signupUseCase) {
         this.voucherService = voucherService;
         this.paymentLinkService = paymentLinkService;
         this.redisContract = redisContract;
+        this.signupUseCase = signupUseCase;
     }
 
     /**
@@ -95,6 +99,20 @@ public class VoucherController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("ONBOARDING_SERVER_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * DEBUG ONLY: Mocks the payment confirmation and finalizes user registration.
+     */
+    @PostMapping("/onboarding-mock-confirm")
+    public ResponseEntity<ApiResponse<String>> mockOnboardingConfirm(@RequestParam String sessionId) {
+        try {
+            signupUseCase.finalizeUserFromRedis(sessionId, "mock_onboarding_tx_" + System.currentTimeMillis(),
+                    new BigDecimal("0.00022000"));
+            return ResponseEntity.ok(ApiResponse.success("MOCK: User finalized successfully. Account is now ACTIVE.", "OK"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("MOCK_ERROR", e.getMessage()));
         }
     }
 }

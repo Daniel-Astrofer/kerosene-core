@@ -15,13 +15,11 @@ public class UserDTO implements UserDTOContract {
      * Passphrase in char[] to limit heap lifetime.
      * WRITE_ONLY ensures it's read from request but never sent back.
      */
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private char[] passphrase;
 
     /**
      * TOTP seed — stored in Redis during signup, never sent to client.
      */
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String totpSecret;
 
     /** TOTP code is short-lived input. */
@@ -42,7 +40,6 @@ public class UserDTO implements UserDTOContract {
     /**
      * Backup codes — generated at signup, stored in Redis.
      */
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private java.util.List<String> backupCodes;
 
     public java.util.List<String> getBackupCodes() {

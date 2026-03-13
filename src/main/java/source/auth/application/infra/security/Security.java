@@ -52,6 +52,8 @@ public class Security {
                                                 .requestMatchers("/auth/passkey/login/finish").permitAll()
                                                 .requestMatchers("/auth/passkey/register/onboarding/start").permitAll()
                                                 .requestMatchers("/auth/passkey/register/onboarding/finish").permitAll()
+                                                .requestMatchers("/auth/hardware/register/onboarding/start").permitAll()
+                                                .requestMatchers("/auth/hardware/register/onboarding/finish").permitAll()
                                                 .requestMatchers("/auth/pow/challenge").permitAll()
                                                 .requestMatchers("/voucher/**").permitAll()
                                                 .requestMatchers("/sovereignty/**").permitAll()

@@ -37,7 +37,7 @@ public class SovereigntyHeartbeatService {
     @Value("${vault.url:}")
     private String vaultUrl;
 
-    @Value("${vault.url.file:}")
+    @Value("${vault.onion.file:}")
     private String vaultUrlFile;
 
     @Value("${vault.proxy.host:}")

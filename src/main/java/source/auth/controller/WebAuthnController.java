@@ -54,13 +54,12 @@ public class WebAuthnController {
             // Placeholder: "user" + userId.
             String username = "user" + userId;
 
-            String optionsJson = webAuthnService.startRegistration(username);
+            var options = webAuthnService.startRegistration(username);
 
-            // Store the raw options JSON in memory temporarily so we can pass it to
-            // finishRegistration later
-            pendingRegistrations.put(username, optionsJson);
+            // Store the full options JSON (with rp info) for finishRegistration later
+            pendingRegistrations.put(username, options.toJson());
 
-            return ResponseEntity.ok(ApiResponse.success("Registration options generated", optionsJson));
+            return ResponseEntity.ok(ApiResponse.success("Registration options generated", options.toCredentialsCreateJson()));
 
         } catch (Exception e) {
             log.error("Failed to start passkey registration", e);
@@ -152,10 +151,10 @@ public class WebAuthnController {
 
             // We use the raw username during signup as ID representation temporarily
             String username = "user_" + state.getUsername();
-            String optionsJson = webAuthnService.startRegistration(username);
+            var options = webAuthnService.startRegistration(username);
 
-            pendingRegistrations.put(username, optionsJson);
-            return ResponseEntity.ok(ApiResponse.success("Onboarding passkey options generated", optionsJson));
+            pendingRegistrations.put(username, options.toJson());
+            return ResponseEntity.ok(ApiResponse.success("Onboarding passkey options generated", options.toCredentialsCreateJson()));
 
         } catch (Exception e) {
             log.error("Failed to start onboarding passkey registration", e);

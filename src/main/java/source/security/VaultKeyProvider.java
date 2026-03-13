@@ -73,7 +73,7 @@ public class VaultKeyProvider {
      * dynamically.
      * This enables automatic .onion discovery without hardcoding addresses.
      */
-    @Value("${vault.url.file:}")
+    @Value("${vault.onion.file:}")
     private String vaultUrlFile;
 
     @Value("${vault.secret.path:v1/secret/data/kerosene/aes-key}")
@@ -117,6 +117,8 @@ public class VaultKeyProvider {
      */
     @PostConstruct
     public void initialize() {
+        logger.info("[VaultKeyProvider] Config: vault.enabled={}, vault.url='{}', vault.onion.file='{}', vault.proxy.path='{}'", 
+                    vaultEnabled, vaultUrl, vaultUrlFile, proxyPath);
         if (vaultEnabled) {
             logger.info("[VaultKeyProvider] Vault mode ACTIVE. Requesting master key via TPM attestation.");
             // Executado em thread separada para não travar o boot do Spring
@@ -219,22 +221,31 @@ public class VaultKeyProvider {
             try {
                 loadKeyFromVault();
                 if (this.masterKey != null) {
-                    logger.info("[VaultKeyProvider] Successfully provisioned on attempt {}.", attempt);
+                    logger.info("[VaultKeyProvider] ✅ SUCCESS: Master key provisioned on attempt {}.", attempt);
                     break;
                 }
-            } catch (VaultAttestationException | IOException | InterruptedException e) {
-                logger.warn(
-                        "[VaultKeyProvider STALL] Vault unreachable or not armed: {}. Node remains in STALL mode. Retrying in {}ms...",
-                        e.getMessage(), backoffMs);
-                try {
-                    Thread.sleep(backoffMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-                backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF);
-                attempt++;
+            } catch (VaultAttestationException e) {
+                logger.error("[VaultKeyProvider STALL] Vault rejected attestation on attempt {}: {}. Node remains in STALL mode. Retrying in {}ms...", 
+                             attempt, e.getMessage(), backoffMs);
+            } catch (IOException e) {
+                logger.warn("[VaultKeyProvider STALL] Network error on attempt {}: {}. Retrying in {}ms...", 
+                            attempt, e.getMessage(), backoffMs);
+            } catch (InterruptedException e) {
+                logger.error("[VaultKeyProvider] Fetcher thread interrupted.");
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception e) {
+                logger.error("[VaultKeyProvider CRITICAL] Unexpected error on attempt {}: {}", attempt, e.getMessage(), e);
             }
+
+            try {
+                Thread.sleep(backoffMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF);
+            attempt++;
         }
     }
 
@@ -251,7 +262,7 @@ public class VaultKeyProvider {
         // Resolve vault URL dynamically (supports .onion auto-discovery from file)
         String resolvedVaultUrl = resolveVaultUrl();
         if (resolvedVaultUrl == null || resolvedVaultUrl.isBlank()) {
-            throw new IOException("Vault URL is not configured. Set vault.url or vault.url.file.");
+            throw new IOException("Vault URL is not configured. Set vault.url or vault.onion-file.");
         }
 
         byte[] keyBytes = null;
@@ -353,16 +364,20 @@ public class VaultKeyProvider {
                     String onionHost = Files.readString(hostnameFile).trim();
                     if (!onionHost.isBlank()) {
                         String resolved = "http://" + onionHost;
-                        logger.info("[VaultKeyProvider] Vault .onion auto-discovered from file: {}", resolved);
+                        logger.info("[VaultKeyProvider] Vault .onion auto-discovered: {}", resolved);
                         return resolved;
+                    } else {
+                        logger.warn("[VaultKeyProvider] Vault hostname file exists but is EMPTY at: {}", vaultUrlFile);
                     }
                 } else {
-                    logger.debug("[VaultKeyProvider] Vault hostname file not yet available: {}", vaultUrlFile);
+                    logger.info("[VaultKeyProvider] Vault hostname file DOES NOT EXIST at: {}. Check if Tor is up and volume is mounted.", vaultUrlFile);
                 }
             } catch (IOException e) {
-                logger.warn("[VaultKeyProvider] Failed to read vault hostname file {}: {}", vaultUrlFile,
+                logger.error("[VaultKeyProvider] Failed to read vault hostname file {}: {}", vaultUrlFile,
                         e.getMessage());
             }
+        } else {
+            logger.warn("[VaultKeyProvider] vault.onion.file property is BLANK. Node cannot discover Vault.");
         }
 
         return null;

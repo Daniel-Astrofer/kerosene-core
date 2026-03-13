@@ -96,7 +96,7 @@ on run {title, cmd}
     set custom title of front window to title
     activate
   end tell
-run
+end run
 APPLESCRIPT
   exit 0
 fi

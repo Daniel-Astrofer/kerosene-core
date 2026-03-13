@@ -14,6 +14,7 @@ import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 
+import org.springframework.beans.factory.annotation.Value;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,13 +28,17 @@ public class WebAuthnService {
     private final PasskeyCredentialRepository credentialRepository;
     private final UserRepository userRepository;
 
-    public WebAuthnService(PasskeyCredentialRepository credentialRepository, UserRepository userRepository) {
+    public WebAuthnService(
+            PasskeyCredentialRepository credentialRepository,
+            UserRepository userRepository,
+            @Value("${webauthn.rp.id:localhost}") String rpId,
+            @Value("${webauthn.rp.name:Kerosene}") String rpName) {
         this.credentialRepository = credentialRepository;
         this.userRepository = userRepository;
 
         RelyingPartyIdentity rpIdentity = RelyingPartyIdentity.builder()
-                .id("localhost") // In production, this should be the domain name (e.g., your onion address)
-                .name("Kerosene Tor Network")
+                .id(rpId)
+                .name(rpName)
                 .build();
 
         this.relyingParty = RelyingParty.builder()
@@ -46,7 +51,7 @@ public class WebAuthnService {
         return relyingParty;
     }
 
-    public String startRegistration(String username) {
+    public com.yubico.webauthn.data.PublicKeyCredentialCreationOptions startRegistration(String username) {
         try {
             var request = com.yubico.webauthn.StartRegistrationOptions.builder()
                     .user(com.yubico.webauthn.data.UserIdentity.builder()
@@ -56,8 +61,7 @@ public class WebAuthnService {
                             .build())
                     .build();
 
-            var creationOptions = relyingParty.startRegistration(request);
-            return creationOptions.toCredentialsCreateJson();
+            return relyingParty.startRegistration(request);
         } catch (Exception e) {
             log.error("Failed to generate registration options", e);
             throw new RuntimeException("WebAuthn generation failed: " + e.getMessage());

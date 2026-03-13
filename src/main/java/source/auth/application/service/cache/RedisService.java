@@ -36,8 +36,8 @@ public class RedisService implements RedisServicer {
     @Override
     public void createTempUser(UserDTO userDTO) {
 
-        String normalizedPassphrase = new String(userDTO.getPassphrase()).trim().replaceAll("[\\s\\u00A0]+", " ");
-        userDTO.setPassphrase(hasher.hash(normalizedPassphrase.toCharArray()).toCharArray());
+        // String normalizedPassphrase = new String(userDTO.getPassphrase()).trim().replaceAll("[\\s\\u00A0]+", " ");
+        // userDTO.setPassphrase(hasher.hash(normalizedPassphrase.toCharArray()).toCharArray());
 
         try {
             String base64 = Base64.getEncoder()

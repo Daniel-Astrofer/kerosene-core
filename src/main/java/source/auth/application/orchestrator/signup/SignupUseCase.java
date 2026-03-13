@@ -42,6 +42,7 @@ public class SignupUseCase implements Signup {
     private final source.auth.application.service.pow.PowService powService;
     private final source.auth.application.service.user.contract.UserServiceContract userService;
     private final source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyRepo;
+    private final source.auth.application.infra.persistance.jpa.HardwareCredentialRepository hardwareCredentialRepo;
     private final source.notification.service.NotificationService notificationService;
     private final CosignerSecretService cosignerSecretService;
     private final source.auth.application.service.cripto.contracts.Hasher hasher;
@@ -55,6 +56,7 @@ public class SignupUseCase implements Signup {
             source.auth.application.service.pow.PowService powService,
             source.auth.application.service.user.contract.UserServiceContract userService,
             source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyRepo,
+            source.auth.application.infra.persistance.jpa.HardwareCredentialRepository hardwareCredentialRepo,
             source.notification.service.NotificationService notificationService,
             CosignerSecretService cosignerSecretService,
             @org.springframework.beans.factory.annotation.Qualifier("Argon2Hasher") source.auth.application.service.cripto.contracts.Hasher hasher) {
@@ -67,6 +69,7 @@ public class SignupUseCase implements Signup {
         this.powService = powService;
         this.userService = userService;
         this.passkeyRepo = passkeyRepo;
+        this.hardwareCredentialRepo = hardwareCredentialRepo;
         this.notificationService = notificationService;
         this.cosignerSecretService = cosignerSecretService;
         this.hasher = hasher;
@@ -227,12 +230,24 @@ public class SignupUseCase implements Signup {
                 throw new IllegalStateException("User was persisted but ID is null — aborting finalize.");
             }
 
-            // 2. Deserialize PasskeyCredential if user registered one
-            if (state.isPasskeyRegistered() && state.getPasskeyCredentialJson() != null) {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                PasskeyCredential cred = mapper.readValue(state.getPasskeyCredentialJson(), PasskeyCredential.class);
-                cred.setUser(user);
-                passkeyRepo.save(cred);
+            // 2. Deserialize PasskeyCredential/HardwareCredential if user registered one
+            if (state.isPasskeyRegistered()) {
+                if (state.getHardwarePublicKey() != null) {
+                    // Handle Sovereign Auth (Hardware Auth)
+                    source.auth.model.entity.HardwareCredential hwCred = new source.auth.model.entity.HardwareCredential();
+                    hwCred.setPublicKey(state.getHardwarePublicKey());
+                    hwCred.setDeviceName(state.getHardwareDeviceName());
+                    hwCred.setUser(user);
+                    hardwareCredentialRepo.save(hwCred);
+                    log.info("Sovereign Auth (Hardware) credential persisted for user {}", user.getUsername());
+                } else if (state.getPasskeyCredentialJson() != null) {
+                    // Handle Legacy WebAuthn Passkeys
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    PasskeyCredential cred = mapper.readValue(state.getPasskeyCredentialJson(), PasskeyCredential.class);
+                    cred.setUser(user);
+                    passkeyRepo.save(cred);
+                    log.info("WebAuthn Passkey credential persisted for user {}", user.getUsername());
+                }
             }
 
             // 3. Create and Claim the onboarding voucher, giving them isActive = true
