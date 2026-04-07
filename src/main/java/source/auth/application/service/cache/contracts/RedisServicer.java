@@ -17,6 +17,8 @@ public interface RedisServicer {
 
     String getValue(String key);
 
+    String getAndDeleteValue(String key);
+
     void setValue(String key, String value, long timeoutSeconds);
 
     void deleteValue(String key);

@@ -262,4 +262,26 @@ public class LedgerService implements LedgerContract {
             throw new RuntimeException("Carteira não encontrada ou não pertence ao usuário logado.");
         }
     }
+
+    @Override
+    @Transactional
+    public boolean validateUserLedgerIntegrity(Long userId) {
+        if (userId == null) {
+            throw new SecurityException("User id is required for ledger integrity validation.");
+        }
+
+        List<LedgerEntity> ledgers = ledgerRepository.findByWalletUserId(userId);
+        if (ledgers.isEmpty()) {
+            // No ledger rows exist for this user, so there is no balance signature to verify.
+            log.warn("[LedgerService] No ledgers found while validating integrity for user {}", userId);
+            return true;
+        }
+
+        try {
+            ledgers.forEach(this::verifyBalanceIntegrity);
+            return true;
+        } catch (RuntimeException e) {
+            throw new SecurityException("Ledger integrity validation failed for user " + userId, e);
+        }
+    }
 }

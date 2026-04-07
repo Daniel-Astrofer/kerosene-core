@@ -1,7 +1,6 @@
 package source.auth.dto;
 
 import java.io.Serializable;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import source.auth.model.enums.AccountSecurityType;
 
 /**
@@ -33,11 +32,14 @@ public class SignupState implements Serializable {
 
     // Generated Bitcoin onboarding deposit address
     private String btcDepositAddress;
-    private String passkeyCredentialJson;
 
-    // Sovereign Auth (Hardware Auth)
-    private String hardwarePublicKey;
-    private String hardwareDeviceName;
+    // Passkey (Ed25519) optimized for Tor/Standard
+    private String passkeyPublicKey;
+    private String passkeyPublicKeyCose;
+    private String passkeyCredentialId;
+    private String passkeyUserHandle;
+    private String passkeyDeviceName;
+    private String passkeyCredentialJson;
 
     /**
      * Backup codes are hashed one-time recovery secrets.
@@ -123,8 +125,57 @@ public class SignupState implements Serializable {
         this.btcDepositAddress = btcDepositAddress;
     }
 
+    public String getPasskeyPublicKey() {
+        return passkeyPublicKey;
+    }
+
+    public void setPasskeyPublicKey(String passkeyPublicKey) {
+        this.passkeyPublicKey = passkeyPublicKey;
+    }
+
+    public String getPasskeyPublicKeyCose() {
+        return passkeyPublicKeyCose;
+    }
+
+    public void setPasskeyPublicKeyCose(String passkeyPublicKeyCose) {
+        this.passkeyPublicKeyCose = passkeyPublicKeyCose;
+    }
+
+    public String getPasskeyCredentialId() {
+        return passkeyCredentialId;
+    }
+
+    public void setPasskeyCredentialId(String passkeyCredentialId) {
+        this.passkeyCredentialId = passkeyCredentialId;
+    }
+
+    public String getPasskeyUserHandle() {
+        return passkeyUserHandle;
+    }
+
+    public void setPasskeyUserHandle(String passkeyUserHandle) {
+        this.passkeyUserHandle = passkeyUserHandle;
+    }
+
+    public String getPasskeyDeviceName() {
+        return passkeyDeviceName;
+    }
+
+    public void setPasskeyDeviceName(String passkeyDeviceName) {
+        this.passkeyDeviceName = passkeyDeviceName;
+    }
+
     public String getPasskeyCredentialJson() {
-        return passkeyCredentialJson;
+        if (passkeyCredentialJson != null && !passkeyCredentialJson.isBlank()) {
+            return passkeyCredentialJson;
+        }
+        if (passkeyCredentialId == null && passkeyPublicKeyCose == null && passkeyUserHandle == null) {
+            return null;
+        }
+        return "{\"credentialId\":\"" + nullToEmpty(passkeyCredentialId)
+                + "\",\"publicKeyCose\":\"" + nullToEmpty(passkeyPublicKeyCose)
+                + "\",\"userHandle\":\"" + nullToEmpty(passkeyUserHandle)
+                + "\",\"deviceName\":\"" + nullToEmpty(passkeyDeviceName) + "\"}";
     }
 
     public void setPasskeyCredentialJson(String passkeyCredentialJson) {
@@ -155,19 +206,7 @@ public class SignupState implements Serializable {
         this.backupCodes = backupCodes;
     }
 
-    public String getHardwarePublicKey() {
-        return hardwarePublicKey;
-    }
-
-    public void setHardwarePublicKey(String hardwarePublicKey) {
-        this.hardwarePublicKey = hardwarePublicKey;
-    }
-
-    public String getHardwareDeviceName() {
-        return hardwareDeviceName;
-    }
-
-    public void setHardwareDeviceName(String hardwareDeviceName) {
-        this.hardwareDeviceName = hardwareDeviceName;
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

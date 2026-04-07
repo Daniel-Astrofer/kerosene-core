@@ -109,6 +109,11 @@ public class VaultKeyProvider {
      */
     private volatile SecretKey masterKey;
     private final ReentrantReadWriteLock keyLock = new ReentrantReadWriteLock();
+    private final ShardIdentityManager shardIdentityManager;
+
+    public VaultKeyProvider(ShardIdentityManager shardIdentityManager) {
+        this.shardIdentityManager = shardIdentityManager;
+    }
 
     /**
      * Inicializa a chave mestra no boot:
@@ -273,7 +278,11 @@ public class VaultKeyProvider {
             logger.info("[VaultKeyProvider] TPM Quote obtained. Node: {}. Attesting...", nodeId);
 
             // ── Construir corpo da atestação ─────────────────────────────────
-            String attestBody = String.format("{\"tpm_quote\": \"%s\", \"node_id\": \"%s\"}", tpmQuote, nodeId);
+            String attestBody = String.format(
+                    "{\"tpm_quote\": \"%s\", \"node_id\": \"%s\", \"public_key\": \"%s\"}",
+                    tpmQuote,
+                    nodeId,
+                    shardIdentityManager.getPublicKeyBase64());
 
             if (proxyPath != null && !proxyPath.isBlank()) {
                 // ── Caminho Produção: UDS SOCKS5 (Zero TCP, Anti DNS-Leak) ────
@@ -560,12 +569,7 @@ public class VaultKeyProvider {
      * de atestação associada a este servidor específico.
      */
     private String getNodeIdentity() {
-        // Produção: retornar o fingerprint do certificado TLS do nó, ou o hostname.
-        try {
-            return java.net.InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
-            return "unknown-node";
-        }
+        return shardIdentityManager.getStableNodeId();
     }
 
     /** Exceção de falha de atestação — força System.exit(1) no boot. */

@@ -124,6 +124,11 @@ public class RedisRepository implements RedisContract {
     }
 
     @Override
+    public String getAndDeleteValue(String key) {
+        return redis.opsForValue().getAndDelete(key);
+    }
+
+    @Override
     public void setValue(String key, String value, long timeoutSeconds) {
         redis.opsForValue().set(key, value, timeoutSeconds, TimeUnit.SECONDS);
     }

@@ -45,6 +45,16 @@ public class WalletEntity {
     @Column(name = "totp_secret", nullable = false)
     private String totpSecret;
 
+    @Column(name = "deposit_address", length = 100)
+    private String depositAddress;
+
+    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
+    @Column(name = "xpub", columnDefinition = "TEXT")
+    private String xpub;
+
+    @Column(name = "last_derived_index", nullable = false, columnDefinition = "integer default -1")
+    private Integer lastDerivedIndex = -1;
+
     public void setId(Long id) {
         this.id = id;
     }
@@ -107,5 +117,29 @@ public class WalletEntity {
 
     public void setTotpSecret(String totpSecret) {
         this.totpSecret = totpSecret;
+    }
+
+    public String getDepositAddress() {
+        return depositAddress;
+    }
+
+    public void setDepositAddress(String depositAddress) {
+        this.depositAddress = depositAddress;
+    }
+
+    public String getXpub() {
+        return xpub;
+    }
+
+    public void setXpub(String xpub) {
+        this.xpub = xpub;
+    }
+
+    public Integer getLastDerivedIndex() {
+        return lastDerivedIndex;
+    }
+
+    public void setLastDerivedIndex(Integer lastDerivedIndex) {
+        this.lastDerivedIndex = lastDerivedIndex;
     }
 }

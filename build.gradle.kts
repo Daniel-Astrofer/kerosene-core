@@ -36,16 +36,16 @@ dependencies {
     implementation("org.jboss.aerogear:aerogear-otp-java:1.0.0.M1")
     implementation("commons-codec:commons-codec:1.16.0")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
-    implementation(group = "io.lettuce", name = "lettuce-core", version = "6.8.1.RELEASE")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.postgresql:postgresql:42.7.7")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.17.2")
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("com.bucket4j:bucket4j-core:8.7.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("com.yubico:webauthn-server-core:2.4.0")
+
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.micrometer:micrometer-observation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -57,7 +57,6 @@ dependencies {
     implementation("io.grpc:grpc-stub:1.62.2")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     compileOnly("jakarta.annotation:jakarta.annotation-api:2.1.1")
-    implementation("commons-net:commons-net:3.10.0")
 }
 
 tasks.withType<Test> {

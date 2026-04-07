@@ -52,6 +52,11 @@ public class SovereigntyHeartbeatService {
     // For injecting the built client to reuse connections
     private HttpClient httpClient;
     private String nodeId;
+    private final ShardIdentityManager shardIdentityManager;
+
+    public SovereigntyHeartbeatService(ShardIdentityManager shardIdentityManager) {
+        this.shardIdentityManager = shardIdentityManager;
+    }
 
     /** Initialise the HTTP client eagerly at startup to avoid race conditions. */
     @PostConstruct
@@ -77,6 +82,13 @@ public class SovereigntyHeartbeatService {
                 return;
             }
 
+            long timestamp = System.currentTimeMillis();
+            String signature = shardIdentityManager.sign("heartbeat:" + timestamp);
+            java.util.Map<String, String> heartbeatHeaders = java.util.Map.of(
+                    "X-Node-Id", nodeId,
+                    "X-Shard-Timestamp", Long.toString(timestamp),
+                    "X-Shard-Signature", signature);
+
             if (proxyPath != null && !proxyPath.isBlank()) {
                 // Caminho Produção/UDS SOCKS5
                 UdsSocks5Transport transport = new UdsSocks5Transport(proxyPath);
@@ -84,7 +96,7 @@ public class SovereigntyHeartbeatService {
                         resolvedUrl + "/v1/vault/heartbeat",
                         "POST",
                         "",
-                        java.util.Map.of("X-Node-Id", nodeId));
+                        heartbeatHeaders);
 
                 if (response.statusCode() != 200) {
                     logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
@@ -99,6 +111,8 @@ public class SovereigntyHeartbeatService {
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(resolvedUrl + "/v1/vault/heartbeat"))
                         .header("X-Node-Id", nodeId)
+                        .header("X-Shard-Timestamp", Long.toString(timestamp))
+                        .header("X-Shard-Signature", signature)
                         .timeout(Duration.ofSeconds(15)) // prevent Tor latency from blocking scheduler thread
                         .POST(HttpRequest.BodyPublishers.noBody())
                         .build();
@@ -166,10 +180,6 @@ public class SovereigntyHeartbeatService {
     }
 
     private String getNodeIdentity() {
-        try {
-            return java.net.InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
-            return "unknown-node";
-        }
+        return shardIdentityManager.getStableNodeId();
     }
 }

@@ -50,16 +50,7 @@ public class PocketNetworkClient implements BlockchainClient {
 
             ArrayNode paramsNode = objectMapper.createArrayNode();
             for (Object param : params) {
-                if (param instanceof String)
-                    paramsNode.add((String) param);
-                else if (param instanceof Integer)
-                    paramsNode.add((Integer) param);
-                else if (param instanceof Long)
-                    paramsNode.add((Long) param);
-                else if (param instanceof Boolean)
-                    paramsNode.add((Boolean) param);
-                else if (param instanceof Double)
-                    paramsNode.add((Double) param);
+                paramsNode.add(objectMapper.valueToTree(param));
             }
             request.set("params", paramsNode);
 

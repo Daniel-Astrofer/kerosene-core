@@ -33,12 +33,14 @@ public class TransactionServiceImpl implements TransactionService {
     private final source.ledger.orchestrator.TransactionContract ledgerTransactionOrchestrator;
     private final source.ledger.repository.LedgerTransactionHistoryRepository historyRepository;
     private final source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier;
-    private final source.auth.application.service.webauthn.WebAuthnService webAuthnService;
+    private final source.auth.application.service.passkey.PasskeyService passkeyService;
+    private final source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyCredentialRepository;
     private final source.auth.application.service.user.contract.UserServiceContract userService;
     private final source.auth.application.service.cripto.contracts.Hasher hasher;
     private final source.transactions.infra.MpcSidecarClient mpcClient;
     private final source.ledger.repository.LedgerEntryRepository ledgerEntryRepository;
     private final BlockchainClient blockchainClient;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TransactionServiceImpl.class);
 
@@ -55,7 +57,8 @@ public class TransactionServiceImpl implements TransactionService {
             source.ledger.orchestrator.TransactionContract ledgerTransactionOrchestrator,
             source.ledger.repository.LedgerTransactionHistoryRepository historyRepository,
             source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier,
-            source.auth.application.service.webauthn.WebAuthnService webAuthnService,
+            source.auth.application.service.passkey.PasskeyService passkeyService,
+            source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyCredentialRepository,
             source.auth.application.service.user.contract.UserServiceContract userService,
             @org.springframework.beans.factory.annotation.Qualifier("Argon2Hasher") source.auth.application.service.cripto.contracts.Hasher hasher,
             source.transactions.infra.MpcSidecarClient mpcClient,
@@ -69,7 +72,8 @@ public class TransactionServiceImpl implements TransactionService {
         this.ledgerTransactionOrchestrator = ledgerTransactionOrchestrator;
         this.historyRepository = historyRepository;
         this.totpVerifier = totpVerifier;
-        this.webAuthnService = webAuthnService;
+        this.passkeyService = passkeyService;
+        this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.userService = userService;
         this.hasher = hasher;
         this.mpcClient = mpcClient;
@@ -302,18 +306,53 @@ public class TransactionServiceImpl implements TransactionService {
             if (request.getPasskeyAssertionResponseJSON() == null
                     || request.getPasskeyAssertionResponseJSON().isBlank()) {
                 // Se não enviou a resposta, geramos o desafio (Assertion Request)
-                String challenge = webAuthnService.startLogin(user.getUsername());
+                String challenge = passkeyService.generateChallenge(user.getUsername());
                 throw new source.auth.AuthExceptions.AuthValidationException("PASSKEY_CHALLENGE_REQUIRED:" + challenge);
             }
 
-            // Validar a assinatura da Passkey
-            boolean passkeyValid = webAuthnService.finishLogin(
-                    request.getPasskeyAssertionRequestJSON(),
-                    request.getPasskeyAssertionResponseJSON());
+            try {
+                // Parse do JSON recebido do frontend
+                com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(request.getPasskeyAssertionResponseJSON());
+                String signature = node.get("signature").asText();
+                String authData = node.get("authData").asText();
+                String clientDataJSON = node.get("clientDataJSON").asText();
+                String credentialId = node.get("credentialId").asText();
 
-            if (!passkeyValid) {
-                throw new source.auth.AuthExceptions.AuthValidationException(
-                        "Invalid Passkey signature for transaction.");
+                byte[] credentialIdBytes;
+                try {
+                    credentialIdBytes = java.util.Base64.getUrlDecoder().decode(credentialId);
+                } catch (Exception e) {
+                    credentialIdBytes = java.util.Base64.getDecoder().decode(credentialId);
+                }
+
+                java.util.Optional<source.auth.model.entity.PasskeyCredential> credOpt =
+                    passkeyCredentialRepository.findByCredentialIdAndUserId(credentialIdBytes, user.getId());
+
+                if (credOpt.isEmpty()) {
+                    throw new source.auth.AuthExceptions.AuthValidationException("Passkey credential not found for this user.");
+                }
+
+                String consumedChallenge = passkeyService.consumeChallengeFromRedis(user.getUsername());
+                if (consumedChallenge == null) {
+                    throw new source.auth.AuthExceptions.AuthValidationException("Passkey challenge expired. Please retry.");
+                }
+
+                boolean passkeyValid = passkeyService.verifySignature(
+                        user.getUsername(),
+                        consumedChallenge,
+                        signature,
+                        credOpt.get().getPublicKeyCose(),
+                        authData,
+                        clientDataJSON);
+
+                if (!passkeyValid) {
+                    throw new source.auth.AuthExceptions.AuthValidationException("Invalid Passkey signature for transaction.");
+                }
+            } catch (source.auth.AuthExceptions.AuthValidationException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("Passkey verification error in withdrawal", e);
+                throw new source.auth.AuthExceptions.AuthValidationException("Passkey validation failed: " + e.getMessage());
             }
         }
 

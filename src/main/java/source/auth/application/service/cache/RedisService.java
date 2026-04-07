@@ -81,6 +81,11 @@ public class RedisService implements RedisServicer {
     }
 
     @Override
+    public String getAndDeleteValue(String key) {
+        return repository.getAndDeleteValue(key);
+    }
+
+    @Override
     public void setValue(String key, String value, long timeoutSeconds) {
         repository.setValue(key, value, timeoutSeconds);
     }

@@ -66,6 +66,17 @@ public class WalletService implements WalletContract {
         return walletRepository.findByUserId(userId);
     }
 
+    public int incrementLastDerivedIndex(Long walletId) {
+        WalletEntity wallet = walletRepository.findByIdForUpdate(walletId)
+                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
+
+        Integer currentIndex = wallet.getLastDerivedIndex();
+        int nextIndex = currentIndex == null ? 0 : currentIndex + 1;
+        wallet.setLastDerivedIndex(nextIndex);
+        walletRepository.save(wallet);
+        return nextIndex;
+    }
+
     public boolean deleteWallet(Long id, WalletRequestDTO wallet) {
         String walletNameUpperCase = wallet.name() != null ? wallet.name().toUpperCase() : null;
         WalletEntity dbWallet = walletRepository.findByUserIdAndName(id, walletNameUpperCase)
