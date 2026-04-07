@@ -23,6 +23,9 @@ public class PasskeyCredential {
     @Column(name = "signature_count", nullable = false)
     private long signatureCount;
 
+    @Column(name = "device_name")
+    private String deviceName;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private UserDataBase user;
@@ -68,6 +71,14 @@ public class PasskeyCredential {
 
     public void setSignatureCount(long signatureCount) {
         this.signatureCount = signatureCount;
+    }
+
+    public String getDeviceName() {
+        return deviceName;
+    }
+
+    public void setDeviceName(String deviceName) {
+        this.deviceName = deviceName;
     }
 
     public UserDataBase getUser() {

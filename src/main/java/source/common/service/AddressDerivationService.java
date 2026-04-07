@@ -1,0 +1,91 @@
+package source.common.service;
+
+import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.SegwitAddress;
+import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.params.TestNet3Params;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+/**
+ * Service to derive unique Bitcoin addresses for wallets.
+ * In a production environment, this would use BIP44/84 HD Wallets.
+ * For this implementation, we use a deterministic derivation from a salt and wallet ID.
+ */
+@Service
+public class AddressDerivationService {
+
+    private static final Logger log = LoggerFactory.getLogger(AddressDerivationService.class);
+
+    private final NetworkParameters netParams;
+    private final String derivationSalt;
+
+    public AddressDerivationService(
+            @Value("${bitcoin.network:testnet}") String network,
+            @Value("${bitcoin.derivation.salt:kerosene_sovereign_salt_2026}") String salt) {
+        this.netParams = "mainnet".equalsIgnoreCase(network) ? MainNetParams.get() : TestNet3Params.get();
+        this.derivationSalt = salt;
+    }
+
+    /**
+     * Derives a unique P2WPKH (SegWit/bech32) address for a wallet.
+     *
+     * @param walletId Unique ID of the wallet
+     * @param passphraseHash The Argon2id hash of the wallet passphrase (used as additional entropy)
+     * @return A valid Bitcoin address string
+     */
+    public String deriveAddress(Long walletId, String passphraseHash) {
+        try {
+            // Create a deterministic seed for this specific wallet
+            String seedSource = derivationSalt + ":" + walletId + ":" + passphraseHash;
+            byte[] seed = MessageDigest.getInstance("SHA-256")
+                    .digest(seedSource.getBytes(StandardCharsets.UTF_8));
+
+            // Bitcoinj requires a public key hash (20 bytes) for P2WPKH.
+            byte[] pubKeyHash = new byte[20];
+            System.arraycopy(seed, 0, pubKeyHash, 0, 20);
+
+            // In bitcoinj 0.15.10, we use SegwitAddress.fromHash for bech32 addresses
+            SegwitAddress address = SegwitAddress.fromHash(netParams, pubKeyHash);
+
+            String derived = address.toString();
+            log.info("[Derivation] Derived Segwit address {} for wallet ID {}", derived, walletId);
+            return derived;
+
+        } catch (NoSuchAlgorithmException e) {
+            log.error("[Derivation] Critical failure: SHA-256 algorithm not found");
+            throw new RuntimeException("Address derivation failed", e);
+        }
+    }
+
+    /**
+     * Derives a P2WPKH address from an xpub at a given index.
+     * Uses BIP84/Segwit (m/84'/0'/0'/0/index).
+     */
+    public String deriveAddressFromXpub(String xpub, int index) {
+        return deriveAddressFromXpub(xpub, index, false);
+    }
+
+    public String deriveAddressFromXpub(String xpub, int index, boolean isChange) {
+        try {
+            org.bitcoinj.crypto.DeterministicKey masterKey = org.bitcoinj.crypto.DeterministicKey.deserializeB58(xpub, netParams);
+
+            // Derive child: m / <isChange> / <index>
+            org.bitcoinj.crypto.DeterministicKey childKey = org.bitcoinj.crypto.HDKeyDerivation.deriveChildKey(
+                    org.bitcoinj.crypto.HDKeyDerivation.deriveChildKey(masterKey, isChange ? 1 : 0),
+                    index);
+
+            SegwitAddress address = SegwitAddress.fromHash(netParams, childKey.getPubKeyHash());
+            return address.toString();
+        } catch (Exception e) {
+            log.error("[Derivation] Failed to derive address from xpub {}: {}", xpub, e.getMessage());
+            throw new RuntimeException("XPub derivation failed", e);
+        }
+    }
+}

@@ -60,15 +60,18 @@ public class Transaction implements TransactionContract {
     private final source.notification.service.NotificationService notificationService;
     private final source.ledger.repository.LedgerTransactionHistoryRepository historyRepository;
     private final StringRedisTemplate redisTemplate;
-    private final source.auth.application.service.webauthn.WebAuthnService webAuthnService;
+    private final source.auth.application.service.passkey.PasskeyService passkeyService;
+    private final source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyCredentialRepository;
     private final source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier;
     private final source.auth.application.service.cripto.contracts.Hasher hasher;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public Transaction(WalletContract walletContract, LedgerContract ledgerContract, UserService userService,
             source.notification.service.NotificationService notificationService,
             source.ledger.repository.LedgerTransactionHistoryRepository historyRepository,
             StringRedisTemplate redisTemplate,
-            source.auth.application.service.webauthn.WebAuthnService webAuthnService,
+            source.auth.application.service.passkey.PasskeyService passkeyService,
+            source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository passkeyCredentialRepository,
             source.auth.application.service.validation.totp.contratcs.TOTPVerifier totpVerifier,
             @org.springframework.beans.factory.annotation.Qualifier("Argon2Hasher") source.auth.application.service.cripto.contracts.Hasher hasher) {
         this.walletService = walletContract;
@@ -77,7 +80,8 @@ public class Transaction implements TransactionContract {
         this.notificationService = notificationService;
         this.historyRepository = historyRepository;
         this.redisTemplate = redisTemplate;
-        this.webAuthnService = webAuthnService;
+        this.passkeyService = passkeyService;
+        this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.totpVerifier = totpVerifier;
         this.hasher = hasher;
     }
@@ -292,31 +296,59 @@ public class Transaction implements TransactionContract {
         log.info("Verifying transaction auth for user: {} (Security: {})", sender.getUsername(),
                 sender.getAccountSecurity());
 
-        // 1. Check Passkey (FIDO2) - if enabled, it's the strongest factor
+        // 1. Check Passkey (Ed25519) - if enabled, it's the strongest factor
         if (Boolean.TRUE.equals(sender.getPasskeyEnabledForTransactions())) {
             if (dto.getPasskeyAssertionJson() == null || dto.getPasskeyAssertionJson().isEmpty()) {
                 throw new source.auth.AuthExceptions.InvalidCredentials(
                         "Passkey authentication is required for transactions on this account.");
             }
 
-            // We need the original challenge to verify. We assume the app fetched one
-            // and it's stored in Redis under "passkey_challenge:{username}"
-            String challengeKey = "passkey_challenge:" + sender.getUsername();
-            String assertionRequestJson = redisTemplate.opsForValue().get(challengeKey);
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(dto.getPasskeyAssertionJson());
+                String signature = node.get("signature").asText();
+                String authData = node.get("authData").asText();
+                String clientDataJSON = node.get("clientDataJSON").asText();
+                String credentialId = node.get("credentialId").asText();
 
-            if (assertionRequestJson == null) {
-                throw new source.auth.AuthExceptions.InvalidCredentials(
-                        "Passkey challenge expired or not found. Please request a new challenge before signing.");
+                byte[] credentialIdBytes;
+                try {
+                    credentialIdBytes = java.util.Base64.getUrlDecoder().decode(credentialId);
+                } catch (Exception e) {
+                    credentialIdBytes = java.util.Base64.getDecoder().decode(credentialId);
+                }
+
+                java.util.Optional<source.auth.model.entity.PasskeyCredential> credOpt =
+                    passkeyCredentialRepository.findByCredentialIdAndUserId(credentialIdBytes, sender.getId());
+
+                if (credOpt.isEmpty()) {
+                    throw new source.auth.AuthExceptions.InvalidCredentials("Passkey credential not found for this user.");
+                }
+
+                String consumedChallenge = passkeyService.consumeChallengeFromRedis(sender.getUsername());
+                if (consumedChallenge == null) {
+                    throw new source.auth.AuthExceptions.InvalidCredentials("Passkey challenge expired or not found. Please request a new challenge before signing.");
+                }
+
+                boolean passkeyValid = passkeyService.verifySignature(
+                        sender.getUsername(),
+                        consumedChallenge,
+                        signature,
+                        credOpt.get().getPublicKeyCose(),
+                        authData,
+                        clientDataJSON);
+
+                if (!passkeyValid) {
+                    throw new source.auth.AuthExceptions.InvalidCredentials("Invalid Passkey signature for transaction.");
+                }
+
+                log.info("Passkey transaction auth verified for {}", sender.getUsername());
+                return; // Passkey is sufficient
+            } catch (source.auth.AuthExceptions.InvalidCredentials e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("Passkey verification error in transaction", e);
+                throw new source.auth.AuthExceptions.InvalidCredentials("Passkey validation failed: " + e.getMessage());
             }
-
-            if (!webAuthnService.finishLogin(assertionRequestJson, dto.getPasskeyAssertionJson())) {
-                throw new source.auth.AuthExceptions.InvalidCredentials("Invalid Passkey signature for transaction.");
-            }
-
-            // Consume challenge
-            redisTemplate.delete(challengeKey);
-            log.info("Passkey transaction auth verified for {}", sender.getUsername());
-            return; // Passkey is sufficient
         }
 
         // 2. Check Multisig/Shamir Passphrase Confirmation

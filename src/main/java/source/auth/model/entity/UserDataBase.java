@@ -61,6 +61,9 @@ public class UserDataBase implements UserDB {
     @Column(name = "passkey_transaction_auth", nullable = false, columnDefinition = "boolean default false")
     private Boolean passkeyEnabledForTransactions = false;
 
+    @Column(name = "test_balance_claimed", nullable = false, columnDefinition = "boolean default false")
+    private Boolean testBalanceClaimed = false;
+
     /**
      * AES-256-GCM encrypted co-signer secret (Base64-encoded IV + ciphertext).
      * Only populated for SHAMIR and MULTISIG_2FA modes.
@@ -185,6 +188,14 @@ public class UserDataBase implements UserDB {
 
     public void setPasskeyEnabledForTransactions(Boolean passkeyEnabledForTransactions) {
         this.passkeyEnabledForTransactions = passkeyEnabledForTransactions;
+    }
+
+    public Boolean getTestBalanceClaimed() {
+        return testBalanceClaimed;
+    }
+
+    public void setTestBalanceClaimed(Boolean testBalanceClaimed) {
+        this.testBalanceClaimed = testBalanceClaimed;
     }
 
     public java.util.List<String> getBackupCodes() {

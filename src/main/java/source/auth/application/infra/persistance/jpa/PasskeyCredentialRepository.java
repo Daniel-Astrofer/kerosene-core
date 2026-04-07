@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCredential, UUID> {
     Optional<PasskeyCredential> findByCredentialId(byte[] credentialId);
 
+    Optional<PasskeyCredential> findByCredentialIdAndUserId(byte[] credentialId, Long userId);
+
     List<PasskeyCredential> findByUserId(Long userId);
 
     List<PasskeyCredential> findByUserHandle(byte[] userHandle);

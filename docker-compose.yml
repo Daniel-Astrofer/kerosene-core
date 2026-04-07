@@ -112,7 +112,7 @@ services:
     tmpfs:
       - /opt/kerosene:rw,noexec,nosuid,size=10m
     volumes:
-      - ../../panic.sh:/opt/kerosene/panic.sh:ro
+      - ./deploy/panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_is:/var/run/tor/socks
       - tor_keys_vault:/vault-onion:ro
@@ -208,7 +208,7 @@ services:
     tmpfs:
       - /opt/kerosene:rw,noexec,nosuid,size=10m
     volumes:
-      - ../../panic.sh:/opt/kerosene/panic.sh:ro
+      - ./deploy/panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_ch:/var/run/tor/socks
       - tor_keys_vault:/vault-onion:ro
@@ -304,7 +304,7 @@ services:
     tmpfs:
       - /opt/kerosene:rw,noexec,nosuid,size=10m
     volumes:
-      - ../../panic.sh:/opt/kerosene/panic.sh:ro
+      - ./deploy/panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_sg:/var/run/tor/socks
       - tor_keys_vault:/vault-onion:ro

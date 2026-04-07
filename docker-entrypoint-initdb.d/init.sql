@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS auth.users_credentials (
     failed_login_attempts INTEGER DEFAULT 0,
     account_security VARCHAR(20) DEFAULT 'STANDARD',
     passkey_transaction_auth BOOLEAN DEFAULT FALSE,
+    test_balance_claimed BOOLEAN DEFAULT FALSE,
     platform_cosigner_secret TEXT,
     voucher_id UUID UNIQUE REFERENCES auth.vouchers(id)
 );
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS auth.passkey_credentials (
     credential_id BYTEA UNIQUE NOT NULL,
     user_handle BYTEA NOT NULL,
     public_key_cose BYTEA NOT NULL,
+    device_name VARCHAR(255),
     signature_count BIGINT NOT NULL DEFAULT 0,
     user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE
 );

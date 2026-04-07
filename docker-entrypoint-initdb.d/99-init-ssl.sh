@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 echo "Configuring SSL and pg_hba for PostgreSQL..."
@@ -10,7 +10,7 @@ echo "Configuring SSL and pg_hba for PostgreSQL..."
 #   If REQUIRE_MTLS=true -> Enforce full mTLS cert verification (Production)
 #   If REQUIRE_MTLS=false -> Use scram-sha-256 password auth (Local Dev)
 #
-if [[ "${REQUIRE_MTLS:-false}" == "true" ]]; then
+if [ "${REQUIRE_MTLS:-false}" = "true" ]; then
   echo "Enforcing strict mTLS policy for network access..."
   cat <<EOF > "$PGDATA/pg_hba.conf"
 # TYPE        DATABASE    USER          ADDRESS          METHOD
@@ -23,7 +23,7 @@ else
   cat <<EOF > "$PGDATA/pg_hba.conf"
 # TYPE        DATABASE    USER          ADDRESS          METHOD
 local         all         all                            scram-sha-256
-host          kerosene    api_system    0.0.0.0/0        scram-sha-256
+host          all         all           0.0.0.0/0        scram-sha-256
 EOF
 fi
 

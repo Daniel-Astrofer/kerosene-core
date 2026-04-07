@@ -24,4 +24,6 @@ public interface WalletContract {
     boolean deleteWallet(Long id, WalletRequestDTO wallet);
 
     void updateWallet(Long userId, WalletUpdateDTO dto);
+
+    int incrementLastDerivedIndex(Long walletId);
 }

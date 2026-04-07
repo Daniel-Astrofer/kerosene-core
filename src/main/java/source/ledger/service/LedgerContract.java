@@ -27,4 +27,6 @@ public interface LedgerContract {
 
     void validateWalletOwnership(WalletEntity wallet, Long userId);
 
+    boolean validateUserLedgerIntegrity(Long userId);
+
 }
