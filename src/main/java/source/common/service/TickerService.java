@@ -3,6 +3,7 @@ package source.common.service;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,9 @@ public class TickerService {
     private static final BigDecimal FALLBACK_USD = new BigDecimal("65000");
     private static final BigDecimal FALLBACK_BRL = new BigDecimal("325000");
 
+    @Value("${ticker.coingecko.enabled:true}")
+    private boolean coingeckoEnabled;
+
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
 
@@ -40,6 +44,9 @@ public class TickerService {
     void initializeFallbackCache() {
         ensurePricePresent("usd", FALLBACK_USD);
         ensurePricePresent("brl", FALLBACK_BRL);
+        if (!coingeckoEnabled) {
+            log.info("[Ticker] CoinGecko polling disabled for this profile. Using cached/fallback prices.");
+        }
     }
 
     /**
@@ -47,6 +54,10 @@ public class TickerService {
      */
     @Scheduled(fixedRate = 300000)
     public void updatePrices() {
+        if (!coingeckoEnabled) {
+            return;
+        }
+
         try {
             log.info("[Ticker] Fetching BTC prices from CoinGecko...");
             Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
