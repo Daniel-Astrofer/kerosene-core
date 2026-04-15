@@ -13,6 +13,8 @@ import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletContract;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -67,7 +69,9 @@ public class LedgerPaymentRequestService {
         InternalPaymentRequestDTO req = new InternalPaymentRequestDTO();
         req.setId(UUID.randomUUID().toString());
         req.setRequesterUserId(requesterUserId);
-        req.setReceiverWalletName(receiverWalletName);
+        req.setReceiverWalletId(wallet.getId());
+        req.setReceiverWalletName(wallet.getName());
+        req.setDestinationHash(buildDestinationHash(wallet));
         req.setAmount(amount);
         req.setStatus("PENDING");
         req.setCreatedAt(LocalDateTime.now());
@@ -84,7 +88,7 @@ public class LedgerPaymentRequestService {
             history.setCreatedAt(LocalDateTime.now());
             history.setContext("Internal Payment Request: " + req.getId());
             history.setReceiverUserId(requesterUserId);
-            history.setReceiverIdentifier(receiverWalletName);
+            history.setReceiverIdentifier(wallet.getName());
             history.setTransactionType("PAYMENT_LINK");
             history.setStatus("PENDING");
             historyRepository.save(history);
@@ -96,7 +100,7 @@ public class LedgerPaymentRequestService {
         try {
             notificationService.notifyUser(requesterUserId, "Solicitação de Pagamento Gerada",
                     String.format("Um novo link de pagamento no valor de %s BTC foi criado para a carteira '%s'.",
-                            amount.toPlainString(), receiverWalletName));
+                            amount.toPlainString(), wallet.getName()));
         } catch (Exception e) {
             log.warn("Payment request creation notification failed (non-blocking): {}", e.getMessage());
         }
@@ -117,10 +121,24 @@ public class LedgerPaymentRequestService {
             req.setStatus("EXPIRED");
         }
 
+        if ("PENDING".equals(req.getStatus())
+                && (req.getReceiverWalletId() == null
+                        || req.getDestinationHash() == null
+                        || req.getDestinationHash().isBlank())) {
+            resolveLockedReceiverWallet(req);
+            redisTemplate.opsForValue().set(key, req, TTL_MINUTES, TimeUnit.MINUTES);
+        }
+
         return req;
     }
 
-    public InternalPaymentRequestDTO payRequest(String linkId, Long payerUserId, String payerWalletName) {
+    public InternalPaymentRequestDTO payRequest(
+            String linkId,
+            Long payerUserId,
+            String payerWalletName,
+            String totpCode,
+            String passkeyAssertionJson,
+            String confirmationPassphrase) {
         String key = REDIS_PREFIX + linkId;
         InternalPaymentRequestDTO req = redisTemplate.opsForValue().get(key);
 
@@ -148,13 +166,20 @@ public class LedgerPaymentRequestService {
                     "Operation Denied: You cannot pay a request that you created yourself.");
         }
 
+        WalletEntity receiverWallet = resolveLockedReceiverWallet(req);
+
         // Delegate to the standard transaction orchestrator to move funds safely
         TransactionDTO txDto = new TransactionDTO();
         txDto.setSender(payerWalletName);
-        // We know the receiver is the wallet of the requester
-        txDto.setReceiver(req.getReceiverWalletName());
+        // The receiver is the immutable wallet captured when the link was created.
+        // The client never sends this value back, so shared links and QR codes cannot
+        // redirect funds by changing a visible wallet name or destination field.
+        txDto.setReceiver(receiverWallet.getId().toString());
         txDto.setAmount(req.getAmount());
         txDto.setContext("Payment Link " + linkId);
+        txDto.setTotpCode(totpCode);
+        txDto.setPasskeyAssertionJson(passkeyAssertionJson);
+        txDto.setConfirmationPassphrase(confirmationPassphrase);
 
         // Process transaction (This internally verifies balance, debit, credit and
         // sends push notification)
@@ -192,5 +217,66 @@ public class LedgerPaymentRequestService {
         }
 
         return req;
+    }
+
+    private WalletEntity resolveLockedReceiverWallet(InternalPaymentRequestDTO req) {
+        WalletEntity wallet = null;
+        if (req.getReceiverWalletId() != null) {
+            wallet = walletService.findById(req.getReceiverWalletId());
+        }
+
+        if (wallet == null && req.getReceiverWalletName() != null && req.getRequesterUserId() != null) {
+            wallet = walletService.findByNameAndUserId(req.getReceiverWalletName(), req.getRequesterUserId());
+        }
+
+        if (wallet == null) {
+            throw new LedgerExceptions.ReceiverNotFoundException(
+                    "Receiver wallet locked in this payment request was not found.");
+        }
+
+        if (!wallet.getUser().getId().equals(req.getRequesterUserId())) {
+            throw new LedgerExceptions.ReceiverNotFoundException(
+                    "Receiver wallet locked in this payment request no longer belongs to the requester.");
+        }
+
+        if (req.getReceiverWalletId() == null) {
+            req.setReceiverWalletId(wallet.getId());
+        }
+        if (req.getDestinationHash() == null || req.getDestinationHash().isBlank()) {
+            req.setDestinationHash(buildDestinationHash(wallet));
+        }
+
+        return wallet;
+    }
+
+    private String buildDestinationHash(WalletEntity wallet) {
+        String source = firstNonBlank(
+                wallet.getDepositAddress(),
+                wallet.getPassphraseHash(),
+                wallet.getId() == null ? null : "wallet:" + wallet.getId());
+        if (source == null) {
+            source = "wallet:unknown";
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(source.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b & 0xff));
+            }
+            return hex.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to calculate payment destination hash", e);
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }
