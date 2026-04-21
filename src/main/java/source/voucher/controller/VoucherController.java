@@ -8,10 +8,10 @@ import source.voucher.service.VoucherService.VoucherRequestData;
 
 import source.transactions.service.PaymentLinkService;
 import source.transactions.dto.PaymentLinkDTO;
-import source.auth.application.orchestrator.signup.SignupUseCase;
+import source.auth.application.orchestrator.signup.FinalizeSignupOnPayment;
+import source.auth.application.orchestrator.signup.port.SignupStateStore;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Map;
 
 @RestController
@@ -20,17 +20,17 @@ public class VoucherController {
 
     private final VoucherService voucherService;
     private final PaymentLinkService paymentLinkService;
-    private final source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract;
-    private final SignupUseCase signupUseCase;
+    private final SignupStateStore signupStateStore;
+    private final FinalizeSignupOnPayment finalizeSignupOnPayment;
 
     public VoucherController(VoucherService voucherService,
             PaymentLinkService paymentLinkService,
-            source.auth.application.infra.persistance.redis.contracts.RedisContract redisContract,
-            SignupUseCase signupUseCase) {
+            SignupStateStore signupStateStore,
+            FinalizeSignupOnPayment finalizeSignupOnPayment) {
         this.voucherService = voucherService;
         this.paymentLinkService = paymentLinkService;
-        this.redisContract = redisContract;
-        this.signupUseCase = signupUseCase;
+        this.signupStateStore = signupStateStore;
+        this.finalizeSignupOnPayment = finalizeSignupOnPayment;
     }
 
     /**
@@ -70,7 +70,7 @@ public class VoucherController {
     @PostMapping("/onboarding-link")
     public ResponseEntity<ApiResponse<PaymentLinkDTO>> onboardingLink(@RequestParam String sessionId) {
         try {
-            source.auth.dto.SignupState state = redisContract.findSignupState(sessionId);
+            source.auth.dto.SignupState state = signupStateStore.findSignupState(sessionId);
 
             if (state == null) {
                 return ResponseEntity.badRequest()
@@ -88,7 +88,7 @@ public class VoucherController {
             PaymentLinkDTO paymentLink = paymentLinkService.createOnboardingPaymentLink(
                     sessionId,
                     new BigDecimal("0.00022000"), // Equivalent to the fixed SATOSHI fee
-                    "ONBOARDING_VOUCHER");
+                    PaymentLinkService.ONBOARDING_VOUCHER_DESCRIPTION);
 
             return ResponseEntity.ok(ApiResponse.success(
                     "Deposit the exact amount of " + paymentLink.getAmountBtc()
@@ -103,13 +103,55 @@ public class VoucherController {
     }
 
     /**
+     * Public onboarding payment-link status endpoint.
+     * This exists because the user is not fully authenticated yet during onboarding.
+     */
+    @GetMapping("/onboarding-link/{linkId}")
+    public ResponseEntity<ApiResponse<PaymentLinkDTO>> getOnboardingLinkStatus(@PathVariable String linkId) {
+        PaymentLinkDTO link = paymentLinkService.getPublicOnboardingPaymentLink(linkId);
+        if (link == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("ONBOARDING_LINK_NOT_FOUND",
+                            "The specified onboarding payment link could not be found."));
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                "Onboarding payment link details successfully fetched.",
+                link));
+    }
+
+    /**
+     * Public onboarding payment confirmation endpoint.
+     * Kept under /voucher/** so it remains accessible before JWT issuance.
+     */
+    @PostMapping("/onboarding-link/{linkId}/confirm")
+    public ResponseEntity<ApiResponse<PaymentLinkDTO>> confirmOnboardingPayment(@PathVariable String linkId,
+            @RequestBody source.transactions.dto.ConfirmPaymentRequest req) {
+        try {
+            PaymentLinkDTO link = paymentLinkService.confirmPublicOnboardingPayment(
+                    linkId,
+                    req.getTxid(),
+                    req.getFromAddress());
+            return ResponseEntity.ok(ApiResponse.success(
+                    "Onboarding payment confirmed successfully. The transaction is now being monitored on the blockchain.",
+                    link));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("ONBOARDING_CONFIRM_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
      * DEBUG ONLY: Mocks the payment confirmation and finalizes user registration.
      */
     @PostMapping("/onboarding-mock-confirm")
     public ResponseEntity<ApiResponse<String>> mockOnboardingConfirm(@RequestParam String sessionId) {
         try {
-            signupUseCase.finalizeUserFromRedis(sessionId, "mock_onboarding_tx_" + System.currentTimeMillis(),
+            boolean finalized = finalizeSignupOnPayment.execute(sessionId, "mock_onboarding_tx_" + System.currentTimeMillis(),
                     new BigDecimal("0.00022000"));
+            if (!finalized) {
+                return ResponseEntity.badRequest().body(ApiResponse.error(
+                        "MOCK_ERROR",
+                        "Onboarding state is incomplete or no longer available for finalization."));
+            }
             return ResponseEntity.ok(ApiResponse.success("MOCK: User finalized successfully. Account is now ACTIVE.", "OK"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error("MOCK_ERROR", e.getMessage()));

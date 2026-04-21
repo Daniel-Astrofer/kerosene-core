@@ -1,31 +1,39 @@
 package source.transactions.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import source.auth.application.orchestrator.signup.SignupUseCase;
+import source.auth.application.orchestrator.signup.FinalizeSignupOnPayment;
+import source.transactions.application.paymentlink.PaymentLinkStatus;
+import source.transactions.application.paymentlink.PaymentLinkStore;
 import source.transactions.dto.PaymentLinkDTO;
+import source.transactions.infra.BlockchainClient;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class OnboardingMonitorService {
 
     private static final Logger log = LoggerFactory.getLogger(OnboardingMonitorService.class);
 
-    private final RedisTemplate<String, PaymentLinkDTO> redisTemplate;
-    private final SignupUseCase signupUseCase;
+    private final PaymentLinkStore paymentLinkStore;
+    private final FinalizeSignupOnPayment finalizeSignupOnPayment;
+    private final BlockchainClient blockchainClient;
+    private final int requiredConfirmations;
 
-    private static final int REQUIRED_CONFIRMATIONS = 3;
-
-    public OnboardingMonitorService(RedisTemplate<String, PaymentLinkDTO> redisTemplate,
-            SignupUseCase signupUseCase) {
-        this.redisTemplate = redisTemplate;
-        this.signupUseCase = signupUseCase;
+    public OnboardingMonitorService(PaymentLinkStore paymentLinkStore,
+            FinalizeSignupOnPayment finalizeSignupOnPayment,
+            BlockchainClient blockchainClient,
+            @Value("${bitcoin.min-confirmations:3}") int requiredConfirmations) {
+        this.paymentLinkStore = paymentLinkStore;
+        this.finalizeSignupOnPayment = finalizeSignupOnPayment;
+        this.blockchainClient = blockchainClient;
+        this.requiredConfirmations = Math.max(1, requiredConfirmations);
     }
 
     /**
@@ -34,50 +42,51 @@ public class OnboardingMonitorService {
      */
     @Scheduled(fixedDelay = 60000)
     public void monitorOnboardingConfirmations() {
-        Set<String> keys = redisTemplate.keys("payment_link:*");
-        if (keys == null || keys.isEmpty())
+        List<PaymentLinkDTO> pendingLinks = paymentLinkStore.findByStatus(PaymentLinkStatus.VERIFYING_ONBOARDING);
+        if (pendingLinks.isEmpty()) {
             return;
+        }
 
-        boolean hasPending = false;
-        for (String key : keys) {
-            PaymentLinkDTO dto = redisTemplate.opsForValue().get(key);
-            if (dto != null && "verifying_onboarding".equals(dto.getStatus())) {
-                if (!hasPending) {
-                    log.info("Checking onboarding transaction confirmations...");
-                    hasPending = true;
-                }
-                checkConfirmations(dto, key);
-            }
+        log.info("Checking onboarding transaction confirmations...");
+        for (PaymentLinkDTO dto : pendingLinks) {
+            checkConfirmations(dto);
         }
     }
 
-    private void checkConfirmations(PaymentLinkDTO dto, String redisKey) {
+    private void checkConfirmations(PaymentLinkDTO dto) {
         try {
             if (dto.getTxid() == null)
                 return;
 
-            // TODO: Consultar via novo Blockchain Client
-            Map<String, Object> txInfo = Map.of("confirmations", 3); // Mocked response
+            JsonNode txInfo = blockchainClient.getRawTransaction(dto.getTxid(), true);
 
-            if (txInfo == null || txInfo.isEmpty()) {
+            if (txInfo == null || txInfo.isNull() || txInfo.isMissingNode()) {
                 log.warn("Onboarding tx {} not found on blockchain", dto.getTxid());
                 return;
             }
 
-            int confirmations = (int) txInfo.getOrDefault("confirmations", 0);
+            int confirmations = txInfo.path("confirmations").isNumber()
+                    ? txInfo.path("confirmations").asInt()
+                    : 0;
             log.info("Onboarding link {} has {} confirmations (Target: {})", dto.getId(), confirmations,
-                    REQUIRED_CONFIRMATIONS);
+                    requiredConfirmations);
 
-            if (confirmations >= REQUIRED_CONFIRMATIONS) {
+            if (confirmations >= requiredConfirmations) {
                 // We reached 3 confirmations!
                 // Finish registration in Postgres
                 log.info("3 confirmations reached for link {}! Finalizing user account for session {}.", dto.getId(),
                         dto.getSessionId());
 
-                signupUseCase.finalizeUserFromRedis(dto.getSessionId(), dto.getTxid(), dto.getAmountBtc());
+                boolean finalized = finalizeSignupOnPayment.execute(dto.getSessionId(), dto.getTxid(), dto.getAmountBtc());
+                if (!finalized) {
+                    log.warn("Onboarding link {} reached confirmations but account finalization is still incomplete.",
+                            dto.getId());
+                    return;
+                }
 
-                dto.setStatus("completed");
-                redisTemplate.opsForValue().set(redisKey, dto, 24, TimeUnit.HOURS);
+                dto.setStatus(PaymentLinkStatus.COMPLETED);
+                dto.setCompletedAt(LocalDateTime.now());
+                paymentLinkStore.save(dto, Duration.ofHours(24));
             }
         } catch (Exception e) {
             log.error("Failed to check confirmations for onboarding link {}", dto.getId(), e);

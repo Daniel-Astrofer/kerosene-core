@@ -1,14 +1,22 @@
 package source.ledger.service;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.auth.application.service.cripto.contracts.Hasher;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 import source.auth.model.entity.UserDataBase;
+import source.ledger.application.balance.LedgerBalanceConsensusPort;
+import source.ledger.application.balance.LedgerBalanceUpdate;
+import source.ledger.application.balance.LedgerBalanceUpdatePort;
+import source.ledger.application.balance.LedgerHashService;
+import source.ledger.application.balance.LedgerIntegrityService;
 import source.ledger.dto.LedgerDTO;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.exceptions.LedgerExceptions;
@@ -20,11 +28,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -35,7 +49,16 @@ class LedgerServiceTest {
     private LedgerRepository ledgerRepository;
 
     @Mock
-    private Hasher hash;
+    private LedgerHashService ledgerHashService;
+
+    @Mock
+    private LedgerIntegrityService ledgerIntegrityService;
+
+    @Mock
+    private LedgerBalanceConsensusPort balanceConsensusPort;
+
+    @Mock
+    private LedgerBalanceUpdatePort balanceUpdatePort;
 
     @InjectMocks
     private LedgerService ledgerService;
@@ -46,10 +69,8 @@ class LedgerServiceTest {
 
     @BeforeEach
     void setUp() {
-        user = mock(UserDataBase.class);
-        when(user.getId()).thenReturn(1L);
-        when(user.getUsername()).thenReturn("testuser");
-
+        user = new UserDataBase();
+        ReflectionTestUtils.setField(user, "id", 1L);
         wallet = new WalletEntity();
         wallet.setId(1L);
         wallet.setName("TestWallet");
@@ -60,20 +81,22 @@ class LedgerServiceTest {
         ledger.setBalance(BigDecimal.ZERO);
         ledger.setNonce(0);
         ledger.setLastHash("initial-hash");
+        ledger.setBalanceSignature("initial-signature");
     }
 
     @Test
     @DisplayName("Should create ledger successfully")
     void shouldCreateLedgerSuccessfully() {
         when(ledgerRepository.existsByWalletId(wallet.getId())).thenReturn(false);
-        when(hash.hash(any(char[].class))).thenReturn("generated-hash");
+        when(ledgerHashService.generateInitialHash(wallet.getId())).thenReturn("generated-hash");
+        when(ledgerHashService.generateBalanceSignature(any(LedgerEntity.class))).thenReturn("generated-signature");
         when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
 
         LedgerEntity result = ledgerService.createLedger(wallet, "Initial ledger");
 
         assertNotNull(result);
         verify(ledgerRepository).existsByWalletId(wallet.getId());
-        verify(hash).hash(any(char[].class));
+        verify(ledgerHashService).generateInitialHash(wallet.getId());
         verify(ledgerRepository).save(any(LedgerEntity.class));
     }
 
@@ -82,9 +105,8 @@ class LedgerServiceTest {
     void shouldThrowExceptionWhenLedgerAlreadyExists() {
         when(ledgerRepository.existsByWalletId(wallet.getId())).thenReturn(true);
 
-        assertThrows(LedgerExceptions.LedgerAlreadyExistsException.class, () -> {
-            ledgerService.createLedger(wallet, "Initial ledger");
-        });
+        assertThrows(LedgerExceptions.LedgerAlreadyExistsException.class,
+                () -> ledgerService.createLedger(wallet, "Initial ledger"));
 
         verify(ledgerRepository).existsByWalletId(wallet.getId());
         verify(ledgerRepository, never()).save(any(LedgerEntity.class));
@@ -100,6 +122,7 @@ class LedgerServiceTest {
         assertNotNull(result);
         assertEquals(ledger.getId(), result.getId());
         verify(ledgerRepository).findByWalletId(wallet.getId());
+        verify(ledgerIntegrityService).verifyBalanceIntegrity(ledger);
     }
 
     @Test
@@ -107,9 +130,8 @@ class LedgerServiceTest {
     void shouldThrowExceptionWhenLedgerNotFoundByWalletId() {
         when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.empty());
 
-        assertThrows(LedgerExceptions.LedgerNotFoundException.class, () -> {
-            ledgerService.findByWalletId(wallet.getId());
-        });
+        assertThrows(LedgerExceptions.LedgerNotFoundException.class,
+                () -> ledgerService.findByWalletId(wallet.getId()));
 
         verify(ledgerRepository).findByWalletId(wallet.getId());
     }
@@ -125,39 +147,34 @@ class LedgerServiceTest {
         assertNotNull(result);
         assertEquals(1, result.size());
         verify(ledgerRepository).findByWalletUserId(user.getId());
+        verify(ledgerIntegrityService).verifyBalanceIntegrity(ledger);
     }
 
     @Test
     @DisplayName("Should update balance with credit operation")
     void shouldUpdateBalanceWithCreditOperation() {
         BigDecimal creditAmount = new BigDecimal("100.00");
-        when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
-        when(hash.hash(any(char[].class))).thenReturn("new-hash");
+        when(ledgerRepository.findByWalletIdForUpdate(wallet.getId())).thenReturn(Optional.of(ledger));
+        when(ledgerHashService.generateHash(any(LedgerEntity.class))).thenReturn("new-hash");
+        when(ledgerHashService.generateBalanceSignature(any(LedgerEntity.class))).thenReturn("new-signature");
         when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
 
         LedgerEntity result = ledgerService.updateBalance(wallet.getId(), creditAmount, "Credit transaction");
 
         assertNotNull(result);
-        verify(ledgerRepository).findByWalletId(wallet.getId());
-        verify(hash).hash(any(char[].class));
-        verify(ledgerRepository).save(any(LedgerEntity.class));
-    }
+        verify(ledgerRepository).findByWalletIdForUpdate(wallet.getId());
+        verify(ledgerIntegrityService).verifyBalanceIntegrity(ledger);
+        verify(balanceConsensusPort).requireConsensus("new-hash");
 
-    @Test
-    @DisplayName("Should update balance with debit operation when sufficient balance")
-    void shouldUpdateBalanceWithDebitOperationWhenSufficientBalance() {
-        ledger.setBalance(new BigDecimal("200.00"));
-        BigDecimal debitAmount = new BigDecimal("-50.00");
-
-        when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
-        when(hash.hash(any(char[].class))).thenReturn("new-hash");
-        when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
-
-        LedgerEntity result = ledgerService.updateBalance(wallet.getId(), debitAmount, "Debit transaction");
-
-        assertNotNull(result);
-        verify(ledgerRepository).findByWalletId(wallet.getId());
-        verify(ledgerRepository).save(any(LedgerEntity.class));
+        ArgumentCaptor<LedgerBalanceUpdate> updateCaptor = ArgumentCaptor.forClass(LedgerBalanceUpdate.class);
+        verify(balanceUpdatePort).publishBalanceUpdated(updateCaptor.capture());
+        LedgerBalanceUpdate update = updateCaptor.getValue();
+        assertEquals(wallet.getId(), update.walletId());
+        assertEquals(wallet.getName(), update.walletName());
+        assertEquals(user.getId(), update.userId());
+        assertEquals(creditAmount, update.newBalance());
+        assertEquals(creditAmount, update.amount());
+        assertEquals("Credit transaction", update.context());
     }
 
     @Test
@@ -165,14 +182,12 @@ class LedgerServiceTest {
     void shouldThrowExceptionWhenInsufficientBalanceForDebit() {
         ledger.setBalance(new BigDecimal("50.00"));
         BigDecimal debitAmount = new BigDecimal("-100.00");
+        when(ledgerRepository.findByWalletIdForUpdate(wallet.getId())).thenReturn(Optional.of(ledger));
 
-        when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
+        assertThrows(LedgerExceptions.InsufficientBalanceException.class,
+                () -> ledgerService.updateBalance(wallet.getId(), debitAmount, "Debit transaction"));
 
-        assertThrows(LedgerExceptions.InsufficientBalanceException.class, () -> {
-            ledgerService.updateBalance(wallet.getId(), debitAmount, "Debit transaction");
-        });
-
-        verify(ledgerRepository).findByWalletId(wallet.getId());
+        verify(ledgerRepository).findByWalletIdForUpdate(wallet.getId());
         verify(ledgerRepository, never()).save(any(LedgerEntity.class));
     }
 
@@ -181,13 +196,13 @@ class LedgerServiceTest {
     void shouldGetBalanceSuccessfully() {
         BigDecimal expectedBalance = new BigDecimal("150.00");
         ledger.setBalance(expectedBalance);
-
         when(ledgerRepository.findByWalletId(wallet.getId())).thenReturn(Optional.of(ledger));
 
         BigDecimal result = ledgerService.getBalance(wallet.getId());
 
         assertEquals(expectedBalance, result);
         verify(ledgerRepository).findByWalletId(wallet.getId());
+        verify(ledgerIntegrityService).verifyBalanceIntegrity(ledger);
     }
 
     @Test
@@ -207,9 +222,7 @@ class LedgerServiceTest {
     void shouldThrowExceptionWhenDeletingNonExistentLedger() {
         when(ledgerRepository.existsByWalletId(wallet.getId())).thenReturn(false);
 
-        assertThrows(LedgerExceptions.LedgerNotFoundException.class, () -> {
-            ledgerService.deleteLedger(wallet.getId());
-        });
+        assertThrows(LedgerExceptions.LedgerNotFoundException.class, () -> ledgerService.deleteLedger(wallet.getId()));
 
         verify(ledgerRepository).existsByWalletId(wallet.getId());
         verify(ledgerRepository, never()).deleteByWalletId(anyLong());
@@ -257,18 +270,12 @@ class LedgerServiceTest {
     @Test
     @DisplayName("Should throw exception when wallet is null")
     void shouldThrowExceptionWhenWalletIsNull() {
-        assertThrows(RuntimeException.class, () -> {
-            ledgerService.validateWalletOwnership(null, user.getId());
-        });
+        assertThrows(RuntimeException.class, () -> ledgerService.validateWalletOwnership(null, user.getId()));
     }
 
     @Test
     @DisplayName("Should throw exception when wallet does not belong to user")
     void shouldThrowExceptionWhenWalletDoesNotBelongToUser() {
-        Long differentUserId = 999L;
-
-        assertThrows(RuntimeException.class, () -> {
-            ledgerService.validateWalletOwnership(wallet, differentUserId);
-        });
+        assertThrows(RuntimeException.class, () -> ledgerService.validateWalletOwnership(wallet, 999L));
     }
 }

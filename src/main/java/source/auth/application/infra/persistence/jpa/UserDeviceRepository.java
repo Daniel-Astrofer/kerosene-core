@@ -1,0 +1,17 @@
+package source.auth.application.infra.persistence.jpa;
+
+import source.auth.model.entity.UserDataBase;
+import source.auth.model.entity.UserDevice;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface UserDeviceRepository extends JpaRepository<UserDevice, Long> {
+
+    Optional<UserDevice> findByUserId(Long id);
+
+    java.util.List<UserDevice> findAllByUserId(Long userId);
+
+}

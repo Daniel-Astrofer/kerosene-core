@@ -7,8 +7,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationResult;
 import source.auth.model.entity.UserDataBase;
-import source.ledger.repository.LedgerTransactionHistoryRepository;
 import source.ledger.service.LedgerService;
 import source.mining.dto.MiningAllocationRequestDTO;
 import source.mining.dto.MiningAllocationResponseDTO;
@@ -16,7 +18,6 @@ import source.mining.entity.MiningAllocationEntity;
 import source.mining.entity.MiningRigOfferEntity;
 import source.mining.repository.MiningAllocationRepository;
 import source.mining.repository.MiningRigOfferRepository;
-import source.transactions.service.WalletAuthorizationService;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletService;
 
@@ -25,7 +26,6 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,10 +47,10 @@ class MiningServiceTest {
     private LedgerService ledgerService;
 
     @Mock
-    private LedgerTransactionHistoryRepository historyRepository;
+    private MiningHistoryPort historyPort;
 
     @Mock
-    private WalletAuthorizationService walletAuthorizationService;
+    private TransactionalAuthenticationPort transactionalAuthenticationPort;
 
     @Mock
     private source.notification.service.NotificationService notificationService;
@@ -59,14 +59,22 @@ class MiningServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MiningService(
-                rigOfferRepository,
+        RigCatalog rigCatalog = new RigCatalog(rigOfferRepository);
+        MiningSettlementService settlementService = new MiningSettlementService(
+                ledgerService,
+                rigCatalog,
+                allocationRepository,
+                historyPort,
+                notificationService);
+        MiningAllocationUseCase allocationUseCase = new MiningAllocationUseCase(
                 allocationRepository,
                 walletService,
-                ledgerService,
-                historyRepository,
-                walletAuthorizationService,
+                transactionalAuthenticationPort,
+                rigCatalog,
+                settlementService,
+                historyPort,
                 notificationService);
+        service = new MiningService(rigCatalog, allocationUseCase);
     }
 
     @Test
@@ -96,13 +104,12 @@ class MiningServiceTest {
         rig.setProvider("KEROSENE_INTERNAL");
         rig.setActive(true);
 
-        when(rigOfferRepository.count()).thenReturn(1L);
         when(rigOfferRepository.findByIdAndActiveTrue(21L)).thenReturn(java.util.Optional.of(rig));
         when(rigOfferRepository.save(any(MiningRigOfferEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(walletService.findByNameAndUserId("TREASURY", 1L)).thenReturn(wallet);
         when(ledgerService.getBalance(11L)).thenReturn(new BigDecimal("1.00000000"));
-        when(walletAuthorizationService.authorizeOutboundTransfer(eq(1L), eq(wallet), eq("123456"), eq(null), eq("pass")))
-                .thenReturn(new WalletAuthorizationService.AuthorizationResult(user, ""));
+        when(transactionalAuthenticationPort.authorize(any(TransactionalAuthenticationRequest.class)))
+                .thenReturn(new TransactionalAuthenticationResult(user, ""));
         when(allocationRepository.save(any(MiningAllocationEntity.class))).thenAnswer(invocation -> {
             MiningAllocationEntity entity = invocation.getArgument(0);
             if (entity.getStartsAt() == null) {

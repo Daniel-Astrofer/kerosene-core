@@ -2,22 +2,32 @@ package source.auth.application.service.passkey;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import source.auth.application.service.cache.contracts.RedisServicer;
 
+import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
 import java.security.MessageDigest;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
-import java.security.KeyFactory;
-import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Base64;
-import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class PasskeyService {
@@ -26,12 +36,28 @@ public class PasskeyService {
     private final RedisServicer redisService;
     private final SecureRandom secureRandom = new SecureRandom();
     private static final String CHALLENGE_PREFIX = "passkey_challenge:";
+    private final Set<String> allowedOrigins;
+    private final String relyingPartyId;
 
-    private final ObjectMapper jsonMapper = new ObjectMapper();
-    private final ObjectMapper cborMapper = new ObjectMapper(new CBORFactory());
+    private final ObjectMapper jsonMapper;
+    private final ObjectMapper cborMapper;
 
-    public PasskeyService(RedisServicer redisService) {
+    public PasskeyService(
+            RedisServicer redisService,
+            ObjectMapper jsonMapper,
+            @Qualifier("cborObjectMapper") ObjectMapper cborMapper,
+            @Value("${webauthn.origins:}") String allowedOrigins,
+            @Value("${webauthn.relying-party-id:localhost}") String relyingPartyId) {
         this.redisService = redisService;
+        this.jsonMapper = jsonMapper;
+        this.cborMapper = cborMapper;
+        this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
+        this.relyingPartyId = relyingPartyId == null || relyingPartyId.isBlank()
+                ? "localhost"
+                : relyingPartyId.trim();
     }
 
     public String generateChallenge(String username) {
@@ -73,8 +99,9 @@ public class PasskeyService {
 
             // 1. Structural JSON Validation: Challenge, Origin, and Type
             JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
-            String challengeInClientData = clientDataNode.get("challenge").asText();
-            String typeInClientData = clientDataNode.get("type").asText();
+            String challengeInClientData = clientDataNode.path("challenge").asText(null);
+            String typeInClientData = clientDataNode.path("type").asText(null);
+            String originInClientData = clientDataNode.path("origin").asText(null);
 
             byte[] expectedChallengeBytes = hexToBytes(expectedChallengeHex);
             String expectedChallengeB64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(expectedChallengeBytes);
@@ -84,8 +111,18 @@ public class PasskeyService {
                 return false;
             }
 
+            if (!isAllowedOrigin(originInClientData)) {
+                log.error("Invalid WebAuthn origin for user {}: {}", username, originInClientData);
+                return false;
+            }
+
             if (!"webauthn.get".equals(typeInClientData) && !"webauthn.create".equals(typeInClientData)) {
                 log.error("Invalid WebAuthn operation type: {}", typeInClientData);
+                return false;
+            }
+
+            String expectedRpId = resolveExpectedRelyingPartyId(originInClientData);
+            if (!validateAuthenticatorData(authDataBytes, expectedRpId)) {
                 return false;
             }
 
@@ -128,6 +165,17 @@ public class PasskeyService {
             log.error("Passkey signature verification failed for user {}: {}", username, e.getMessage());
             return false;
         }
+    }
+
+    public long extractSignatureCount(String authDataB64Url) {
+        byte[] authDataBytes = Base64.getUrlDecoder().decode(authDataB64Url);
+        if (authDataBytes.length < 37) {
+            throw new IllegalArgumentException("authenticatorData must be at least 37 bytes.");
+        }
+        return ((long) authDataBytes[33] & 0xff) << 24
+                | ((long) authDataBytes[34] & 0xff) << 16
+                | ((long) authDataBytes[35] & 0xff) << 8
+                | ((long) authDataBytes[36] & 0xff);
     }
 
     private java.security.PublicKey loadRawEd25519PublicKey(byte[] rawKey) throws Exception {
@@ -179,6 +227,135 @@ public class PasskeyService {
         }
 
         return rawKey;
+    }
+
+    private boolean validateAuthenticatorData(byte[] authDataBytes, String expectedRpId) throws Exception {
+        if (authDataBytes == null || authDataBytes.length < 37) {
+            log.error("Invalid authenticatorData length: {}", authDataBytes == null ? "null" : authDataBytes.length);
+            return false;
+        }
+
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] expectedRpIdHash = digest.digest(expectedRpId.getBytes(StandardCharsets.UTF_8));
+        byte[] suppliedRpIdHash = Arrays.copyOfRange(authDataBytes, 0, 32);
+        if (!MessageDigest.isEqual(expectedRpIdHash, suppliedRpIdHash)) {
+            log.error("Invalid authenticatorData rpIdHash for rpId {}", expectedRpId);
+            return false;
+        }
+
+        int flags = authDataBytes[32] & 0xff;
+        boolean userPresent = (flags & 0x01) != 0;
+        boolean userVerified = (flags & 0x04) != 0;
+        if (!userPresent || !userVerified) {
+            log.error("Authenticator did not assert both user presence and verification. flags={}", flags);
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean isAllowedOrigin(String originInClientData) {
+        if (originInClientData == null || originInClientData.isBlank()) {
+            return false;
+        }
+        if (allowedOrigins.isEmpty() || allowedOrigins.contains(originInClientData)) {
+            return true;
+        }
+
+        String originHost = extractOriginHost(originInClientData);
+        String requestHost = currentRequestHost();
+        return originHost != null
+                && requestHost != null
+                && isDynamicHostAllowed(requestHost)
+                && requestHost.equals(originHost);
+    }
+
+    private String resolveExpectedRelyingPartyId(String originInClientData) {
+        String requestHost = currentRequestHost();
+        String originHost = extractOriginHost(originInClientData);
+
+        if (hostMatchesConfiguredRpId(requestHost) || hostMatchesConfiguredRpId(originHost)) {
+            return relyingPartyId;
+        }
+        if (requestHost != null && isDynamicHostAllowed(requestHost)) {
+            return requestHost;
+        }
+        if (originHost != null && isDynamicHostAllowed(originHost)) {
+            return originHost;
+        }
+        return relyingPartyId;
+    }
+
+    private boolean hostMatchesConfiguredRpId(String host) {
+        if (host == null || relyingPartyId == null || relyingPartyId.isBlank()) {
+            return false;
+        }
+        String normalizedRpId = relyingPartyId.toLowerCase(Locale.ROOT);
+        return host.equals(normalizedRpId) || host.endsWith("." + normalizedRpId);
+    }
+
+    private boolean isDynamicHostAllowed(String host) {
+        return host.endsWith(".onion")
+                || "localhost".equals(host)
+                || "127.0.0.1".equals(host)
+                || "::1".equals(host);
+    }
+
+    private String currentRequestHost() {
+        var attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes servletAttributes)) {
+            return null;
+        }
+
+        HttpServletRequest request = servletAttributes.getRequest();
+        String forwardedHost = request.getHeader("X-Forwarded-Host");
+        if (forwardedHost != null && !forwardedHost.isBlank()) {
+            String normalized = normalizeHost(forwardedHost.split(",")[0]);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+
+        String serverName = normalizeHost(request.getServerName());
+        if (serverName != null) {
+            return serverName;
+        }
+
+        return normalizeHost(request.getHeader("Host"));
+    }
+
+    private String extractOriginHost(String originInClientData) {
+        try {
+            return normalizeHost(URI.create(originInClientData).getHost());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String normalizeHost(String host) {
+        if (host == null) {
+            return null;
+        }
+
+        String normalized = host.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        if (normalized.startsWith("[")) {
+            int closingBracket = normalized.indexOf(']');
+            if (closingBracket > 0) {
+                normalized = normalized.substring(1, closingBracket);
+            }
+        } else {
+            int portSeparator = normalized.indexOf(':');
+            if (portSeparator >= 0) {
+                normalized = normalized.substring(0, portSeparator);
+            }
+        }
+
+        normalized = normalized.trim().toLowerCase(Locale.ROOT);
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private String bytesToHex(byte[] bytes) {

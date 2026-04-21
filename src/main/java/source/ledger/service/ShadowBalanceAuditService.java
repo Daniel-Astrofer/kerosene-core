@@ -2,10 +2,15 @@ package source.ledger.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import source.ledger.application.balance.LedgerActiveUserPort;
 import source.ledger.repository.LedgerRepository;
-import source.transactions.infra.BlockchainClient;
+import source.treasury.domain.model.ReserveSnapshot;
+import source.treasury.service.ReserveBalanceService;
 
 import java.math.BigDecimal;
 
@@ -16,24 +21,29 @@ import java.math.BigDecimal;
 @Service
 public class ShadowBalanceAuditService {
 
+    private static final int AUDIT_BATCH_SIZE = 500;
+
     private final LedgerRepository ledgerRepository;
-    private final BlockchainClient blockchainClient;
-    private final LedgerService ledgerService;
-    private final source.auth.application.service.user.contract.UserServiceContract userService;
+    private final ReserveBalanceService reserveBalanceService;
+    private final LedgerContract ledgerService;
+    private final LedgerActiveUserPort activeUserPort;
     private final source.security.VaultKeyProvider vaultKeyProvider;
+    private final boolean solvencyAuditEnforced;
 
     private static final Logger log = LoggerFactory.getLogger(ShadowBalanceAuditService.class);
 
     public ShadowBalanceAuditService(LedgerRepository ledgerRepository,
-                                     BlockchainClient blockchainClient,
-                                     LedgerService ledgerService,
-                                     source.auth.application.service.user.contract.UserServiceContract userService,
-                                     source.security.VaultKeyProvider vaultKeyProvider) {
+                                     ReserveBalanceService reserveBalanceService,
+                                     LedgerContract ledgerService,
+                                     LedgerActiveUserPort activeUserPort,
+                                     source.security.VaultKeyProvider vaultKeyProvider,
+                                     @Value("${audit.solvency.enforced:true}") boolean solvencyAuditEnforced) {
         this.ledgerRepository = ledgerRepository;
-        this.blockchainClient = blockchainClient;
+        this.reserveBalanceService = reserveBalanceService;
         this.ledgerService = ledgerService;
-        this.userService = userService;
+        this.activeUserPort = activeUserPort;
         this.vaultKeyProvider = vaultKeyProvider;
+        this.solvencyAuditEnforced = solvencyAuditEnforced;
     }
 
     /**
@@ -50,37 +60,62 @@ public class ShadowBalanceAuditService {
         log.info("[ShadowAudit] Iniciando auditoria global e interna...");
 
         // 1. Auditoria de Solvência Global (L1 vs L2)
-        // Note: Summing in Java layer to allow decryption by BalanceCryptoConverter
-        BigDecimal totalDbBalance = ledgerRepository.findAll().stream()
-            .map(source.ledger.entity.LedgerEntity::getBalance)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (solvencyAuditEnforced) {
+            // Sum in paged batches to avoid loading the whole ledger table into memory.
+            BigDecimal totalDbBalance = sumLedgerBalances();
 
-        if (totalDbBalance == null) {
-            totalDbBalance = BigDecimal.ZERO;
-        }
+            if (totalDbBalance == null) {
+                totalDbBalance = BigDecimal.ZERO;
+            }
 
-        long totalSatsDb = totalDbBalance.multiply(new BigDecimal("100000000")).longValue();
-        long totalSatsChain = blockchainClient.getHotWalletBalance();
+            long totalSatsDb = totalDbBalance.multiply(new BigDecimal("100000000")).longValue();
+            ReserveSnapshot reserves = reserveBalanceService.captureSnapshot();
+            long totalReserveSats = reserves.totalAssetsSats();
 
-        if (totalSatsDb > totalSatsChain) {
-            log.error("[CRÍTICA] INSOLVÊNCIA DETECTADA! DB={} sats > Chain={} sats.", totalSatsDb, totalSatsChain);
-            triggerFraudCircuitBreaker();
+            if (totalSatsDb > totalReserveSats) {
+                log.error("[CRÍTICA] INSOLVÊNCIA DETECTADA! DB={} sats > Reservas={} sats (Hot={} | WalletXPUB={} | TreasuryXPUB={} | Lightning={}).",
+                        totalSatsDb,
+                        totalReserveSats,
+                        reserves.hotWalletBtc().toPlainString(),
+                        reserves.walletMonitoredOnchainBtc().toPlainString(),
+                        reserves.treasuryXpubOnchainBtc().toPlainString(),
+                        reserves.lightningBtc().toPlainString());
+                triggerFraudCircuitBreaker();
+            }
+        } else {
+            log.info("[ShadowAudit] Solvency enforcement disabled for this profile. Skipping reserve-vs-ledger comparison.");
         }
 
         // 2. Auditoria de Integridade Interna (Auditore das Sombras)
         // Varre todos os usuários ativos para garantir que o saldo bate com o extrato e HMAC
-        userService.listar().stream()
-            .filter(user -> user.getIsActive())
-            .forEach(user -> {
-                try {
-                    ledgerService.validateUserLedgerIntegrity(user.getId());
-                } catch (SecurityException e) {
-                    log.error("[ShadowAudit] Falha de integridade crítica para usuário {}: {}", user.getUsername(), e.getMessage());
-                    // validateUserLedgerIntegrity já faz o lockAccount se necessário
-                }
-            });
+        activeUserPort.listActiveUsers().forEach(user -> {
+            try {
+                ledgerService.validateUserLedgerIntegrity(user.userId());
+            } catch (SecurityException e) {
+                log.error("[ShadowAudit] Falha de integridade crítica para usuário {}: {}",
+                        user.username(),
+                        e.getMessage());
+            }
+        });
 
         log.info("[ShadowAudit] Auditoria concluída.");
+    }
+
+    private BigDecimal sumLedgerBalances() {
+        BigDecimal total = BigDecimal.ZERO;
+        int pageNumber = 0;
+        Page<source.ledger.entity.LedgerEntity> page;
+
+        do {
+            page = ledgerRepository.findAll(PageRequest.of(pageNumber++, AUDIT_BATCH_SIZE));
+            for (source.ledger.entity.LedgerEntity ledger : page.getContent()) {
+                if (ledger.getBalance() != null) {
+                    total = total.add(ledger.getBalance());
+                }
+            }
+        } while (page.hasNext());
+
+        return total;
     }
 
     private void triggerFraudCircuitBreaker() {

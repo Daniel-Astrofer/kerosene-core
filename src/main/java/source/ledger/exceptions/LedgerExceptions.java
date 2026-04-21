@@ -90,6 +90,12 @@ public class LedgerExceptions {
         }
     }
 
+    public static class LedgerIntegrityViolationException extends LedgerException {
+        public LedgerIntegrityViolationException(String message) {
+            super(message);
+        }
+    }
+
     /**
      * Thrown when any financial operation receives an invalid amount (zero,
      * negative, or null).

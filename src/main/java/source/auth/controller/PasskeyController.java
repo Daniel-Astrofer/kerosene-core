@@ -7,9 +7,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository;
-import source.auth.application.infra.persistance.jpa.UserRepository;
-import source.auth.application.infra.persistance.redis.contracts.RedisContract;
+import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
@@ -17,7 +17,7 @@ import source.auth.dto.SignupState;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
-import java.util.List;
+import java.time.Duration;
 import java.util.Optional;
 
 
@@ -30,20 +30,20 @@ public class PasskeyController {
     private final PasskeyCredentialRepository passkeyCredentialRepository;
     private final UserRepository userRepository;
     private final JwtServicer jwtServicer;
-    private final RedisContract redisContract;
+    private final SignupStateStore signupStateStore;
     private final DevBalanceInjector balanceInjector;
 
     public PasskeyController(PasskeyService passkeyService,
                                   PasskeyCredentialRepository passkeyCredentialRepository,
                                   UserRepository userRepository,
                                   JwtServicer jwtServicer,
-                                  RedisContract redisContract,
+                                  SignupStateStore signupStateStore,
                                   DevBalanceInjector balanceInjector) {
         this.passkeyService = passkeyService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.userRepository = userRepository;
         this.jwtServicer = jwtServicer;
-        this.redisContract = redisContract;
+        this.signupStateStore = signupStateStore;
         this.balanceInjector = balanceInjector;
     }
 
@@ -121,6 +121,7 @@ public class PasskeyController {
 
             credential.setDeviceName(request.getDeviceName());
             credential.setUser(user);
+            credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
 
             passkeyCredentialRepository.save(credential);
             return ResponseEntity.ok(ApiResponse.success("Passkey registered successfully", "OK"));
@@ -174,7 +175,15 @@ public class PasskeyController {
                     request.getClientDataJSON());
 
             if (verified) {
-                cred.setSignatureCount(cred.getSignatureCount() + 1);
+                long newSignatureCount = passkeyService.extractSignatureCount(request.getAuthData());
+                if (newSignatureCount <= cred.getSignatureCount()) {
+                    log.error("Passkey signature counter replay detected for user {}. stored={} received={}",
+                            request.getUsername(), cred.getSignatureCount(), newSignatureCount);
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(ApiResponse.error("SIGN_COUNT_REPLAY",
+                                    "Passkey authenticator counter did not advance."));
+                }
+                cred.setSignatureCount(newSignatureCount);
                 passkeyCredentialRepository.save(cred);
 
                 // [DEV ONLY] Grant 100 BTC one-time bonus
@@ -196,7 +205,7 @@ public class PasskeyController {
 
     @PostMapping("/onboarding/start")
     public ResponseEntity<ApiResponse<String>> startOnboardingRegistration(@RequestParam String sessionId) {
-        SignupState state = redisContract.findSignupState(sessionId);
+        SignupState state = signupStateStore.findSignupState(sessionId);
         if (state == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("SESSION_NOT_FOUND", "Session expired"));
         }
@@ -208,7 +217,7 @@ public class PasskeyController {
     @PostMapping("/onboarding/finish")
     public ResponseEntity<ApiResponse<String>> finishOnboardingRegistration(@RequestParam String sessionId,
                                                                            @RequestBody PasskeyRegistrationRequest request) {
-        SignupState state = redisContract.findSignupState(sessionId);
+        SignupState state = signupStateStore.findSignupState(sessionId);
         if (state == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("SESSION_NOT_FOUND", "Session expired"));
         }
@@ -252,7 +261,7 @@ public class PasskeyController {
         state.setPasskeyPublicKeyCose(request.getPublicKeyCose());
         state.setPasskeyRegistered(true);
 
-        redisContract.saveSignupState(sessionId, state, 1440);
+        signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
 
         return ResponseEntity.ok(ApiResponse.success("Passkey linked to onboarding", "OK"));
     }

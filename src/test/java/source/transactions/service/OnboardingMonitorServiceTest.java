@@ -3,18 +3,15 @@ package source.transactions.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import source.auth.application.orchestrator.signup.SignupUseCase;
+import source.auth.application.orchestrator.signup.FinalizeSignupOnPayment;
+import source.transactions.application.paymentlink.PaymentLinkStore;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.infra.BlockchainClient;
-import source.treasury.service.FinancialIntegrityService;
 
 import java.math.BigDecimal;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
@@ -22,54 +19,51 @@ import static org.mockito.Mockito.*;
 class OnboardingMonitorServiceTest {
 
     @Mock
-    private RedisTemplate<String, PaymentLinkDTO> redisTemplate;
+    private FinalizeSignupOnPayment finalizeSignupOnPayment;
     @Mock
-    private ValueOperations<String, PaymentLinkDTO> valueOperations;
-    @Mock
-    private SignupUseCase signupUseCase;
-    @Mock
-    private FinancialIntegrityService financialIntegrityService;
+    private PaymentLinkStore paymentLinkStore;
     @Mock
     private BlockchainClient blockchainClient;
 
-    @InjectMocks
     private OnboardingMonitorService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(blockchainClient.getTransactionConfirmations("tx-abc")).thenReturn(3);
+        service = new OnboardingMonitorService(paymentLinkStore, finalizeSignupOnPayment, blockchainClient, 3);
     }
 
     @Test
-    void shouldSetRedisTTLTo1HourAfterCompletion() {
+    void shouldStoreCompletedOnboardingLinkFor24Hours() {
         PaymentLinkDTO dto = new PaymentLinkDTO();
         dto.setId("link-123");
         dto.setStatus("verifying_onboarding");
         dto.setTxid("tx-abc");
         dto.setSessionId("session-xyz");
         dto.setAmountBtc(new BigDecimal("0.001"));
+        when(blockchainClient.getRawTransaction("tx-abc", true))
+                .thenReturn(com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+                        .put("confirmations", 3));
+        when(finalizeSignupOnPayment.execute("session-xyz", "tx-abc", new BigDecimal("0.001")))
+                .thenReturn(true);
 
         // Invoke private checkConfirmations
         try {
-            java.lang.reflect.Method method = OnboardingMonitorService.class.getDeclaredMethod("checkConfirmations", PaymentLinkDTO.class, String.class);
+            java.lang.reflect.Method method = OnboardingMonitorService.class.getDeclaredMethod("checkConfirmations", PaymentLinkDTO.class);
             method.setAccessible(true);
-            method.invoke(service, dto, "payment_link:link-123");
+            method.invoke(service, dto);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
 
         // Verify signup was finalized
-        verify(signupUseCase).finalizeUserFromRedis("session-xyz", "tx-abc", new BigDecimal("0.001"));
+        verify(finalizeSignupOnPayment).execute("session-xyz", "tx-abc", new BigDecimal("0.001"));
 
-        // Verify TTL was set to 1 hour
-        ArgumentCaptor<Long> timeoutCaptor = ArgumentCaptor.forClass(Long.class);
-        ArgumentCaptor<TimeUnit> unitCaptor = ArgumentCaptor.forClass(TimeUnit.class);
+        // Verify the completed link is extended in the store
+        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
 
-        verify(valueOperations).set(eq("payment_link:link-123"), any(PaymentLinkDTO.class), timeoutCaptor.capture(), unitCaptor.capture());
+        verify(paymentLinkStore).save(any(PaymentLinkDTO.class), ttlCaptor.capture());
 
-        assertEquals(1L, timeoutCaptor.getValue());
-        assertEquals(TimeUnit.HOURS, unitCaptor.getValue());
+        assertEquals(Duration.ofHours(24), ttlCaptor.getValue());
     }
 }

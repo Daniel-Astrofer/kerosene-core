@@ -1,6 +1,7 @@
 package source.auth.application.infra.security;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import org.springframework.context.annotation.Bean;
@@ -23,11 +24,12 @@ public class Security {
         public SecurityFilterChain securityFilterChain(HttpSecurity http,
                         JwtAuthenticationFilter jwtAuthenticationFilter,
                         RateLimitFilter rateLimitFilter,
-                        ParanoidSecurityFilter paranoidFilter)
+                        ParanoidSecurityFilter paranoidFilter,
+                        org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource)
                         throws Exception {
                 http
 
-                                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                                 .csrf(AbstractHttpConfigurer::disable)
                                 .headers(headers -> headers
                                                 .contentSecurityPolicy(
@@ -52,9 +54,10 @@ public class Security {
                                                 .requestMatchers("/auth/passkey/verify").permitAll()
                                                 .requestMatchers("/auth/passkey/onboarding/start").permitAll()
                                                 .requestMatchers("/auth/passkey/onboarding/finish").permitAll()
+                                                .requestMatchers("/auth/recovery/emergency/start").permitAll()
+                                                .requestMatchers("/auth/recovery/emergency/finish").permitAll()
                                                 .requestMatchers("/auth/pow/challenge").permitAll()
                                                 .requestMatchers("/voucher/**").permitAll()
-                                                .requestMatchers("/sovereignty/**").permitAll()
                                                 .requestMatchers(
                                                                 "/v3/api-docs",
                                                                 "/v3/api-docs/**",
@@ -67,8 +70,7 @@ public class Security {
                                                                 "/configuration/security",
                                                                 "/webjars/**",
                                                                 "/error",
-                                                                "/ws/**",
-                                                                "/actuator/**")
+                                                                "/ws/**")
                                                 .permitAll()
                                                 .anyRequest().authenticated())
                                 .addFilterBefore(paranoidFilter, UsernamePasswordAuthenticationFilter.class)
@@ -79,11 +81,26 @@ public class Security {
         }
 
         @Bean
-        public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+        public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
+                        @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}") String allowedOrigins) {
                 org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
-                configuration.setAllowedOriginPatterns(java.util.List.of("*")); // Allow all origins for dev/testing
+                java.util.List<String> origins = java.util.Arrays.stream(allowedOrigins.split(","))
+                                .map(String::trim)
+                                .filter(origin -> !origin.isEmpty())
+                                .toList();
+                if (origins.isEmpty() || origins.contains("*")) {
+                        throw new IllegalStateException(
+                                        "app.cors.allowed-origins must explicitly list trusted Flutter app origins; wildcard CORS is not allowed.");
+                }
+                configuration.setAllowedOrigins(origins);
                 configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-                configuration.setAllowedHeaders(java.util.List.of("*"));
+                configuration.setAllowedHeaders(java.util.List.of(
+                                "Authorization",
+                                "Content-Type",
+                                "Digest",
+                                "X-Requested-With",
+                                "X-Idempotency-Key"));
+                configuration.setExposedHeaders(java.util.List.of("X-New-Token"));
                 configuration.setAllowCredentials(true);
                 org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
                 source.registerCorsConfiguration("/**", configuration);

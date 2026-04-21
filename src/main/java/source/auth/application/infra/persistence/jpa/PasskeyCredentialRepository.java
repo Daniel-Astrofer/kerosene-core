@@ -1,0 +1,20 @@
+package source.auth.application.infra.persistence.jpa;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import source.auth.model.entity.PasskeyCredential;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCredential, UUID> {
+    Optional<PasskeyCredential> findByCredentialId(byte[] credentialId);
+
+    Optional<PasskeyCredential> findByCredentialIdAndUserId(byte[] credentialId, Long userId);
+
+    List<PasskeyCredential> findByUserId(Long userId);
+
+    List<PasskeyCredential> findByUserHandle(byte[] userHandle);
+}

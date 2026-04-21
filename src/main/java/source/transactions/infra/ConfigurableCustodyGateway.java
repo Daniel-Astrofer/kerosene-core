@@ -2,12 +2,12 @@ package source.transactions.infra;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import source.transactions.exception.ExternalPaymentsExceptions;
@@ -33,6 +33,8 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
     private final boolean mockMode;
     private final String onchainAddressPath;
     private final String lightningInvoicePath;
+    private final String lightningInvoiceStatusPath;
+    private final String lightningInvoiceCancelPath;
     private final String onchainSendPath;
     private final String lightningPayPath;
 
@@ -40,22 +42,25 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
             @Value("${custody.provider-name:BCX}") String providerName,
             @Value("${custody.base-url:}") String baseUrl,
             @Value("${custody.api-key:}") String apiKey,
-            @Value("${custody.mock-mode:true}") boolean mockMode,
+            @Value("${custody.mock-mode:false}") boolean mockMode,
             @Value("${custody.onchain-address-path:/api/v1/onchain/address}") String onchainAddressPath,
             @Value("${custody.lightning-invoice-path:/api/v1/lightning/invoice}") String lightningInvoicePath,
+            @Value("${custody.lightning-invoice-status-path:/api/v1/lightning/invoice/status}") String lightningInvoiceStatusPath,
+            @Value("${custody.lightning-invoice-cancel-path:/api/v1/lightning/invoice/cancel}") String lightningInvoiceCancelPath,
             @Value("${custody.onchain-send-path:/api/v1/onchain/send}") String onchainSendPath,
-            @Value("${custody.lightning-pay-path:/api/v1/lightning/pay}") String lightningPayPath) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5_000);
-        factory.setReadTimeout(15_000);
-        this.restTemplate = new RestTemplate(factory);
-        this.objectMapper = new ObjectMapper();
+            @Value("${custody.lightning-pay-path:/api/v1/lightning/pay}") String lightningPayPath,
+            @Qualifier("custodyRestTemplate") RestTemplate restTemplate,
+            ObjectMapper objectMapper) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
         this.providerName = providerName;
         this.baseUrl = sanitizeBaseUrl(baseUrl);
         this.apiKey = apiKey;
         this.mockMode = mockMode;
         this.onchainAddressPath = onchainAddressPath;
         this.lightningInvoicePath = lightningInvoicePath;
+        this.lightningInvoiceStatusPath = lightningInvoiceStatusPath;
+        this.lightningInvoiceCancelPath = lightningInvoiceCancelPath;
         this.onchainSendPath = onchainSendPath;
         this.lightningPayPath = lightningPayPath;
     }
@@ -118,6 +123,48 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
                 text(response, "lightningAddress", "lnAddress"),
                 text(response, "reference", "id"),
                 parseDateTime(response, "expiresAt"));
+    }
+
+    @Override
+    public IncomingLightningInvoiceStatus getLightningInvoiceStatus(LightningInvoiceStatusCommand command) {
+        if (!isLive()) {
+            return new IncomingLightningInvoiceStatus("PENDING", command.paymentHash() != null ? 0L : null, null, "mock");
+        }
+
+        JsonNode response = post(lightningInvoiceStatusPath, Map.of(
+                "userId", command.userId(),
+                "walletId", command.walletId(),
+                "walletName", command.walletName(),
+                "paymentHash", safeText(command.paymentHash()),
+                "reference", safeText(command.providerReference()),
+                "paymentRequest", safeText(command.paymentRequest())));
+
+        return new IncomingLightningInvoiceStatus(
+                textOrDefault(response, "status", "PENDING"),
+                nullableLongValue(response, "receivedSats", "settledAmountSats", "amountSats"),
+                parseOptionalDateTime(response, "settledAt", "paidAt", "confirmedAt"),
+                response.toString());
+    }
+
+    @Override
+    public boolean cancelLightningInvoice(LightningInvoiceCancellationCommand command) {
+        if (!isLive()) {
+            return true;
+        }
+
+        JsonNode response = post(lightningInvoiceCancelPath, Map.of(
+                "userId", command.userId(),
+                "walletId", command.walletId(),
+                "walletName", command.walletName(),
+                "paymentHash", safeText(command.paymentHash()),
+                "reference", safeText(command.providerReference()),
+                "paymentRequest", safeText(command.paymentRequest())));
+
+        JsonNode cancelled = response.path("cancelled");
+        if (cancelled.isBoolean()) {
+            return cancelled.asBoolean();
+        }
+        return "CANCELLED".equalsIgnoreCase(textOrDefault(response, "status", "CANCELLED"));
     }
 
     @Override
@@ -243,6 +290,22 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
         return 0L;
     }
 
+    private Long nullableLongValue(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode value = node.path(fieldName);
+            if (value.isNumber()) {
+                return value.asLong();
+            }
+            if (value.isTextual()) {
+                try {
+                    return Long.parseLong(value.asText());
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
     private LocalDateTime parseDateTime(JsonNode node, String fieldName) {
         JsonNode value = node.path(fieldName);
         if (value.isTextual()) {
@@ -252,6 +315,19 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
             }
         }
         return LocalDateTime.now().plusMinutes(15);
+    }
+
+    private LocalDateTime parseOptionalDateTime(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode value = node.path(fieldName);
+            if (value.isTextual()) {
+                try {
+                    return LocalDateTime.parse(value.asText());
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return null;
     }
 
     private String safeText(String value) {
