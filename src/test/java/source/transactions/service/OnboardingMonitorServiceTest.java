@@ -24,13 +24,20 @@ class OnboardingMonitorServiceTest {
     private PaymentLinkStore paymentLinkStore;
     @Mock
     private BlockchainClient blockchainClient;
+    private OnboardingPaymentFinalizer onboardingPaymentFinalizer;
 
     private OnboardingMonitorService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service = new OnboardingMonitorService(paymentLinkStore, finalizeSignupOnPayment, blockchainClient, 3);
+        onboardingPaymentFinalizer = new OnboardingPaymentFinalizer(paymentLinkStore, finalizeSignupOnPayment);
+        service = new OnboardingMonitorService(
+                paymentLinkStore,
+                onboardingPaymentFinalizer,
+                blockchainClient,
+                false,
+                3);
     }
 
     @Test
@@ -49,7 +56,8 @@ class OnboardingMonitorServiceTest {
 
         // Invoke private checkConfirmations
         try {
-            java.lang.reflect.Method method = OnboardingMonitorService.class.getDeclaredMethod("checkConfirmations", PaymentLinkDTO.class);
+            java.lang.reflect.Method method = OnboardingMonitorService.class.getDeclaredMethod("checkConfirmations",
+                    PaymentLinkDTO.class);
             method.setAccessible(true);
             method.invoke(service, dto);
         } catch (Exception e) {
@@ -65,5 +73,36 @@ class OnboardingMonitorServiceTest {
         verify(paymentLinkStore).save(any(PaymentLinkDTO.class), ttlCaptor.capture());
 
         assertEquals(Duration.ofHours(24), ttlCaptor.getValue());
+    }
+
+    @Test
+    void shouldFinalizeWithoutBlockchainLookupWhenVoucherMockModeIsEnabled() {
+        service = new OnboardingMonitorService(
+                paymentLinkStore,
+                onboardingPaymentFinalizer,
+                blockchainClient,
+                true,
+                3);
+
+        PaymentLinkDTO dto = new PaymentLinkDTO();
+        dto.setId("link-mock");
+        dto.setStatus("verifying_onboarding");
+        dto.setTxid("qualquer-txid");
+        dto.setSessionId("session-mock");
+        dto.setAmountBtc(new BigDecimal("0.001"));
+        when(finalizeSignupOnPayment.execute("session-mock", "qualquer-txid", new BigDecimal("0.001")))
+                .thenReturn(true);
+
+        try {
+            java.lang.reflect.Method method = OnboardingMonitorService.class.getDeclaredMethod("checkConfirmations",
+                    PaymentLinkDTO.class);
+            method.setAccessible(true);
+            method.invoke(service, dto);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        verifyNoInteractions(blockchainClient);
+        verify(finalizeSignupOnPayment).execute("session-mock", "qualquer-txid", new BigDecimal("0.001"));
     }
 }

@@ -11,7 +11,6 @@ import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.exception.PaymentLinkExceptions;
 import source.transactions.infra.BlockchainClient;
 
-import java.util.Locale;
 import java.util.regex.Pattern;
 
 @Component
@@ -42,7 +41,7 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
             throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction("Transacao nao e valida");
         }
 
-        if (isAllowedMockVoucher(paymentLink, txid) || bitcoinMockMode) {
+        if (isAllowedMockVoucher(paymentLink) || bitcoinMockMode) {
             log.warn("[PaymentLink] Mock transaction accepted for link {} while mock mode is enabled.",
                     paymentLink.getId());
             return;
@@ -69,14 +68,11 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
         }
     }
 
-    private boolean isAllowedMockVoucher(PaymentLinkDTO paymentLink, String txid) {
+    private boolean isAllowedMockVoucher(PaymentLinkDTO paymentLink) {
         if (!voucherMockMode || paymentLink == null || paymentLink.getDescription() == null) {
             return false;
         }
 
-        boolean onboardingVoucher = PaymentLinkDescription.ONBOARDING_VOUCHER.equals(paymentLink.getDescription());
-        String normalizedTxid = txid.toLowerCase(Locale.ROOT);
-        return onboardingVoucher
-                && (normalizedTxid.startsWith("mock_") || normalizedTxid.startsWith("mock-"));
+        return PaymentLinkDescription.ONBOARDING_VOUCHER.equals(paymentLink.getDescription());
     }
 }

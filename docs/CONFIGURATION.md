@@ -176,6 +176,7 @@ Producao segura implica:
 - `bitcoin.min-confirmations`
 - `bitcoin.payment-link-expiration-minutes`
 - `bitcoin.mock-mode`
+- `voucher.mock.accept-any-txid`
 - `transactions.external.fee-rate`
 - `transactions.inbound-monitor.*`
 - `transactions.deposit.mock-credit.*`

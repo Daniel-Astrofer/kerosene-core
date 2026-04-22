@@ -6,14 +6,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import source.auth.application.orchestrator.signup.FinalizeSignupOnPayment;
 import source.transactions.application.paymentlink.PaymentLinkStatus;
 import source.transactions.application.paymentlink.PaymentLinkStore;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.infra.BlockchainClient;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -22,17 +19,20 @@ public class OnboardingMonitorService {
     private static final Logger log = LoggerFactory.getLogger(OnboardingMonitorService.class);
 
     private final PaymentLinkStore paymentLinkStore;
-    private final FinalizeSignupOnPayment finalizeSignupOnPayment;
+    private final OnboardingPaymentFinalizer onboardingPaymentFinalizer;
     private final BlockchainClient blockchainClient;
+    private final boolean voucherMockAcceptAnyTxid;
     private final int requiredConfirmations;
 
     public OnboardingMonitorService(PaymentLinkStore paymentLinkStore,
-            FinalizeSignupOnPayment finalizeSignupOnPayment,
+            OnboardingPaymentFinalizer onboardingPaymentFinalizer,
             BlockchainClient blockchainClient,
+            @Value("${voucher.mock.accept-any-txid:false}") boolean voucherMockAcceptAnyTxid,
             @Value("${bitcoin.min-confirmations:3}") int requiredConfirmations) {
         this.paymentLinkStore = paymentLinkStore;
-        this.finalizeSignupOnPayment = finalizeSignupOnPayment;
+        this.onboardingPaymentFinalizer = onboardingPaymentFinalizer;
         this.blockchainClient = blockchainClient;
+        this.voucherMockAcceptAnyTxid = voucherMockAcceptAnyTxid;
         this.requiredConfirmations = Math.max(1, requiredConfirmations);
     }
 
@@ -58,6 +58,13 @@ public class OnboardingMonitorService {
             if (dto.getTxid() == null)
                 return;
 
+            if (voucherMockAcceptAnyTxid) {
+                log.warn("Mock voucher mode enabled. Finalizing onboarding link {} without blockchain lookup.",
+                        dto.getId());
+                onboardingPaymentFinalizer.finalizeConfirmedPayment(dto);
+                return;
+            }
+
             JsonNode txInfo = blockchainClient.getRawTransaction(dto.getTxid(), true);
 
             if (txInfo == null || txInfo.isNull() || txInfo.isMissingNode()) {
@@ -77,16 +84,7 @@ public class OnboardingMonitorService {
                 log.info("3 confirmations reached for link {}! Finalizing user account for session {}.", dto.getId(),
                         dto.getSessionId());
 
-                boolean finalized = finalizeSignupOnPayment.execute(dto.getSessionId(), dto.getTxid(), dto.getAmountBtc());
-                if (!finalized) {
-                    log.warn("Onboarding link {} reached confirmations but account finalization is still incomplete.",
-                            dto.getId());
-                    return;
-                }
-
-                dto.setStatus(PaymentLinkStatus.COMPLETED);
-                dto.setCompletedAt(LocalDateTime.now());
-                paymentLinkStore.save(dto, Duration.ofHours(24));
+                onboardingPaymentFinalizer.finalizeConfirmedPayment(dto);
             }
         } catch (Exception e) {
             log.error("Failed to check confirmations for onboarding link {}", dto.getId(), e);
