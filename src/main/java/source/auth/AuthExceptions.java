@@ -17,6 +17,15 @@ public class AuthExceptions {
     }
 
     /**
+     * Thrown when an account can use the platform but cannot receive funds yet.
+     */
+    public static class InboundReceivingBlockedException extends AuthValidationException {
+        public InboundReceivingBlockedException(String message) {
+            super(message);
+        }
+    }
+
+    /**
      * Thrown when user fails to register a Passkey which is mandatory.
      */
     public static class MissingPasskey extends AuthValidationException {
@@ -120,6 +129,34 @@ public class AuthExceptions {
      */
     public static class TotpTimeExceededException extends AuthValidationException {
         public TotpTimeExceededException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Thrown when an emergency recovery request is rejected without disclosing
+     * whether the username or recovery codes were valid.
+     */
+    public static class RecoveryRejectedException extends AuthValidationException {
+        public RecoveryRejectedException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Thrown when the emergency recovery flow is being rate limited or blocked.
+     */
+    public static class RecoveryRateLimitedException extends AuthValidationException {
+        public RecoveryRateLimitedException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Thrown when the emergency recovery session expired or was already consumed.
+     */
+    public static class RecoverySessionExpiredException extends AuthValidationException {
+        public RecoverySessionExpiredException(String message) {
             super(message);
         }
     }

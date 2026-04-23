@@ -2,24 +2,18 @@ package source.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Coordinates Vault key bootstrap through Spring-managed lifecycle and
- * scheduling.
+ * Coordinates Vault key bootstrap through Spring-managed lifecycle.
  */
 @Component
 public class VaultBootstrapCoordinator implements SmartLifecycle {
@@ -32,9 +26,7 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
     private final VaultAttestationClient attestationClient;
     private final VaultProvisioningClient provisioningClient;
     private final MasterKeyMemoryStore masterKeyMemoryStore;
-    private final TaskScheduler taskScheduler;
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private final AtomicReference<ScheduledFuture<?>> scheduledAttempt = new AtomicReference<>();
 
     private int attempt = 1;
     private long backoffMs = INITIAL_BACKOFF_MS;
@@ -48,17 +40,18 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
     @Value("${api.secret.aes.secret:}")
     private String devAesSecretBase64;
 
+    @Value("${vault.bootstrap.startup-timeout-ms:180000}")
+    private long startupTimeoutMs;
+
     public VaultBootstrapCoordinator(
             VaultEndpointResolver endpointResolver,
             VaultAttestationClient attestationClient,
             VaultProvisioningClient provisioningClient,
-            MasterKeyMemoryStore masterKeyMemoryStore,
-            @Qualifier("vaultBootstrapTaskScheduler") TaskScheduler taskScheduler) {
+            MasterKeyMemoryStore masterKeyMemoryStore) {
         this.endpointResolver = endpointResolver;
         this.attestationClient = attestationClient;
         this.provisioningClient = provisioningClient;
         this.masterKeyMemoryStore = masterKeyMemoryStore;
-        this.taskScheduler = taskScheduler;
     }
 
     @Override
@@ -73,10 +66,15 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
                 endpointResolver.configuredVaultUrlFile(),
                 proxyPath);
 
+        synchronized (this) {
+            attempt = 1;
+            backoffMs = INITIAL_BACKOFF_MS;
+        }
+
         try {
             if (vaultEnabled) {
-                logger.info("[VaultBootstrapCoordinator] Vault mode active. Scheduling TPM attestation bootstrap.");
-                scheduleAttempt(Duration.ZERO);
+                logger.info("[VaultBootstrapCoordinator] Vault mode active. Provisioning master key before application startup completes.");
+                provisionDuringStartup();
             } else {
                 logger.warn("[VaultBootstrapCoordinator] DEVELOPMENT MODE - key loaded from api.secret.aes.secret. "
                         + "Never use this in production. Set vault.enabled=true.");
@@ -91,10 +89,6 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
     @Override
     public void stop() {
         running.set(false);
-        ScheduledFuture<?> future = scheduledAttempt.getAndSet(null);
-        if (future != null) {
-            future.cancel(true);
-        }
     }
 
     @Override
@@ -113,40 +107,9 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
         return true;
     }
 
-    private void provisionOnce() {
-        if (!running.get() || masterKeyMemoryStore.isReady()) {
-            return;
-        }
-
-        int currentAttempt;
-        long currentBackoffMs;
-        synchronized (this) {
-            currentAttempt = attempt;
-            currentBackoffMs = backoffMs;
-        }
-
-        logger.info("[VaultBootstrapCoordinator] Attempt {} to fetch master key...", currentAttempt);
-        try {
-            provisionFromVault();
-            logger.info("[VaultBootstrapCoordinator] SUCCESS: Master key provisioned on attempt {}.", currentAttempt);
-            return;
-        } catch (VaultAttestationException e) {
-            logger.error("[VaultBootstrapCoordinator STALL] Vault rejected attestation on attempt {}: {}. "
-                            + "Node remains in STALL mode. Retrying in {}ms...",
-                    currentAttempt, e.getMessage(), currentBackoffMs);
-        } catch (IOException e) {
-            logger.warn("[VaultBootstrapCoordinator STALL] Network error on attempt {}: {}. Retrying in {}ms...",
-                    currentAttempt, e.getMessage(), currentBackoffMs);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.error("[VaultBootstrapCoordinator] Vault bootstrap task interrupted.");
-            return;
-        } catch (Exception e) {
-            logger.error("[VaultBootstrapCoordinator CRITICAL] Unexpected error on attempt {}: {}",
-                    currentAttempt, e.getMessage(), e);
-        }
-
-        scheduleNextAttempt(currentBackoffMs);
+    @Override
+    public int getPhase() {
+        return Integer.MIN_VALUE;
     }
 
     private void provisionFromVault() throws IOException, InterruptedException {
@@ -167,28 +130,61 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
         }
     }
 
-    private void scheduleAttempt(Duration delay) {
-        if (!running.get() || masterKeyMemoryStore.isReady()) {
-            return;
-        }
+    private void provisionDuringStartup() {
+        long timeoutMs = Math.max(1L, startupTimeoutMs);
+        Instant deadline = Instant.now().plusMillis(timeoutMs);
 
-        ScheduledFuture<?> future = taskScheduler.schedule(this::provisionOnce, Instant.now().plus(delay));
-        ScheduledFuture<?> previous = scheduledAttempt.getAndSet(future);
-        if (previous != null && !previous.isDone()) {
-            previous.cancel(false);
+        while (running.get() && !masterKeyMemoryStore.isReady()) {
+            int currentAttempt;
+            long currentBackoffMs;
+            synchronized (this) {
+                currentAttempt = attempt;
+                currentBackoffMs = backoffMs;
+            }
+
+            logger.info("[VaultBootstrapCoordinator] Attempt {} to fetch master key...", currentAttempt);
+            try {
+                provisionFromVault();
+                logger.info("[VaultBootstrapCoordinator] SUCCESS: Master key provisioned on attempt {}.", currentAttempt);
+                return;
+            } catch (VaultAttestationException e) {
+                logger.warn("[VaultBootstrapCoordinator] Vault attestation rejected on attempt {}: {}. Retrying in {}ms...",
+                        currentAttempt, e.getMessage(), currentBackoffMs);
+            } catch (IOException e) {
+                logger.warn("[VaultBootstrapCoordinator] Network error on attempt {}: {}. Retrying in {}ms...",
+                        currentAttempt, e.getMessage(), currentBackoffMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("[VaultBootstrapCoordinator] Vault bootstrap interrupted during startup.", e);
+            } catch (Exception e) {
+                logger.error("[VaultBootstrapCoordinator] Unexpected error on attempt {}: {}",
+                        currentAttempt, e.getMessage(), e);
+            }
+
+            if (Instant.now().plusMillis(currentBackoffMs).isAfter(deadline)) {
+                throw new IllegalStateException(
+                        "[VaultBootstrapCoordinator] Unable to provision master key within "
+                                + timeoutMs
+                                + "ms. Failing startup instead of entering STALL mode.");
+            }
+
+            sleepBeforeRetry(currentBackoffMs);
+            advanceBackoff();
         }
     }
 
-    private void scheduleNextAttempt(long delayMs) {
-        if (!running.get() || masterKeyMemoryStore.isReady()) {
-            return;
+    private void sleepBeforeRetry(long delayMs) {
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("[VaultBootstrapCoordinator] Vault bootstrap interrupted during retry backoff.", e);
         }
+    }
 
-        synchronized (this) {
-            attempt++;
-            backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
-        }
-        scheduleAttempt(Duration.ofMillis(delayMs));
+    private synchronized void advanceBackoff() {
+        attempt++;
+        backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
     }
 
     private void loadKeyFromEnvironment() {

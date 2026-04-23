@@ -21,16 +21,21 @@ CREATE TABLE IF NOT EXISTS auth.users_credentials (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
     passphrase VARCHAR(255),
+    password_hash VARCHAR(255),
     totp_secret VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login_at TIMESTAMP,
     is_active BOOLEAN DEFAULT FALSE,
+    activated_at TIMESTAMP,
     failed_login_attempts INTEGER DEFAULT 0,
     account_security VARCHAR(20) DEFAULT 'STANDARD',
     passkey_transaction_auth BOOLEAN DEFAULT FALSE,
     test_balance_claimed BOOLEAN DEFAULT FALSE,
     platform_cosigner_secret TEXT,
+    shamir_total_shares INTEGER,
+    shamir_threshold INTEGER,
+    multisig_threshold INTEGER NOT NULL DEFAULT 2,
     voucher_id UUID UNIQUE REFERENCES auth.vouchers(id)
 );
 

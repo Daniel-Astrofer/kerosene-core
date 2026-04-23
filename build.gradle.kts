@@ -50,6 +50,7 @@ dependencies {
     implementation("io.micrometer:micrometer-observation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // gRPC for MPC Sidecar
     implementation("io.grpc:grpc-netty-shaded:1.62.2")

@@ -7,7 +7,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import source.auth.AuthExceptions;
 import source.common.dto.ApiResponse;
 import source.ledger.exceptions.LedgerExceptions;
+import source.mining.exception.MiningExceptions;
+import source.transactions.exception.ExternalPaymentsExceptions;
+import source.transactions.exception.PaymentLinkExceptions;
+import source.transactions.exception.TransactionExceptions;
 import source.wallet.exceptions.WalletExceptions;
+
+import java.util.regex.Pattern;
 
 /**
  * Global centralized component to intercept all exceptions and return standard
@@ -18,6 +24,9 @@ import source.wallet.exceptions.WalletExceptions;
 public class GlobalExceptionHandler {
 
         private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        private static final String INVALID_ARGUMENTS_MESSAGE = "The request contained invalid arguments.";
+        private static final Pattern TECHNICAL_MESSAGE_PATTERN = Pattern.compile(
+                        "(?i)(exception|stacktrace|sql|jdbc|hibernate|database|nullpointer|select\\s|insert\\s|update\\s|delete\\s|org\\.|java\\.|source\\.|\\bat\\s+[a-z0-9_$.]+\\(|\\{.*\\}|\\[.*\\])");
 
         // ============================================
         // AUTH EXCEPTIONS
@@ -28,7 +37,7 @@ public class GlobalExceptionHandler {
                 return buildErrorResponse(
                                 HttpStatus.CONFLICT,
                                 "Failed to create account: A user with this username already exists. Please choose a different username.",
-                                "ERR_AUTH_USER_ALREADY_EXISTS");
+                                ErrorCodes.AUTH_USER_ALREADY_EXISTS);
         }
 
         @ExceptionHandler(AuthExceptions.UsernameCantBeNull.class)
@@ -43,8 +52,8 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Void>> handlePassphraseNull(AuthExceptions.PassphraseCantBeNull ex) {
                 return buildErrorResponse(
                                 HttpStatus.BAD_REQUEST,
-                                "Validation Error: The passphrase field cannot be null or empty. Please provide a valid passphrase.",
-                                "ERR_AUTH_PASSPHRASE_MISSING");
+                                "Validation Error: The password field cannot be null or empty. Please provide a strong password.",
+                                "ERR_AUTH_PASSWORD_MISSING");
         }
 
         @ExceptionHandler(AuthExceptions.InvalidCharacterUsername.class)
@@ -59,7 +68,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Void>> handleCharLimit(AuthExceptions.CharacterLimitException ex) {
                 return buildErrorResponse(
                                 HttpStatus.BAD_REQUEST,
-                                "Validation Error: The username or passphrase exceeds the allowed character limit. Please shorten your input.",
+                                "Validation Error: The username or password exceeds the allowed character limit. Please shorten your input.",
                                 "ERR_AUTH_CHARACTER_LIMIT_EXCEEDED");
         }
 
@@ -75,8 +84,8 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Void>> handleInvalidPassphrase(AuthExceptions.InvalidPassphrase ex) {
                 return buildErrorResponse(
                                 HttpStatus.BAD_REQUEST,
-                                "Validation Error: The provided passphrase is invalid or does not meet the required BIP39 standards.",
-                                "ERR_AUTH_INVALID_PASSPHRASE_FORMAT");
+                                "Validation Error: The provided password is invalid or does not meet the required strength policy.",
+                                "ERR_AUTH_INVALID_PASSWORD_FORMAT");
         }
 
         @ExceptionHandler(AuthExceptions.IncorrectTotpException.class)
@@ -91,7 +100,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Void>> handleInvalidCredentials(AuthExceptions.InvalidCredentials ex) {
                 return buildErrorResponse(
                                 HttpStatus.UNAUTHORIZED,
-                                "Authentication Failed: Invalid credentials provided. The username or passphrase you entered is incorrect.",
+                                "Authentication Failed: Invalid credentials provided. The username or password you entered is incorrect.",
                                 "ERR_AUTH_INVALID_CREDENTIALS");
         }
 
@@ -120,6 +129,25 @@ public class GlobalExceptionHandler {
                                 "ERR_AUTH_GENERIC");
         }
 
+        @ExceptionHandler(AuthExceptions.InboundReceivingBlockedException.class)
+        public ResponseEntity<ApiResponse<Void>> handleInboundReceivingBlocked(
+                        AuthExceptions.InboundReceivingBlockedException ex) {
+                return buildErrorResponse(
+                                HttpStatus.PAYMENT_REQUIRED,
+                                ex.getMessage(),
+                                "ERR_ACCOUNT_DEPOSIT_REQUIRED");
+        }
+
+        @ExceptionHandler(source.auth.application.orchestrator.signup.FinalizeSignupAccount.VaultNotReadyException.class)
+        public ResponseEntity<ApiResponse<Void>> handleVaultNotReady(
+                        source.auth.application.orchestrator.signup.FinalizeSignupAccount.VaultNotReadyException ex) {
+                log.warn("[GlobalExceptionHandler] Vault master key not ready during signup: {}", ex.getMessage());
+                return buildErrorResponse(
+                                HttpStatus.SERVICE_UNAVAILABLE,
+                                ex.getMessage(),
+                                "ERR_VAULT_NOT_READY");
+        }
+
         // ============================================
         // LEDGER EXCEPTIONS
         // ============================================
@@ -128,7 +156,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Void>> handleLedgerNotFound(LedgerExceptions.LedgerNotFoundException ex) {
                 return buildErrorResponse(
                                 HttpStatus.NOT_FOUND,
-                                "Ledger Error: The requested ledger could not be found. It may have been deleted or never created for this wallet.",
+                                "Ledger Error: " + ex.getMessage(),
                                 "ERR_LEDGER_NOT_FOUND");
         }
 
@@ -215,8 +243,8 @@ public class GlobalExceptionHandler {
         // WALLET EXCEPTIONS
         // ============================================
 
-        @ExceptionHandler(WalletExceptions.WalletNameAlredyExists.class)
-        public ResponseEntity<ApiResponse<Void>> handleWalletNameExists(WalletExceptions.WalletNameAlredyExists ex) {
+        @ExceptionHandler(WalletExceptions.WalletNameAlreadyExists.class)
+        public ResponseEntity<ApiResponse<Void>> handleWalletNameExists(WalletExceptions.WalletNameAlreadyExists ex) {
                 return buildErrorResponse(
                                 HttpStatus.CONFLICT,
                                 "Wallet Creation Failed: A wallet with this exact name already exists. Please choose a unique name for your new wallet.",
@@ -240,6 +268,143 @@ public class GlobalExceptionHandler {
         }
 
         // ============================================
+        // EXTERNAL PAYMENTS
+        // ============================================
+
+        @ExceptionHandler(ExternalPaymentsExceptions.CustodyProviderUnavailable.class)
+        public ResponseEntity<ApiResponse<Void>> handleCustodyProviderUnavailable(
+                        ExternalPaymentsExceptions.CustodyProviderUnavailable ex) {
+                return buildErrorResponse(
+                                HttpStatus.SERVICE_UNAVAILABLE,
+                                ex.getMessage(),
+                                "ERR_CUSTODY_PROVIDER_UNAVAILABLE");
+        }
+
+        @ExceptionHandler(ExternalPaymentsExceptions.InvalidNetworkAddress.class)
+        public ResponseEntity<ApiResponse<Void>> handleInvalidNetworkAddress(
+                        ExternalPaymentsExceptions.InvalidNetworkAddress ex) {
+                return buildErrorResponse(
+                                HttpStatus.BAD_REQUEST,
+                                ex.getMessage(),
+                                "ERR_INVALID_NETWORK_ADDRESS");
+        }
+
+        @ExceptionHandler(ExternalPaymentsExceptions.TransferNotFound.class)
+        public ResponseEntity<ApiResponse<Void>> handleTransferNotFound(
+                        ExternalPaymentsExceptions.TransferNotFound ex) {
+                return buildErrorResponse(
+                                HttpStatus.NOT_FOUND,
+                                ex.getMessage(),
+                                "ERR_NETWORK_TRANSFER_NOT_FOUND");
+        }
+
+        @ExceptionHandler(ExternalPaymentsExceptions.TransferCancellationNotAllowed.class)
+        public ResponseEntity<ApiResponse<Void>> handleTransferCancellationNotAllowed(
+                        ExternalPaymentsExceptions.TransferCancellationNotAllowed ex) {
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_NETWORK_TRANSFER_CANCEL_NOT_ALLOWED");
+        }
+
+        @ExceptionHandler(TransactionExceptions.TransactionBroadcastFailed.class)
+        public ResponseEntity<ApiResponse<Void>> handleTransactionBroadcastFailed(
+                        TransactionExceptions.TransactionBroadcastFailed ex) {
+                return buildErrorResponse(
+                                HttpStatus.BAD_GATEWAY,
+                                ex.getMessage(),
+                                "ERR_TRANSACTION_BROADCAST_FAILED");
+        }
+
+        // ============================================
+        // PAYMENT LINKS
+        // ============================================
+
+        @ExceptionHandler(PaymentLinkExceptions.PaymentLinkNotFound.class)
+        public ResponseEntity<ApiResponse<Void>> handlePaymentLinkNotFound(
+                        PaymentLinkExceptions.PaymentLinkNotFound ex) {
+                return buildErrorResponse(
+                                HttpStatus.NOT_FOUND,
+                                ex.getMessage(),
+                                "ERR_PAYMENT_LINK_NOT_FOUND");
+        }
+
+        @ExceptionHandler(PaymentLinkExceptions.PaymentLinkExpired.class)
+        public ResponseEntity<ApiResponse<Void>> handlePaymentLinkExpired(
+                        PaymentLinkExceptions.PaymentLinkExpired ex) {
+                return buildErrorResponse(
+                                HttpStatus.GONE,
+                                ex.getMessage(),
+                                "ERR_PAYMENT_LINK_EXPIRED");
+        }
+
+        @ExceptionHandler(PaymentLinkExceptions.InvalidPaymentLinkState.class)
+        public ResponseEntity<ApiResponse<Void>> handlePaymentLinkState(
+                        PaymentLinkExceptions.InvalidPaymentLinkState ex) {
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_PAYMENT_LINK_INVALID_STATE");
+        }
+
+        @ExceptionHandler(PaymentLinkExceptions.InvalidPaymentLinkTransaction.class)
+        public ResponseEntity<ApiResponse<Void>> handlePaymentLinkTransaction(
+                        PaymentLinkExceptions.InvalidPaymentLinkTransaction ex) {
+                return buildErrorResponse(
+                                HttpStatus.BAD_REQUEST,
+                                ex.getMessage(),
+                                "ERR_PAYMENT_LINK_INVALID_TRANSACTION");
+        }
+
+        @ExceptionHandler(PaymentLinkExceptions.PaymentLinkCreditFailed.class)
+        public ResponseEntity<ApiResponse<Void>> handlePaymentLinkCreditFailed(
+                        PaymentLinkExceptions.PaymentLinkCreditFailed ex) {
+                return buildErrorResponse(
+                                HttpStatus.INTERNAL_SERVER_ERROR,
+                                ex.getMessage(),
+                                "ERR_PAYMENT_LINK_CREDIT_FAILED");
+        }
+
+        // ============================================
+        // MINING
+        // ============================================
+
+        @ExceptionHandler(MiningExceptions.RigNotFound.class)
+        public ResponseEntity<ApiResponse<Void>> handleRigNotFound(MiningExceptions.RigNotFound ex) {
+                return buildErrorResponse(
+                                HttpStatus.NOT_FOUND,
+                                ex.getMessage(),
+                                "ERR_MINING_RIG_NOT_FOUND");
+        }
+
+        @ExceptionHandler(MiningExceptions.MiningAllocationNotFound.class)
+        public ResponseEntity<ApiResponse<Void>> handleMiningAllocationNotFound(
+                        MiningExceptions.MiningAllocationNotFound ex) {
+                return buildErrorResponse(
+                                HttpStatus.NOT_FOUND,
+                                ex.getMessage(),
+                                "ERR_MINING_ALLOCATION_NOT_FOUND");
+        }
+
+        @ExceptionHandler(MiningExceptions.InvalidMiningAllocation.class)
+        public ResponseEntity<ApiResponse<Void>> handleInvalidMiningAllocation(
+                        MiningExceptions.InvalidMiningAllocation ex) {
+                return buildErrorResponse(
+                                HttpStatus.BAD_REQUEST,
+                                ex.getMessage(),
+                                "ERR_MINING_ALLOCATION_INVALID");
+        }
+
+        @ExceptionHandler(MiningExceptions.MiningAllocationStateException.class)
+        public ResponseEntity<ApiResponse<Void>> handleMiningAllocationState(
+                        MiningExceptions.MiningAllocationStateException ex) {
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_MINING_ALLOCATION_STATE");
+        }
+
+        // ============================================
         // FALLBACK FOR UNEXPECTED ERRORS
         // ============================================
 
@@ -249,12 +414,12 @@ public class GlobalExceptionHandler {
                         return buildErrorResponse(
                                         HttpStatus.UNAUTHORIZED,
                                         "Authentication Failed: The user associated with this session no longer exists. Please log in again.",
-                                        "ERR_AUTH_INVALID_USER");
+                                        ErrorCodes.AUTH_INVALID_CREDENTIALS);
                 }
                 return buildErrorResponse(
                                 HttpStatus.BAD_REQUEST,
-                                "Invalid request: " + ex.getMessage(),
-                                "ERR_BAD_REQUEST");
+                                sanitizeMessage(ex.getMessage(), INVALID_ARGUMENTS_MESSAGE),
+                                ErrorCodes.SYS_INVALID_ARGUMENTS);
         }
 
         @ExceptionHandler(Exception.class)
@@ -264,11 +429,29 @@ public class GlobalExceptionHandler {
                 return buildErrorResponse(
                                 HttpStatus.INTERNAL_SERVER_ERROR,
                                 "Internal Server Error: An unexpected error occurred on our end. Our team has been notified.",
-                                "ERR_INTERNAL_SERVER");
+                                ErrorCodes.SYS_INTERNAL_ERROR);
         }
 
         private ResponseEntity<ApiResponse<Void>> buildErrorResponse(HttpStatus status, String message,
                         String errorCode) {
                 return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode));
+        }
+
+        private String sanitizeMessage(String rawMessage, String fallbackMessage) {
+                if (rawMessage == null) {
+                        return fallbackMessage;
+                }
+
+                String normalized = rawMessage.trim();
+                if (normalized.isEmpty()) {
+                        return fallbackMessage;
+                }
+                if (normalized.length() > 180) {
+                        return fallbackMessage;
+                }
+                if (TECHNICAL_MESSAGE_PATTERN.matcher(normalized).find()) {
+                        return fallbackMessage;
+                }
+                return normalized;
         }
 }

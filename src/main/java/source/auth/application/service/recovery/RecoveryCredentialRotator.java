@@ -14,7 +14,11 @@ import source.auth.dto.EmergencyRecoveryFinishRequest;
 import source.auth.dto.EmergencyRecoveryState;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
+
+import java.util.Map;
 
 @Service
 public class RecoveryCredentialRotator {
@@ -105,8 +109,14 @@ public class RecoveryCredentialRotator {
 
         notificationService.notifyUser(
                 user.getId(),
+                NotificationKind.SECURITY_RECOVERY_COMPLETED,
+                NotificationSeverity.WARNING,
                 "Emergency recovery completed",
-                "Your passphrase, TOTP, passkey and recovery codes were rotated. Login again with the new credentials.");
+                "Your passphrase, TOTP, passkey and recovery codes were rotated. Login again with the new credentials.",
+                "/settings",
+                "user",
+                String.valueOf(user.getId()),
+                Map.of("username", user.getUsername()));
 
         return new RotationResult(user.getUsername(), newBackupCodes.rawCodes());
     }

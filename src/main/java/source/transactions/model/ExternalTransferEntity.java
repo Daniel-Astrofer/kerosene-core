@@ -72,6 +72,9 @@ public class ExternalTransferEntity {
     @Column(name = "context", columnDefinition = "TEXT")
     private String context;
 
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -210,6 +213,14 @@ public class ExternalTransferEntity {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
     }
 
     public void setCreatedAt(LocalDateTime createdAt) {

@@ -28,8 +28,7 @@ public class MasterKeyMemoryStore {
         try {
             if (masterKey == null) {
                 throw new IllegalStateException(
-                        "[VaultKeyProvider STALL] Master key is not available yet. "
-                                + "The Shard is waiting for Vault attestation or network recovery.");
+                        "[VaultKeyProvider] Master key is not provisioned in RAM yet.");
             }
             return masterKey;
         } finally {

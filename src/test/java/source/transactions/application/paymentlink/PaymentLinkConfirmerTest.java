@@ -83,6 +83,21 @@ class PaymentLinkConfirmerTest {
     }
 
     @Test
+    void shouldMoveAccountActivationPaymentToVerificationState() {
+        PaymentLinkDTO paymentLink = pendingPaymentLink();
+        paymentLink.setDescription(PaymentLinkDescription.ACCOUNT_ACTIVATION);
+        when(paymentLinkStore.findById("pay-1")).thenReturn(Optional.of(paymentLink));
+        when(paymentLinkReader.isAccountActivationPaymentLink(paymentLink)).thenReturn(true);
+
+        PaymentLinkDTO confirmed = paymentLinkConfirmer.confirmPayment("pay-1", "mock_tx_1", "sender");
+
+        assertEquals(PaymentLinkStatus.VERIFYING_ACTIVATION, confirmed.getStatus());
+        verify(paymentLinkStore, times(2)).save(paymentLink);
+        verify(paymentLinkCreditPort, never()).creditUserWallet(any());
+        verify(paymentLinkHistoryPort).markConfirmed(paymentLink, "sender");
+    }
+
+    @Test
     void shouldRollbackToPendingWhenCreditFails() {
         PaymentLinkDTO paymentLink = pendingPaymentLink();
         when(paymentLinkStore.findById("pay-1")).thenReturn(Optional.of(paymentLink));

@@ -67,6 +67,11 @@ public class LedgerService implements LedgerContract {
     }
 
     @Override
+    public boolean existsByWalletId(Long walletId) {
+        return ledgerRepository.existsByWalletId(walletId);
+    }
+
+    @Override
     public List<LedgerEntity> findByUserId(Long userId) {
         // Issue 2.4: Avoid N+1 — verifyBalanceIntegrity() is called per-ledger.
         // Fetch all in one query and verify in batch to minimise DB round trips.

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import source.common.infra.RedisAvailabilityGuard;
 import source.transactions.application.transaction.TransactionPendingPort;
 import source.transactions.application.transaction.monitoring.MonitorPendingTransactionUseCase;
 import source.transactions.application.transaction.monitoring.TransactionMonitoringRateLimitException;
@@ -27,16 +28,25 @@ public class PendingTransactionMonitoringScheduler {
 
     private final TransactionPendingPort transactionPendingPort;
     private final MonitorPendingTransactionUseCase monitorPendingTransactionUseCase;
+    private final RedisAvailabilityGuard redisAvailabilityGuard;
 
     public PendingTransactionMonitoringScheduler(
             TransactionPendingPort transactionPendingPort,
-            MonitorPendingTransactionUseCase monitorPendingTransactionUseCase) {
+            MonitorPendingTransactionUseCase monitorPendingTransactionUseCase,
+            RedisAvailabilityGuard redisAvailabilityGuard) {
         this.transactionPendingPort = transactionPendingPort;
         this.monitorPendingTransactionUseCase = monitorPendingTransactionUseCase;
+        this.redisAvailabilityGuard = redisAvailabilityGuard;
     }
 
     @Scheduled(fixedDelay = 30000)
     public void monitorPendingTransactions() {
+        if (!redisAvailabilityGuard.isAvailable()) {
+            log.debug("[BlockchainMonitor] Skipping cycle because Redis is unavailable: {}",
+                    redisAvailabilityGuard.describeLastFailure());
+            return;
+        }
+
         if (currentBackoffMs > 0) {
             currentBackoffMs = Math.max(0, currentBackoffMs - 30000);
             log.debug("[BlockchainMonitor] Skipping cycle (backoff cooling down: {}ms remaining)", currentBackoffMs);

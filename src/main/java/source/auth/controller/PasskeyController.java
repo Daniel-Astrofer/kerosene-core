@@ -9,6 +9,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.util.DevBalanceInjector;
@@ -32,19 +33,22 @@ public class PasskeyController {
     private final JwtServicer jwtServicer;
     private final SignupStateStore signupStateStore;
     private final DevBalanceInjector balanceInjector;
+    private final FinalizeSignupAccount finalizeSignupAccount;
 
     public PasskeyController(PasskeyService passkeyService,
                                   PasskeyCredentialRepository passkeyCredentialRepository,
                                   UserRepository userRepository,
                                   JwtServicer jwtServicer,
                                   SignupStateStore signupStateStore,
-                                  DevBalanceInjector balanceInjector) {
+                                  DevBalanceInjector balanceInjector,
+                                  FinalizeSignupAccount finalizeSignupAccount) {
         this.passkeyService = passkeyService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.userRepository = userRepository;
         this.jwtServicer = jwtServicer;
         this.signupStateStore = signupStateStore;
         this.balanceInjector = balanceInjector;
+        this.finalizeSignupAccount = finalizeSignupAccount;
     }
 
     /**
@@ -65,18 +69,20 @@ public class PasskeyController {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || !auth.isAuthenticated() || auth.getName().equals("anonymousUser")) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponse.error("UNAUTHORIZED", "Must be logged in to register a passkey"));
+                        .body(ApiResponse.error("Must be logged in to register a passkey", "UNAUTHORIZED"));
             }
 
             UserDataBase user = userRepository.findById(Long.parseLong(auth.getName())).orElse(null);
             if (user == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("USER_NOT_FOUND", "User not found"));
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("User not found", "USER_NOT_FOUND"));
             }
 
             // 1. Proof of Possession: Verify signature against challenge
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(user.getUsername());
             if (consumedChallenge == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("CHALLENGE_EXPIRED", "Registration challenge expired or invalid. Request a new one first."));
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                        ApiResponse.error("Registration challenge expired or invalid. Request a new one first.",
+                                "CHALLENGE_EXPIRED"));
             }
 
             byte[] pkToVerify;
@@ -95,7 +101,8 @@ public class PasskeyController {
                     request.getAuthData(),
                     request.getClientDataJSON())) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponse.error("INVALID_SIGNATURE", "Proof of possession failed: Invalid signature or challenge"));
+                        .body(ApiResponse.error("Proof of possession failed: Invalid signature or challenge",
+                                "INVALID_SIGNATURE"));
             }
 
             // 2. Persist Credential
@@ -128,7 +135,7 @@ public class PasskeyController {
 
         } catch (Exception e) {
             log.error("Failed to register passkey", e);
-            return ResponseEntity.badRequest().body(ApiResponse.error("REGISTRATION_ERROR", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage(), "REGISTRATION_ERROR"));
         }
     }
 
@@ -140,11 +147,13 @@ public class PasskeyController {
         try {
             UserDataBase user = userRepository.findByUsername(request.getUsername());
             if (user == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("USER_NOT_FOUND", "User not found"));
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("User not found", "USER_NOT_FOUND"));
             }
 
             if (request.getCredentialId() == null) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error("MISSING_CREDENTIAL_ID", "Frontend must send the credentialId for secure lookup."));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                        ApiResponse.error("Frontend must send the credentialId for secure lookup.",
+                                "MISSING_CREDENTIAL_ID"));
             }
 
             byte[] credentialIdBytes;
@@ -157,13 +166,15 @@ public class PasskeyController {
             Optional<PasskeyCredential> credOpt = passkeyCredentialRepository.findByCredentialIdAndUserId(credentialIdBytes, user.getId());
             if (credOpt.isEmpty()) {
                 log.error("Possible Identity Squatting! User {} tried to use an unknown or unauthorized credentialId.", request.getUsername());
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("AUTH_FAILED", "Invalid credential association."));
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Invalid credential association.", "AUTH_FAILED"));
             }
 
             PasskeyCredential cred = credOpt.get();
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(request.getUsername());
             if (consumedChallenge == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("CHALLENGE_EXPIRED", "Passkey challenge expired or invalid"));
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Passkey challenge expired or invalid", "CHALLENGE_EXPIRED"));
             }
 
             boolean verified = passkeyService.verifySignature(
@@ -180,24 +191,29 @@ public class PasskeyController {
                     log.error("Passkey signature counter replay detected for user {}. stored={} received={}",
                             request.getUsername(), cred.getSignatureCount(), newSignatureCount);
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                            .body(ApiResponse.error("SIGN_COUNT_REPLAY",
-                                    "Passkey authenticator counter did not advance."));
+                            .body(ApiResponse.error("Passkey authenticator counter did not advance.",
+                                    "SIGN_COUNT_REPLAY"));
                 }
                 cred.setSignatureCount(newSignatureCount);
                 passkeyCredentialRepository.save(cred);
 
-                // [DEV ONLY] Grant 100 BTC one-time bonus
-                balanceInjector.injectTestBalance(user);
+                // Ensure ledger exists for all wallets (Self-healing)
+                finalizeSignupAccount.ensureUserFinancialsReady(user, null);
+
+                if (Boolean.TRUE.equals(user.getIsActive())) {
+                    balanceInjector.injectTestBalance(user);
+                }
 
                 String token = jwtServicer.generateToken(user.getId());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));
             } else {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("AUTH_FAILED", "Invalid signature or challenge"));
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Invalid signature or challenge", "AUTH_FAILED"));
             }
 
         } catch (Exception e) {
             log.error("Passkey verification failed", e);
-            return ResponseEntity.badRequest().body(ApiResponse.error("VERIFY_ERROR", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage(), "VERIFY_ERROR"));
         }
     }
 
@@ -207,7 +223,8 @@ public class PasskeyController {
     public ResponseEntity<ApiResponse<String>> startOnboardingRegistration(@RequestParam String sessionId) {
         SignupState state = signupStateStore.findSignupState(sessionId);
         if (state == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("SESSION_NOT_FOUND", "Session expired"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("Session expired", "SESSION_NOT_FOUND"));
         }
 
         String challenge = passkeyService.generateChallenge(state.getUsername());
@@ -219,12 +236,14 @@ public class PasskeyController {
                                                                            @RequestBody PasskeyRegistrationRequest request) {
         SignupState state = signupStateStore.findSignupState(sessionId);
         if (state == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error("SESSION_NOT_FOUND", "Session expired"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("Session expired", "SESSION_NOT_FOUND"));
         }
 
         String challenge = passkeyService.consumeChallengeFromRedis(state.getUsername());
         if (challenge == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("CHALLENGE_EXPIRED", "Registration challenge expired or invalid"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Registration challenge expired or invalid", "CHALLENGE_EXPIRED"));
         }
 
         byte[] pkToVerify;
@@ -251,7 +270,8 @@ public class PasskeyController {
                 request.getAuthData(),
                 request.getClientDataJSON())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("INVALID_SIGNATURE", "Proof of possession failed: Invalid signature or challenge"));
+                    .body(ApiResponse.error("Proof of possession failed: Invalid signature or challenge",
+                            "INVALID_SIGNATURE"));
         }
 
         state.setPasskeyPublicKey(request.getPublicKey());
@@ -263,7 +283,11 @@ public class PasskeyController {
 
         signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
 
-        return ResponseEntity.ok(ApiResponse.success("Passkey linked to onboarding", "OK"));
+        UserDataBase user = finalizeSignupAccount.execute(sessionId);
+        String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
+        return ResponseEntity.ok(ApiResponse.success(
+                "Passkey linked and account created.",
+                token));
     }
 
     public static class PasskeyRegistrationRequest {

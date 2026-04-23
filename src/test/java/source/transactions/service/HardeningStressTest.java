@@ -1,6 +1,7 @@
 package source.transactions.service;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
@@ -155,6 +156,7 @@ public class HardeningStressTest {
     }
 
     @Test
+    @Disabled("No deterministic RBF harness exists yet; this placeholder was disabled to avoid false confidence.")
     public void testRbfNoDoubleDebit() {
         // Agente 6 Goal: Multi-sig RBF replacement without double-debiting
         log.info("[StressTest] RBF Fee-Bump Consistency starts...");

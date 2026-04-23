@@ -10,13 +10,13 @@ Fontes usadas nesta leitura:
 - `docker-compose.yml`
 - `../kerosene-infrastructure/docker-compose.local.yml`
 
-Data de revisao desta documentacao: `2026-04-18`.
+Data de revisao desta documentacao: `2026-04-22`.
 
 ## Resumo executivo
 
 Kerosene e um backend `Java 21` com `Spring Boot 3.3.2` organizado como um monolito modular. Hoje o servico expoe:
 
-- `71` endpoints HTTP mapeados por controllers
+- `76` endpoints HTTP mapeados por controllers
 - `4` endpoints STOMP/WebSocket
 - `15` jobs agendados com `@Scheduled`
 - persistencia principal em `PostgreSQL`
@@ -39,7 +39,6 @@ Em termos de negocio e plataforma, o backend cobre os seguintes blocos:
 - ledger interno, saldo, historico e payment requests
 - transacoes on-chain, Lightning e pagamentos externos
 - transparencia, proof-of-reserves e auditoria Merkle
-- vouchers e fluxos de onboarding pagos
 - marketplace/alocacao de mineracao
 - notificacoes e atualizacoes realtime por WebSocket
 - soberania operacional, attestation, telemetria e bootstrap de chave via Vault
@@ -53,7 +52,6 @@ Os principais pacotes em `src/main/java/source` sao:
 - `ledger`: ledger interno, auditoria e eventos
 - `transactions`: pagamentos externos, on-chain, Lightning, onramp e monitoramento
 - `treasury`: reserva, solvencia, fee policy e configuracao financeira
-- `voucher`: onboarding com voucher e links publicos
 - `mining`: catalogo de rigs e alocacoes
 - `notification`: envio de eventos para usuarios
 - `security`: vault, attestation, heartbeat, telemetry, honeypot e defesa operacional

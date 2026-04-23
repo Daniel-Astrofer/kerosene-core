@@ -1,18 +1,11 @@
 package source.auth.application.service.authentication;
 
-import source.auth.AuthConstants;
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistance.jpa.UserRepository;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import org.bitcoinj.crypto.MnemonicCode;
-import org.bitcoinj.crypto.MnemonicException;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.List;
+import source.auth.application.service.authentication.contracts.SignupVerifier;
+import source.auth.application.service.authentication.signup.SignupCredentialRules;
+import source.auth.application.service.authentication.signup.SignupValidationContext;
+import source.auth.application.service.authentication.signup.chain.SignupValidationChain;
 
 /**
  * Service for verifying user credentials during signup.
@@ -24,159 +17,52 @@ import java.util.List;
 @Service
 public class SignupValidator implements SignupVerifier {
 
-    private final UserRepository repository;
+    private final SignupCredentialRules rules;
+    private final SignupValidationChain validationChain;
 
-    /** Lazy-loaded Portuguese MnemonicCode instance. */
-    private static final MnemonicCode PORTUGUESE_MNEMONIC;
-
-    static {
-        MnemonicCode pt = null;
-        try (InputStream stream = new ClassPathResource("bip39_portuguese.txt").getInputStream()) {
-            // null wordListDigest = skip checksum validation for the wordlist file itself
-            pt = new MnemonicCode(stream, null);
-        } catch (IOException e) {
-            System.err.println("[BIP39] Failed to load Portuguese wordlist, PT mnemonics will not be accepted: "
-                    + e.getMessage());
-        } catch (Exception e) {
-            System.err.println("[BIP39] Unexpected error loading Portuguese wordlist: " + e.getMessage());
-        }
-        PORTUGUESE_MNEMONIC = pt;
-    }
-
-    public SignupValidator(UserRepository repository) {
-        this.repository = repository;
+    public SignupValidator(SignupCredentialRules rules, SignupValidationChain validationChain) {
+        this.rules = rules;
+        this.validationChain = validationChain;
     }
 
     @Override
     public void checkUsernameNotNull(String username) {
-        if (username == null || username.isBlank()) {
-            throw new AuthExceptions.UsernameCantBeNull(AuthConstants.ERR_USERNAME_NULL);
-        }
+        rules.checkUsernameNotNull(username);
     }
 
     @Override
     public void checkPassphraseNotNull(char[] passphrase) {
-        if (passphrase == null || passphrase.length == 0) {
-            throw new AuthExceptions.PassphraseCantBeNull(AuthConstants.ERR_PASSPHRASE_NULL);
-        }
+        rules.checkPassphraseNotNull(passphrase);
     }
 
     @Override
     public void checkUsernameFormat(String username) {
-        if (!username.matches(AuthConstants.USERNAME_PATTERN)) {
-            throw new AuthExceptions.InvalidCharacterUsername(AuthConstants.ERR_USERNAME_INVALID_CHARS);
-        }
+        rules.checkUsernameFormat(username);
     }
 
     @Override
     public void checkUsernameLength(String username) {
-        if (username.length() > AuthConstants.USERNAME_MAX_LENGTH) {
-            throw new AuthExceptions.CharacterLimitException(AuthConstants.ERR_USERNAME_TOO_LONG);
-        }
+        rules.checkUsernameLength(username);
     }
 
     @Override
     public void checkPassphraseLength(char[] passphrase) {
-        if (passphrase.length > AuthConstants.PASSPHRASE_MAX_LENGTH) {
-            throw new AuthExceptions.CharacterLimitException(AuthConstants.ERR_PASSPHRASE_TOO_LONG);
-        }
+        rules.checkPassphraseLength(passphrase);
     }
 
-    /**
-     * Validates that the passphrase is a valid BIP39 mnemonic in English OR
-     * Portuguese.
-     * <p>
-     * Strategy: try English first (zero overhead — uses the pre-built INSTANCE).
-     * If that fails, try Portuguese. Only throw if BOTH fail.
-     */
     @Override
     public void checkPassphraseBip39(char[] passphrase) {
-        String normalizedPhrase = normalizePassphrase(passphrase);
-        List<String> words = Arrays.asList(normalizedPhrase.split(" "));
-
-        if (isValidEnglish(words) || isValidPortuguese(words)) {
-            return; // accepted
-        }
-
-        // Neither language matched — figure out the most specific error
-        deriveAndThrowError(words);
-    }
-
-    private String normalizePassphrase(char[] input) {
-        if (input == null)
-            return "";
-        StringBuilder sb = new StringBuilder();
-        boolean inSpace = false;
-        for (char c : input) {
-            if (Character.isWhitespace(c) || c == '\u00A0') {
-                if (!inSpace) {
-                    sb.append(' ');
-                    inSpace = true;
-                }
-            } else {
-                sb.append(c);
-                inSpace = false;
-            }
-        }
-        return sb.toString().trim();
+        rules.checkPassphraseBip39(passphrase);
     }
 
     @Override
     public void checkUsernameExists(String username) {
-        if (repository.findByUsername(username) != null) {
-            throw new AuthExceptions.UserAlreadyExistsException(AuthConstants.ERR_USERNAME_ALREADY_EXISTS);
-        }
+        rules.checkUsernameExists(username);
     }
 
     @Override
     public boolean verify(String username, char[] passphrase) {
-        checkUsernameNotNull(username);
-        checkPassphraseNotNull(passphrase);
-        checkUsernameFormat(username);
-        checkUsernameLength(username);
-        checkPassphraseLength(passphrase);
-        checkPassphraseBip39(passphrase);
-        checkUsernameExists(username);
+        validationChain.validate(new SignupValidationContext(username, passphrase));
         return true;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Private helpers
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private boolean isValidEnglish(List<String> words) {
-        try {
-            MnemonicCode.INSTANCE.check(words);
-            return true;
-        } catch (MnemonicException e) {
-            return false;
-        }
-    }
-
-    private boolean isValidPortuguese(List<String> words) {
-        if (PORTUGUESE_MNEMONIC == null)
-            return false;
-        try {
-            PORTUGUESE_MNEMONIC.check(words);
-            return true;
-        } catch (MnemonicException e) {
-            return false;
-        }
-    }
-
-    /**
-     * Re-runs validation against English to extract the most meaningful error
-     * code to return to the client.
-     */
-    private void deriveAndThrowError(List<String> words) {
-        try {
-            MnemonicCode.INSTANCE.check(words);
-        } catch (MnemonicException.MnemonicWordException e) {
-            throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSPHRASE_INVALID_WORD);
-        } catch (MnemonicException.MnemonicLengthException e) {
-            throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSPHRASE_INVALID_LENGTH);
-        } catch (MnemonicException e) {
-            throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSPHRASE_INVALID);
-        }
     }
 }

@@ -1,24 +1,39 @@
 package source.ledger.application.transaction;
 
 import org.springframework.stereotype.Service;
+import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
 import source.auth.model.entity.UserDataBase;
+import source.common.service.AddressDerivationService;
+import source.ledger.application.paymentrequest.PaymentRequestDestinationHashService;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.exceptions.LedgerExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletContract;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class TransactionParticipantResolver {
 
     private final WalletContract walletService;
     private final UserService userService;
+    private final AccountActivationService accountActivationService;
+    private final PaymentRequestDestinationHashService destinationHashService;
+    private final AddressDerivationService addressDerivationService;
 
-    public TransactionParticipantResolver(WalletContract walletService, UserService userService) {
+    public TransactionParticipantResolver(
+            WalletContract walletService,
+            UserService userService,
+            AccountActivationService accountActivationService,
+            PaymentRequestDestinationHashService destinationHashService,
+            AddressDerivationService addressDerivationService) {
         this.walletService = walletService;
         this.userService = userService;
+        this.accountActivationService = accountActivationService;
+        this.destinationHashService = destinationHashService;
+        this.addressDerivationService = addressDerivationService;
     }
 
     public UserDataBase resolveAuthenticatedSender(Long senderUserId) {
@@ -46,24 +61,40 @@ public class TransactionParticipantResolver {
         }
 
         if (TransactionDTO.isBitcoinAddress(senderIdentifier) || isHashFormat(senderIdentifier)) {
-            WalletEntity walletByAddress = walletService.findByPassphraseHash(senderIdentifier);
+            WalletEntity walletByAddress = walletService.findByDepositAddress(senderIdentifier);
+            if (walletByAddress == null) {
+                // Fallback to passphrase hash for partial compatibility or specific hash lookups
+                walletByAddress = walletService.findByPassphraseHash(senderIdentifier);
+            }
+
             if (walletByAddress != null && walletByAddress.getUser().getId().equals(sender.getId())) {
                 return walletByAddress;
             }
 
             return senderWallets.stream()
-                    .filter(wallet -> wallet.getPassphraseHash().equals(senderIdentifier))
+                    .filter(wallet -> (wallet.getDepositAddress() != null && wallet.getDepositAddress().equals(senderIdentifier))
+                            || wallet.getPassphraseHash().equals(senderIdentifier))
                     .findFirst()
                     .orElseThrow(() -> new LedgerExceptions.LedgerNotFoundException(
                             "Sender wallet with address '" + senderIdentifier + "' not found"));
         }
 
-        String normalizedIdentifier = senderIdentifier.toUpperCase();
-        return senderWallets.stream()
-                .filter(wallet -> wallet.getName().equals(normalizedIdentifier))
-                .findFirst()
-                .orElseThrow(() -> new LedgerExceptions.LedgerNotFoundException(
-                        "Sender wallet with name '" + senderIdentifier + "' not found"));
+        // 4. Try as username
+        if (senderIdentifier.equalsIgnoreCase(sender.getUsername())) {
+            List<WalletEntity> wallets = walletService.findByUserId(sender.getId());
+            if (!wallets.isEmpty()) {
+                return wallets.get(0);
+            }
+        }
+
+        // 5. Treat as wallet name
+        WalletEntity walletByName = walletService.findByNameAndUserId(senderIdentifier, sender.getId());
+        if (walletByName != null) {
+            return walletByName;
+        }
+
+        throw new LedgerExceptions.LedgerNotFoundException(
+                "Sender wallet with identifier '" + senderIdentifier + "' not found");
     }
 
     public WalletEntity resolveReceiverWallet(String receiverIdentifier) {
@@ -76,6 +107,7 @@ public class TransactionParticipantResolver {
                 long walletId = Long.parseLong(receiverIdentifier);
                 WalletEntity wallet = walletService.findById(walletId);
                 if (wallet != null) {
+                    accountActivationService.assertInboundEnabled(wallet.getUser());
                     return wallet;
                 }
             } catch (NumberFormatException ignored) {
@@ -83,14 +115,14 @@ public class TransactionParticipantResolver {
             }
         }
 
-        if (TransactionDTO.isBitcoinAddress(receiverIdentifier) || isHashFormat(receiverIdentifier)) {
-            WalletEntity wallet = walletService.findByPassphraseHash(receiverIdentifier);
-            if (wallet != null) {
-                return wallet;
-            }
-
+        WalletEntity wallet = resolveReceiverByPublicIdentifier(receiverIdentifier);
+        if (wallet != null) {
+            accountActivationService.assertInboundEnabled(wallet.getUser());
+            return wallet;
+        }
+        if (looksLikePublicWalletIdentifier(receiverIdentifier)) {
             throw new LedgerExceptions.ReceiverNotFoundException(
-                    "Receiver wallet with address '" + receiverIdentifier + "' not found");
+                    "Receiver wallet with identifier '" + receiverIdentifier + "' not found");
         }
 
         UserDataBase receiver = userService.findByUsername(receiverIdentifier);
@@ -98,6 +130,7 @@ public class TransactionParticipantResolver {
             throw new LedgerExceptions.ReceiverNotFoundException(
                     "Receiver username '" + receiverIdentifier + "' not found");
         }
+        accountActivationService.assertInboundEnabled(receiver);
 
         List<WalletEntity> receiverWallets = walletService.findByUserId(receiver.getId());
         if (receiverWallets == null || receiverWallets.isEmpty()) {
@@ -106,6 +139,89 @@ public class TransactionParticipantResolver {
         }
 
         return receiverWallets.get(0);
+    }
+
+    private WalletEntity resolveReceiverByPublicIdentifier(String receiverIdentifier) {
+        if (TransactionDTO.isBitcoinAddress(receiverIdentifier)) {
+            WalletEntity wallet = walletService.findByDepositAddress(receiverIdentifier);
+            if (wallet != null) {
+                return wallet;
+            }
+            return findWalletByDerivedBlockchainAddress(receiverIdentifier);
+        }
+
+        if (looksLikeArgon2Hash(receiverIdentifier)) {
+            WalletEntity wallet = walletService.findByPassphraseHash(receiverIdentifier);
+            if (wallet != null) {
+                return wallet;
+            }
+        }
+
+        if (isDestinationHash(receiverIdentifier)) {
+            return findWalletByDestinationHash(receiverIdentifier);
+        }
+
+        if (isHashFormat(receiverIdentifier)) {
+            WalletEntity wallet = walletService.findByPassphraseHash(receiverIdentifier);
+            if (wallet != null) {
+                return wallet;
+            }
+        }
+
+        return null;
+    }
+
+    private WalletEntity findWalletByDerivedBlockchainAddress(String receiverIdentifier) {
+        for (WalletEntity wallet : walletService.findAll()) {
+            if (wallet == null || wallet.getId() == null || !canDeriveStaticBlockchainAddress(wallet)) {
+                continue;
+            }
+
+            String derivedAddress = addressDerivationService.deriveAddress(wallet.getId(), wallet.getPassphraseHash());
+            if (receiverIdentifier.equals(derivedAddress)) {
+                return wallet;
+            }
+        }
+        return null;
+    }
+
+    private WalletEntity findWalletByDestinationHash(String receiverIdentifier) {
+        String normalizedIdentifier = receiverIdentifier.toLowerCase(Locale.ROOT);
+        for (WalletEntity wallet : walletService.findAll()) {
+            if (wallet == null) {
+                continue;
+            }
+
+            String destinationHash = destinationHashService.buildDestinationHash(wallet);
+            if (destinationHash != null && destinationHash.equalsIgnoreCase(normalizedIdentifier)) {
+                return wallet;
+            }
+        }
+        return null;
+    }
+
+    private boolean canDeriveStaticBlockchainAddress(WalletEntity wallet) {
+        return wallet.getPassphraseHash() != null
+                && !wallet.getPassphraseHash().isBlank()
+                && (wallet.getDepositAddress() == null || wallet.getDepositAddress().isBlank())
+                && (wallet.getXpub() == null || wallet.getXpub().isBlank());
+    }
+
+    private boolean looksLikeArgon2Hash(String identifier) {
+        return identifier != null && identifier.startsWith("$argon2");
+    }
+
+    private boolean isDestinationHash(String identifier) {
+        return identifier != null
+                && !identifier.trim().isEmpty()
+                && identifier.matches("^[A-Fa-f0-9]{64}$");
+    }
+
+    private boolean looksLikePublicWalletIdentifier(String identifier) {
+        return TransactionDTO.isBitcoinAddress(identifier)
+                || looksLikeArgon2Hash(identifier)
+                || isDestinationHash(identifier)
+                || isHashFormat(identifier);
     }
 
     private boolean isHashFormat(String identifier) {

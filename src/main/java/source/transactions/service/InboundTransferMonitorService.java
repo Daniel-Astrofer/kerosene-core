@@ -6,6 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.auth.application.service.account.AccountActivationService;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
+import source.notification.model.UserNotificationPayload;
 import source.transactions.application.externalpayments.ExternalPaymentsLedgerPort;
 import source.transactions.application.externalpayments.ExternalPaymentsMath;
 import source.transactions.application.externalpayments.ExternalPaymentsNotificationPort;
@@ -20,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class InboundTransferMonitorService {
@@ -31,6 +36,7 @@ public class InboundTransferMonitorService {
     private final ExternalPaymentsNotificationPort notificationPort;
     private final ExternalPaymentsMath externalPaymentsMath;
     private final WalletCardProfileService walletCardProfileService;
+    private final AccountActivationService accountActivationService;
     private final BlockchainClient blockchainClient;
     private final CustodyGateway custodyGateway;
     private final VaultKeyProvider vaultKeyProvider;
@@ -42,6 +48,7 @@ public class InboundTransferMonitorService {
             ExternalPaymentsNotificationPort notificationPort,
             ExternalPaymentsMath externalPaymentsMath,
             WalletCardProfileService walletCardProfileService,
+            AccountActivationService accountActivationService,
             BlockchainClient blockchainClient,
             CustodyGateway custodyGateway,
             VaultKeyProvider vaultKeyProvider,
@@ -51,6 +58,7 @@ public class InboundTransferMonitorService {
         this.notificationPort = notificationPort;
         this.externalPaymentsMath = externalPaymentsMath;
         this.walletCardProfileService = walletCardProfileService;
+        this.accountActivationService = accountActivationService;
         this.blockchainClient = blockchainClient;
         this.custodyGateway = custodyGateway;
         this.vaultKeyProvider = vaultKeyProvider;
@@ -214,11 +222,22 @@ public class InboundTransferMonitorService {
                         + " BTC | fee=" + depositFee.toPlainString()
                         + " BTC | net=" + netCredit.toPlainString() + " BTC"));
         externalTransfersPort.save(transfer);
+        accountActivationService.activateUser(transfer.getUserId());
 
         notificationPort.notifyUser(
                 transfer.getUserId(),
-                "Deposito confirmado",
-                notificationBody + " Liquido creditado: " + netCredit.toPlainString() + " BTC.");
+                UserNotificationPayload.create(
+                        NotificationKind.DEPOSIT_CONFIRMED,
+                        NotificationSeverity.SUCCESS,
+                        "Deposito confirmado",
+                        notificationBody + " Liquido creditado: " + netCredit.toPlainString() + " BTC.",
+                        "/deposits",
+                        "external_transfer",
+                        transfer.getId() != null ? transfer.getId().toString() : null,
+                        Map.of(
+                                "grossAmountBtc", normalizedGross.toPlainString(),
+                                "netAmountBtc", netCredit.toPlainString(),
+                                "network", normalize(transfer.getTransferType()))));
     }
 
     private String buildCompletionContext(

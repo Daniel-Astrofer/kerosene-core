@@ -5,16 +5,21 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.auth.application.service.account.AccountActivationService;
 import source.ledger.entity.LedgerTransactionHistory;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
 import source.ledger.service.LedgerService;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
 import source.wallet.model.WalletEntity;
+import source.wallet.service.WalletCardProfileService;
 import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -26,6 +31,8 @@ public class MockDepositCreditService {
     private final LedgerService ledgerService;
     private final LedgerTransactionHistoryRepository historyRepository;
     private final NotificationService notificationService;
+    private final WalletCardProfileService walletCardProfileService;
+    private final AccountActivationService accountActivationService;
     private final boolean enabled;
     private final BigDecimal amountBtc;
 
@@ -33,12 +40,16 @@ public class MockDepositCreditService {
             LedgerService ledgerService,
             LedgerTransactionHistoryRepository historyRepository,
             NotificationService notificationService,
+            WalletCardProfileService walletCardProfileService,
+            AccountActivationService accountActivationService,
             @Value("${transactions.deposit.mock-credit.enabled:false}") boolean enabled,
             @Value("${transactions.deposit.mock-credit.amount-btc:100.00000000}") BigDecimal amountBtc) {
         this.walletService = walletService;
         this.ledgerService = ledgerService;
         this.historyRepository = historyRepository;
         this.notificationService = notificationService;
+        this.walletCardProfileService = walletCardProfileService;
+        this.accountActivationService = accountActivationService;
         this.enabled = enabled;
         this.amountBtc = amountBtc;
     }
@@ -60,13 +71,18 @@ public class MockDepositCreditService {
         }
 
         WalletEntity wallet = wallets.get(0);
-        ledgerService.updateBalance(wallet.getId(), amountBtc, "MOCK_DEPOSIT_ENDPOINT");
+        BigDecimal depositFee = walletCardProfileService.calculateDepositFee(userId, amountBtc);
+        BigDecimal netCredit = amountBtc.subtract(depositFee).setScale(8, java.math.RoundingMode.HALF_UP);
+        ledgerService.updateBalance(wallet.getId(), netCredit, "MOCK_DEPOSIT_ENDPOINT");
 
         LedgerTransactionHistory history = new LedgerTransactionHistory();
         history.setId(UUID.randomUUID());
         history.setAmount(amountBtc);
         history.setCreatedAt(LocalDateTime.now());
-        history.setContext("Mock deposit credited through /transactions/deposit-address");
+        history.setContext("Mock deposit credited through /transactions/deposit-address | gross="
+                + amountBtc.toPlainString()
+                + " BTC | fee=" + depositFee.toPlainString()
+                + " BTC | net=" + netCredit.toPlainString() + " BTC");
         history.setReceiverUserId(userId);
         history.setReceiverIdentifier(wallet.getName());
         history.setSenderIdentifier("MOCK_DEPOSIT_ENDPOINT");
@@ -75,13 +91,25 @@ public class MockDepositCreditService {
         history.setStatus("CONCLUDED");
         history.setConfirmations(999);
         historyRepository.save(history);
+        accountActivationService.activateUser(userId);
 
         notificationService.notifyUser(
                 userId,
+                NotificationKind.DEPOSIT_CONFIRMED,
+                NotificationSeverity.SUCCESS,
                 "Deposito confirmado",
-                amountBtc.toPlainString() + " BTC foram creditados via mock local de deposito.");
+                "Deposito bruto de " + amountBtc.toPlainString()
+                        + " BTC confirmado via mock local. Liquido creditado: "
+                        + netCredit.toPlainString() + " BTC.",
+                "/deposits",
+                "transaction",
+                history.getBlockchainTxid(),
+                Map.of(
+                        "grossAmountBtc", amountBtc.toPlainString(),
+                        "netAmountBtc", netCredit.toPlainString(),
+                        "network", "MOCK"));
 
-        log.warn("[MOCK_DEPOSIT] Credited {} BTC to user {} wallet {} via deposit-address endpoint.",
-                amountBtc.toPlainString(), userId, wallet.getId());
+        log.warn("[MOCK_DEPOSIT] Credited {} BTC net (gross={} fee={}) to user {} wallet {} via deposit-address endpoint.",
+                netCredit.toPlainString(), amountBtc.toPlainString(), depositFee.toPlainString(), userId, wallet.getId());
     }
 }

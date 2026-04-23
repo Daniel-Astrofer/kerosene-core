@@ -5,12 +5,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import source.ledger.repository.LedgerEntryRepository;
-import source.auth.application.service.validation.totp.contratcs.TOTPVerifier;
+import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.security.VaultKeyProvider;
+import source.treasury.domain.model.ReserveSnapshot;
+import source.treasury.service.ReserveBalanceService;
+import source.treasury.service.TreasuryConfigService;
+import source.ledger.dto.TreasuryAuditConfigRequestDTO;
+import source.ledger.dto.TreasuryAuditConfigResponseDTO;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -44,6 +51,21 @@ public class LedgerAuditController {
     @Autowired
     private VaultKeyProvider vaultKeyProvider;
 
+    @Autowired
+    private ReserveBalanceService reserveBalanceService;
+
+    @Autowired
+    private TreasuryConfigService treasuryConfigService;
+
+    @Value("${security.admin.attestation-token:}")
+    private String adminAttestationToken;
+
+    @Value("${security.founder.totp-secret:}")
+    private String founderTotpSecret;
+
+    @Value("${security.owner.hardware-signature:Yubikey}")
+    private String expectedHardwareSignature;
+
     /**
      * GET /stats (Proof of Reserves PÚBLICA)
      * Pode ser consumida pelo Frontend para mostrar Transparência a todos.
@@ -53,14 +75,17 @@ public class LedgerAuditController {
         BigDecimal liability = ledgerEntryRepository.calculateLiabilityToUsers();
         BigDecimal profit = ledgerEntryRepository.calculatePlatformProfitPending();
 
-        // Em produção: ler o saldo verdadeiro da carteira MPC On-chain via Full Node /
-        // Client
-        BigDecimal actualOnchainBalance = getActualOnchainBalance(POCKET_MPC_ADDRESS);
+        ReserveSnapshot reserves = reserveBalanceService.captureSnapshot();
+        BigDecimal actualOnchainBalance = reserves.totalOnchainBtc();
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("liability_to_users", liability);
         stats.put("platform_profit_pending", profit);
         stats.put("actual_onchain_balance", actualOnchainBalance);
+        stats.put("actual_lightning_balance", reserves.lightningBtc());
+        stats.put("actual_wallet_xpub_balance", reserves.walletMonitoredOnchainBtc());
+        stats.put("actual_treasury_xpub_balance", reserves.treasuryXpubOnchainBtc());
+        stats.put("actual_total_assets", reserves.totalAssetsBtc());
 
         // A regra do Pânico: Se o dinheiro devido for maior que o real existente no
         // blockchain
@@ -79,6 +104,31 @@ public class LedgerAuditController {
         return ResponseEntity.ok(stats);
     }
 
+    @GetMapping("/config")
+    public ResponseEntity<?> getTreasuryAuditConfig(
+            @RequestHeader(value = "X-Admin-Token", required = false) String providedToken) {
+        if (!isValidAdminToken(providedToken)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Invalid admin token."));
+        }
+        TreasuryAuditConfigResponseDTO response = treasuryConfigService.getGlobalConfigResponse();
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/config")
+    public ResponseEntity<?> updateTreasuryAuditConfig(
+            @RequestHeader(value = "X-Admin-Token", required = false) String providedToken,
+            @RequestBody TreasuryAuditConfigRequestDTO request) {
+        if (!isValidAdminToken(providedToken)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Invalid admin token."));
+        }
+        TreasuryAuditConfigResponseDTO response = treasuryConfigService.updateGlobalConfig(
+                request.maxWithdrawLimit(),
+                request.auditXpub());
+        return ResponseEntity.ok(response);
+    }
+
     /**
      * POST /siphon (Tubo de sucção de Taxas)
      * Remove o Fee PENDING e envia pra Multisig Fria.
@@ -89,20 +139,22 @@ public class LedgerAuditController {
             @RequestHeader("X-Hardware-Signature") String hardwareSig,
             @RequestBody Map<String, String> body) {
 
-        // O TOTP Secret Master do Fundador/Vault deveria ficar isolado.
-        // Simulando a extração do secret para o ambiente:
-        String founderTotpSecret = System.getenv("FOUNDER_TOTP_SECRET");
-
-        if (founderTotpSecret != null) {
-            try {
-                totpVerifier.totpVerify(founderTotpSecret, totpCode);
-            } catch (Exception e) {
-                log.warn("[SIPHON] INVALID TOTP. Intrusion attempt?");
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Invalid TOTP"));
-            }
+        String effectiveFounderTotpSecret = firstNonBlank(founderTotpSecret, System.getenv("FOUNDER_TOTP_SECRET"));
+        if (effectiveFounderTotpSecret == null) {
+            log.error("[SIPHON] Founder TOTP secret is not configured.");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "Founder TOTP secret not configured."));
         }
 
-        if (hardwareSig == null || !hardwareSig.contains("Yubikey")) {
+        try {
+            totpVerifier.totpVerify(effectiveFounderTotpSecret, totpCode);
+        } catch (Exception e) {
+            log.warn("[SIPHON] INVALID TOTP. Intrusion attempt?");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Invalid TOTP"));
+        }
+
+        String requiredHardwareSignature = firstNonBlank(expectedHardwareSignature, "Yubikey");
+        if (hardwareSig == null || !hardwareSig.contains(requiredHardwareSignature)) {
             log.warn("[SIPHON] Hardware signature mismatch.");
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Invalid Hardware Attestation"));
         }
@@ -128,13 +180,24 @@ public class LedgerAuditController {
                 "destination", OWNER_MULTISIG_HARDWARE_ADDRESS));
     }
 
-    private BigDecimal getActualOnchainBalance(String address) {
-        // Usar lógica mock de fallback para que a requisição não falhe imediatamente
-        try {
-            // Em produção: Usar novo cliente para checar o saldo real on-chain
-            return new BigDecimal("50.00000000"); // 50 BTC Simulados na Hot Wallet
-        } catch (Exception e) {
-            return BigDecimal.ZERO;
+    private boolean isValidAdminToken(String provided) {
+        if (adminAttestationToken == null || adminAttestationToken.isBlank()) {
+            return false;
         }
+        if (provided == null) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                provided.getBytes(StandardCharsets.UTF_8),
+                adminAttestationToken.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

@@ -12,4 +12,6 @@ public interface TransactionPendingPort {
     Optional<PendingTransaction> findByTxid(String txid);
 
     List<PendingTransaction> findPendingTransactions();
+
+    List<PendingTransaction> findTransactionsByUserId(Long userId);
 }

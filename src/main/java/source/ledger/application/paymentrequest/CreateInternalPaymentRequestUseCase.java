@@ -1,6 +1,7 @@
 package source.ledger.application.paymentrequest;
 
 import org.springframework.stereotype.Service;
+import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.exceptions.LedgerExceptions;
@@ -20,6 +21,7 @@ public class CreateInternalPaymentRequestUseCase {
     private final InternalPaymentRequestStore paymentRequestStore;
     private final WalletContract walletService;
     private final UserService userService;
+    private final AccountActivationService accountActivationService;
     private final PaymentRequestDestinationHashService destinationHashService;
     private final PaymentRequestHistoryService paymentRequestHistoryService;
     private final PaymentRequestNotificationService paymentRequestNotificationService;
@@ -28,12 +30,14 @@ public class CreateInternalPaymentRequestUseCase {
             InternalPaymentRequestStore paymentRequestStore,
             WalletContract walletService,
             UserService userService,
+            AccountActivationService accountActivationService,
             PaymentRequestDestinationHashService destinationHashService,
             PaymentRequestHistoryService paymentRequestHistoryService,
             PaymentRequestNotificationService paymentRequestNotificationService) {
         this.paymentRequestStore = paymentRequestStore;
         this.walletService = walletService;
         this.userService = userService;
+        this.accountActivationService = accountActivationService;
         this.destinationHashService = destinationHashService;
         this.paymentRequestHistoryService = paymentRequestHistoryService;
         this.paymentRequestNotificationService = paymentRequestNotificationService;
@@ -47,6 +51,7 @@ public class CreateInternalPaymentRequestUseCase {
 
         userService.buscarPorId(requesterUserId).orElseThrow(
                 () -> new RuntimeException("Requester user not found"));
+        accountActivationService.assertInboundEnabled(requesterUserId);
 
         WalletEntity wallet = walletService.findByNameAndUserId(receiverWalletName, requesterUserId);
         if (wallet == null) {

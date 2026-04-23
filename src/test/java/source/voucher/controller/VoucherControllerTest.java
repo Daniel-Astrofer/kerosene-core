@@ -4,35 +4,29 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import source.common.dto.ApiResponse;
-import source.auth.application.orchestrator.signup.FinalizeSignupOnPayment;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.transactions.service.PaymentLinkService;
 import source.voucher.service.VoucherService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
 
 class VoucherControllerTest {
 
     @Test
-    void shouldFinalizeUserOnMockOnboardingConfirm() {
-        FinalizeSignupOnPayment finalizeSignupOnPayment = mock(FinalizeSignupOnPayment.class);
-        when(finalizeSignupOnPayment.execute(eq("session-123"), anyString(), any())).thenReturn(true);
+    void shouldRequestVoucherWithoutOnboardingSignupFlow() {
+        VoucherService voucherService = mock(VoucherService.class);
+        when(voucherService.requestVoucher()).thenReturn(new VoucherService.VoucherRequestData(
+                "bc1qvoucher",
+                22000L,
+                "pending-1"));
 
-        VoucherController controller = new VoucherController(
-                mock(VoucherService.class),
-                mock(PaymentLinkService.class),
-                mock(SignupStateStore.class),
-                finalizeSignupOnPayment);
+        VoucherController controller = new VoucherController(voucherService);
 
-        ResponseEntity<ApiResponse<String>> response = controller.mockOnboardingConfirm("session-123");
+        ResponseEntity<ApiResponse<java.util.Map<String, Object>>> response = controller.requestVoucher();
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(finalizeSignupOnPayment).execute(eq("session-123"), anyString(), any());
+        assertEquals("bc1qvoucher", response.getBody().getData().get("depositAddress"));
+        assertEquals(22000L, response.getBody().getData().get("amountSats"));
+        assertEquals("pending-1", response.getBody().getData().get("pendingVoucherId"));
     }
 }

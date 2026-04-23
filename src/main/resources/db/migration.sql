@@ -186,7 +186,9 @@ INSERT INTO financial.mining_rig_offers (
     min_rental_hours,
     max_rental_hours,
     provider,
-    active
+    active,
+    created_at,
+    updated_at
 )
 SELECT
     'sha256-hydro-240',
@@ -200,7 +202,9 @@ SELECT
     1,
     168,
     'KEROSENE_INTERNAL',
-    TRUE
+    TRUE,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
 WHERE NOT EXISTS (
     SELECT 1 FROM financial.mining_rig_offers WHERE rig_code = 'sha256-hydro-240'
 );
@@ -217,7 +221,9 @@ INSERT INTO financial.mining_rig_offers (
     min_rental_hours,
     max_rental_hours,
     provider,
-    active
+    active,
+    created_at,
+    updated_at
 )
 SELECT
     'sha256-pro-150',
@@ -231,7 +237,9 @@ SELECT
     1,
     168,
     'KEROSENE_INTERNAL',
-    TRUE
+    TRUE,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
 WHERE NOT EXISTS (
     SELECT 1 FROM financial.mining_rig_offers WHERE rig_code = 'sha256-pro-150'
 );
@@ -248,7 +256,9 @@ INSERT INTO financial.mining_rig_offers (
     min_rental_hours,
     max_rental_hours,
     provider,
-    active
+    active,
+    created_at,
+    updated_at
 )
 SELECT
     'scrypt-rack-18g',
@@ -262,7 +272,9 @@ SELECT
     1,
     72,
     'KEROSENE_INTERNAL',
-    TRUE
+    TRUE,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
 WHERE NOT EXISTS (
     SELECT 1 FROM financial.mining_rig_offers WHERE rig_code = 'scrypt-rack-18g'
 );
@@ -325,3 +337,110 @@ CREATE TABLE IF NOT EXISTS financial.processed_transactions (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_transactions_txid
     ON financial.processed_transactions(txid);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 012: Auth account password hash + activation audit timestamp
+-- Separates account authentication from internal wallet recovery material.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+
+UPDATE auth.users_credentials
+    SET password_hash = passphrase
+    WHERE password_hash IS NULL
+      AND passphrase IS NOT NULL;
+
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP;
+
+UPDATE auth.users_credentials
+    SET activated_at = CURRENT_TIMESTAMP
+    WHERE is_active = TRUE
+      AND activated_at IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 013: Auth support tables required by the current JPA model
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS auth.users_device (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_device_user_id
+    ON auth.users_device(user_id);
+
+CREATE TABLE IF NOT EXISTS public.user_backup_codes (
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    code_hash VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_backup_codes_user_id
+    ON public.user_backup_codes(user_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 014: Deposit history table for inbound on-chain tracking
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.deposits (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    txid VARCHAR(255) NOT NULL UNIQUE,
+    from_address VARCHAR(255) NOT NULL,
+    to_address VARCHAR(255) NOT NULL,
+    amount_btc NUMERIC(19, 8) NOT NULL,
+    network_fee NUMERIC(19, 8),
+    confirmations BIGINT NOT NULL DEFAULT 0,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_user_created
+    ON public.deposits(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_status
+    ON public.deposits(status);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 015: Audit and treasury support tables
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.merkle_audit (
+    id UUID PRIMARY KEY,
+    merkle_root VARCHAR(64) NOT NULL,
+    ledger_count BIGINT NOT NULL,
+    anchor_txid VARCHAR(64),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_merkle_audit_created_at
+    ON financial.merkle_audit(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS financial.siphon_requests (
+    id UUID PRIMARY KEY,
+    amount NUMERIC(19, 8) NOT NULL,
+    requested_at TIMESTAMP NOT NULL,
+    executable_after TIMESTAMP NOT NULL,
+    status VARCHAR(32) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_siphon_requests_status_eta
+    ON financial.siphon_requests(status, executable_after);
+
+CREATE TABLE IF NOT EXISTS financial.platform_revenue (
+    id BIGSERIAL PRIMARY KEY,
+    accumulated_profit NUMERIC(19, 8) NOT NULL DEFAULT 0,
+    hmac_sha256 VARCHAR(255) NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 016: Wallet network metadata expected by WalletEntity
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS lightning_address VARCHAR(255);
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS external_wallet_reference VARCHAR(255);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_lightning_address
+    ON financial.wallets(lightning_address)
+    WHERE lightning_address IS NOT NULL;

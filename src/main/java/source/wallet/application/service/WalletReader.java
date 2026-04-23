@@ -29,6 +29,10 @@ public class WalletReader {
         return walletPersistencePort.findById(id).orElse(null);
     }
 
+    public List<WalletEntity> findAll() {
+        return walletPersistencePort.findAll();
+    }
+
     public WalletEntity findByPassphraseHash(String passphraseHash) {
         return walletPersistencePort.findByPassphraseHash(passphraseHash);
     }

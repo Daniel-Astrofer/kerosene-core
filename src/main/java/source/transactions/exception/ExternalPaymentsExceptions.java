@@ -22,4 +22,10 @@ public final class ExternalPaymentsExceptions {
             super(message);
         }
     }
+
+    public static class TransferCancellationNotAllowed extends RuntimeException {
+        public TransferCancellationNotAllowed(String message) {
+            super(message);
+        }
+    }
 }

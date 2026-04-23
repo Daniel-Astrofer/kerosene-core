@@ -2,6 +2,8 @@ package source.common.service;
 
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.SegwitAddress;
+import org.bitcoinj.crypto.DeterministicKey;
+import org.bitcoinj.crypto.HDKeyDerivation;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.slf4j.Logger;
@@ -9,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -74,11 +77,11 @@ public class AddressDerivationService {
 
     public String deriveAddressFromXpub(String xpub, int index, boolean isChange) {
         try {
-            org.bitcoinj.crypto.DeterministicKey masterKey = org.bitcoinj.crypto.DeterministicKey.deserializeB58(xpub, netParams);
+            DeterministicKey masterKey = DeterministicKey.deserializeB58(xpub, netParams);
 
             // Derive child: m / <isChange> / <index>
-            org.bitcoinj.crypto.DeterministicKey childKey = org.bitcoinj.crypto.HDKeyDerivation.deriveChildKey(
-                    org.bitcoinj.crypto.HDKeyDerivation.deriveChildKey(masterKey, isChange ? 1 : 0),
+            DeterministicKey childKey = HDKeyDerivation.deriveChildKey(
+                    HDKeyDerivation.deriveChildKey(masterKey, isChange ? 1 : 0),
                     index);
 
             SegwitAddress address = SegwitAddress.fromHash(netParams, childKey.getPubKeyHash());
@@ -87,5 +90,45 @@ public class AddressDerivationService {
             log.error("[Derivation] Failed to derive address from xpub {}: {}", xpub, e.getMessage());
             throw new RuntimeException("XPub derivation failed", e);
         }
+    }
+
+    public String deriveAccountXpub(String mnemonic) {
+        try {
+            byte[] seed = org.bitcoinj.crypto.MnemonicCode.toSeed(
+                    Arrays.asList(mnemonic.trim().split("\\s+")),
+                    "");
+            DeterministicKey masterKey = HDKeyDerivation.createMasterPrivateKey(seed);
+            DeterministicKey purposeKey = HDKeyDerivation.deriveChildKey(masterKey,
+                    new org.bitcoinj.crypto.ChildNumber(84, true));
+            DeterministicKey coinTypeKey = HDKeyDerivation.deriveChildKey(
+                    purposeKey,
+                    new org.bitcoinj.crypto.ChildNumber(isMainnet() ? 0 : 1, true));
+            DeterministicKey accountKey = HDKeyDerivation.deriveChildKey(
+                    coinTypeKey,
+                    org.bitcoinj.crypto.ChildNumber.ZERO_HARDENED);
+            return accountKey.serializePubB58(netParams);
+        } catch (Exception e) {
+            log.error("[Derivation] Failed to derive account xpub from mnemonic: {}", e.getMessage());
+            throw new RuntimeException("Account xpub derivation failed", e);
+        }
+    }
+
+    public String deriveChildXpub(String parentXpub, int childIndex) {
+        if (childIndex < 0) {
+            throw new IllegalArgumentException("Child index must be non-negative.");
+        }
+
+        try {
+            DeterministicKey parentKey = DeterministicKey.deserializeB58(parentXpub, netParams);
+            DeterministicKey childKey = HDKeyDerivation.deriveChildKey(parentKey, childIndex);
+            return childKey.serializePubB58(netParams);
+        } catch (Exception e) {
+            log.error("[Derivation] Failed to derive child xpub from parent {}: {}", parentXpub, e.getMessage());
+            throw new RuntimeException("Child xpub derivation failed", e);
+        }
+    }
+
+    private boolean isMainnet() {
+        return netParams instanceof MainNetParams;
     }
 }

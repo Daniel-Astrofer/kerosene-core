@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.model.entity.UserDataBase;
@@ -29,6 +31,16 @@ class IssueSessionTokenTest {
         String result = issueSessionToken.issue(user);
 
         assertEquals("7 jwt-token", result);
-        verify(notificationService).notifyUser(eq(7L), eq("Acesso Detectado"), contains("novo acesso"));
+        verify(notificationService).notifyUser(
+                eq(7L),
+                eq(NotificationKind.SECURITY_LOGIN_DETECTED),
+                eq(NotificationSeverity.WARNING),
+                eq("Acesso Detectado"),
+                contains("novo acesso"),
+                eq("/settings"),
+                eq("user"),
+                eq("7"),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 }

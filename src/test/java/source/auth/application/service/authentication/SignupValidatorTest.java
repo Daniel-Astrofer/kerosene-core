@@ -39,12 +39,12 @@ class SignupValidatorTest {
     }
 
     @Test
-    void verifyShouldAcceptValidMnemonicAndAvailableUsername() {
+    void verifyShouldAcceptStrongPasswordAndAvailableUsername() {
         when(userGateway.existsByUsername("alice")).thenReturn(false);
 
         boolean result = validator.verify(
                 "alice",
-                "legal winner thank year wave sausage worth useful legal winner thank yellow".toCharArray());
+                "Sup3rSecure!12".toCharArray());
 
         assertTrue(result);
     }
@@ -55,6 +55,15 @@ class SignupValidatorTest {
 
         assertThrows(AuthExceptions.UserAlreadyExistsException.class, () -> validator.verify(
                 "alice",
-                "legal winner thank year wave sausage worth useful legal winner thank yellow".toCharArray()));
+                "Sup3rSecure!12".toCharArray()));
+    }
+
+    @Test
+    void verifyShouldRejectWeakPassword() {
+        when(userGateway.existsByUsername("alice")).thenReturn(false);
+
+        assertThrows(AuthExceptions.InvalidPassphrase.class, () -> validator.verify(
+                "alice",
+                "weakpassword".toCharArray()));
     }
 }

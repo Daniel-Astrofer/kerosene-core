@@ -8,17 +8,30 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan.Filter;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import source.auth.application.infra.security.ParanoidSecurityFilter;
+import source.auth.application.infra.security.RateLimitFilter;
+import source.auth.application.service.cache.contracts.RedisServicer;
 import source.ledger.dto.LedgerDTO;
+import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.orchestrator.TransactionContract;
+import source.ledger.repository.LedgerTransactionHistoryRepository;
+import source.ledger.service.LedgerPaymentRequestService;
 import source.ledger.service.LedgerService;
+import source.security.SuicideService;
+import source.security.application.honeypot.HoneypotInspectionUseCase;
+import source.security.HoneypotRequestFilter;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletService;
 import source.auth.model.entity.UserDataBase;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -31,7 +44,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-@WebMvcTest(LedgerController.class)
+@WebMvcTest(
+        controllers = LedgerController.class,
+        excludeFilters = {
+                @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitFilter.class),
+                @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ParanoidSecurityFilter.class),
+                @Filter(type = FilterType.ASSIGNABLE_TYPE, classes = HoneypotRequestFilter.class)
+        })
 @AutoConfigureMockMvc(addFilters = false)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("LedgerController Tests")
@@ -52,11 +71,31 @@ class LedgerControllerTest {
     @MockBean
     private TransactionContract transaction;
 
+    @MockBean
+    private SuicideService suicideService;
+
+    @MockBean
+    private RedisServicer redisServicer;
+
+    @MockBean
+    private LedgerPaymentRequestService paymentRequestService;
+
+    @MockBean
+    private LedgerTransactionHistoryRepository historyRepository;
+
+    @MockBean
+    private StringRedisTemplate redisTemplate;
+
+    @MockBean
+    private HoneypotInspectionUseCase honeypotInspectionUseCase;
+
     private TransactionDTO transactionDTO;
     private LedgerDTO ledgerDTO;
     private WalletEntity wallet;
     private LedgerEntity ledger;
     private UserDataBase user;
+    private InternalPaymentRequestDTO paymentRequestDTO;
+    private ValueOperations<String, String> valueOperations;
 
     @BeforeEach
     void setUp() {
@@ -87,6 +126,18 @@ class LedgerControllerTest {
         ledgerDTO.setNonce(0);
         ledgerDTO.setLastHash("test-hash");
         ledgerDTO.setContext("Initial context");
+
+        paymentRequestDTO = new InternalPaymentRequestDTO();
+        paymentRequestDTO.setId("pr_123");
+        paymentRequestDTO.setRequesterUserId(1L);
+        paymentRequestDTO.setReceiverWalletId(1L);
+        paymentRequestDTO.setReceiverWalletName("TestWallet");
+        paymentRequestDTO.setAmount(new BigDecimal("25.00"));
+        paymentRequestDTO.setStatus("PENDING");
+
+        valueOperations = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.increment(anyString())).thenReturn(1L);
     }
 
     @Test
@@ -98,7 +149,9 @@ class LedgerControllerTest {
         mockMvc.perform(post("/ledger/transaction")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(transactionDTO)))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.amount").value(50.00));
 
         verify(transaction).processTransaction(any(TransactionDTO.class));
     }
@@ -115,9 +168,10 @@ class LedgerControllerTest {
 
         mockMvc.perform(get("/ledger/all"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(1))
-                .andExpect(jsonPath("$[0].walletName").value("TestWallet"))
-                .andExpect(jsonPath("$[0].balance").value(100.00));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].id").value(1))
+                .andExpect(jsonPath("$.data[0].walletName").value("TestWallet"))
+                .andExpect(jsonPath("$.data[0].balance").value(100.00));
 
         verify(ledgerService).findByUserId(1L);
         verify(ledgerService).toDTOList(ledgers);
@@ -127,19 +181,18 @@ class LedgerControllerTest {
     @WithMockUser(username = "1")
     @DisplayName("Should get ledger by wallet name successfully")
     void shouldGetLedgerByWalletNameSuccessfully() throws Exception {
-        when(walletService.findByName("TestWallet")).thenReturn(wallet);
-        doNothing().when(ledgerService).validateWalletOwnership(wallet, 1L);
+        when(walletService.findByNameAndUserId("TestWallet", 1L)).thenReturn(wallet);
         when(ledgerService.findByWalletId(1L)).thenReturn(ledger);
         when(ledgerService.toDTO(ledger)).thenReturn(ledgerDTO);
 
         mockMvc.perform(get("/ledger/find")
                 .param("walletName", "TestWallet"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.walletName").value("TestWallet"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value(1))
+                .andExpect(jsonPath("$.data.walletName").value("TestWallet"));
 
-        verify(walletService).findByName("TestWallet");
-        verify(ledgerService).validateWalletOwnership(wallet, 1L);
+        verify(walletService).findByNameAndUserId("TestWallet", 1L);
         verify(ledgerService).findByWalletId(1L);
         verify(ledgerService).toDTO(ledger);
     }
@@ -150,35 +203,36 @@ class LedgerControllerTest {
     void shouldGetBalanceSuccessfully() throws Exception {
         BigDecimal expectedBalance = new BigDecimal("100.00");
 
-        when(walletService.findByName("TestWallet")).thenReturn(wallet);
-        doNothing().when(ledgerService).validateWalletOwnership(wallet, 1L);
+        when(walletService.findByNameAndUserId("TestWallet", 1L)).thenReturn(wallet);
         when(ledgerService.getBalance(1L)).thenReturn(expectedBalance);
 
         mockMvc.perform(get("/ledger/balance")
                 .param("walletName", "TestWallet"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("100.00"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value(100.00));
 
-        verify(walletService).findByName("TestWallet");
-        verify(ledgerService).validateWalletOwnership(wallet, 1L);
+        verify(walletService).findByNameAndUserId("TestWallet", 1L);
         verify(ledgerService).getBalance(1L);
     }
 
     @Test
     @WithMockUser(username = "1")
-    @DisplayName("Should delete ledger successfully")
-    void shouldDeleteLedgerSuccessfully() throws Exception {
-        when(walletService.findByName("TestWallet")).thenReturn(wallet);
-        doNothing().when(ledgerService).validateWalletOwnership(wallet, 1L);
-        doNothing().when(ledgerService).deleteLedger(1L);
+    @DisplayName("Should create payment request successfully")
+    void shouldCreatePaymentRequestSuccessfully() throws Exception {
+        when(paymentRequestService.createRequest(1L, new BigDecimal("25.00"), "TestWallet"))
+                .thenReturn(paymentRequestDTO);
 
-        mockMvc.perform(delete("/ledger/delete")
-                .param("walletName", "TestWallet"))
+        mockMvc.perform(post("/ledger/payment-request")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"amount":25.00,"receiverWalletName":"TestWallet"}
+                        """))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Ledger deleted successfully"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.id").value("pr_123"))
+                .andExpect(jsonPath("$.data.receiverWalletName").value("TestWallet"));
 
-        verify(walletService).findByName("TestWallet");
-        verify(ledgerService).validateWalletOwnership(wallet, 1L);
-        verify(ledgerService).deleteLedger(1L);
+        verify(paymentRequestService).createRequest(1L, new BigDecimal("25.00"), "TestWallet");
     }
 }

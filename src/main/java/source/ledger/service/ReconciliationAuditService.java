@@ -3,6 +3,7 @@ package source.ledger.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import source.ledger.repository.LedgerRepository;
@@ -26,17 +27,20 @@ public class ReconciliationAuditService {
     private final LightningClient lightningClient;
     private final StringRedisTemplate redisTemplate;
     private final source.security.VaultKeyProvider vaultKeyProvider;
+    private final boolean solvencyAuditEnforced;
 
     public ReconciliationAuditService(LedgerRepository ledgerRepository,
                                       BlockchainClient blockchainClient,
                                       LightningClient lightningClient,
                                       StringRedisTemplate redisTemplate,
-                                      source.security.VaultKeyProvider vaultKeyProvider) {
+                                      source.security.VaultKeyProvider vaultKeyProvider,
+                                      @Value("${audit.solvency.enforced:true}") boolean solvencyAuditEnforced) {
         this.ledgerRepository = ledgerRepository;
         this.blockchainClient = blockchainClient;
         this.lightningClient = lightningClient;
         this.redisTemplate = redisTemplate;
         this.vaultKeyProvider = vaultKeyProvider;
+        this.solvencyAuditEnforced = solvencyAuditEnforced;
     }
 
     /**
@@ -65,6 +69,10 @@ public class ReconciliationAuditService {
     public void performShadowAudit() {
         if (!vaultKeyProvider.isReady()) {
             log.warn("[ShadowAudit] Skipping platform reconciliation: Master key not available yet (STALL mode).");
+            return;
+        }
+        if (!solvencyAuditEnforced) {
+            log.info("[ShadowAudit] Solvency enforcement disabled for this profile. Skipping platform reconciliation.");
             return;
         }
 

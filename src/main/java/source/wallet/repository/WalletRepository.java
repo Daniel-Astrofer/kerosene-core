@@ -26,6 +26,10 @@ public interface WalletRepository extends JpaRepository<WalletEntity, Long> {
 
     Optional<WalletEntity> findByUserIdAndName(Long userId, String name);
 
+    Optional<WalletEntity> findByDepositAddress(String depositAddress);
+
+    Optional<WalletEntity> findByLightningAddress(String lightningAddress);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM WalletEntity w WHERE w.id = :id")
     Optional<WalletEntity> findByIdForUpdate(@Param("id") Long id);

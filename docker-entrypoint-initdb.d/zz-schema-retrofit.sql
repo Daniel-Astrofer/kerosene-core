@@ -1,0 +1,412 @@
+-- Keep fresh Postgres volumes aligned with the out-of-band migration script.
+-- Everything here must be idempotent because init.sql already creates the base
+-- schema and some operators also apply migrations manually to existing volumes.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 001: Adicionar coluna totp_secret na tabela financial.wallets
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255) NOT NULL DEFAULT '';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 002: Critical Performance Indexes (Issue 2.5)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_ledger_wallet_id   ON financial.ledger(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_nonce        ON financial.ledger(nonce);
+CREATE INDEX IF NOT EXISTS idx_ledger_last_hash    ON financial.ledger(last_hash);
+CREATE INDEX IF NOT EXISTS idx_wallet_user_id      ON financial.wallets(user_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_history_receiver ON financial.ledger_transaction_history(receiver_user_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_history_sender   ON financial.ledger_transaction_history(sender_identifier);
+CREATE INDEX IF NOT EXISTS idx_ledger_history_created  ON financial.ledger_transaction_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ledger_history_txid     ON financial.ledger_transaction_history(blockchain_txid)
+    WHERE blockchain_txid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ledger_history_status   ON financial.ledger_transaction_history(status);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 003: Adicionar coluna deposit_address em financial.wallets
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS deposit_address VARCHAR(100) NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_deposit_address
+    ON financial.wallets(deposit_address)
+    WHERE deposit_address IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 004: Passkey Schema Harmonization
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE auth.passkey_credentials DROP COLUMN IF EXISTS public_key;
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS device_name VARCHAR(255);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 005: Dev balance claim guard
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS test_balance_claimed BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS shamir_total_shares INTEGER;
+
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS shamir_threshold INTEGER;
+
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS multisig_threshold INTEGER NOT NULL DEFAULT 2;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 006: XPUB derivation state for deterministic wallet addresses
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS xpub TEXT;
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS last_derived_index INTEGER NOT NULL DEFAULT -1;
+
+UPDATE financial.wallets
+    SET last_derived_index = -1
+    WHERE last_derived_index IS NULL;
+
+ALTER TABLE financial.wallets
+    ALTER COLUMN last_derived_index SET DEFAULT -1;
+
+ALTER TABLE financial.wallets
+    ALTER COLUMN last_derived_index SET NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 007: External network wallet metadata
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS lightning_address VARCHAR(255);
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS external_wallet_reference VARCHAR(255);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_lightning_address
+    ON financial.wallets(lightning_address)
+    WHERE lightning_address IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 008: External network transfers and custody events
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.network_transfers (
+    id UUID PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    wallet_id BIGINT NOT NULL REFERENCES financial.wallets(id) ON DELETE CASCADE,
+    wallet_name_snapshot VARCHAR(255) NOT NULL,
+    network VARCHAR(32) NOT NULL,
+    transfer_type VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    provider VARCHAR(64) NOT NULL,
+    destination TEXT,
+    external_reference VARCHAR(255),
+    invoice_data TEXT,
+    amount_btc NUMERIC(19, 8),
+    network_fee_btc NUMERIC(19, 8),
+    platform_fee_btc NUMERIC(19, 8),
+    total_debited_btc NUMERIC(19, 8),
+    context TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_user_created
+    ON financial.network_transfers(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_wallet
+    ON financial.network_transfers(wallet_id);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_status
+    ON financial.network_transfers(status);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 009: Mining marketplace inspired by hashpower rentals
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.mining_rig_offers (
+    id BIGSERIAL PRIMARY KEY,
+    rig_code VARCHAR(64) UNIQUE NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    algorithm VARCHAR(64) NOT NULL,
+    hash_unit VARCHAR(16) NOT NULL,
+    price_per_unit_day_btc NUMERIC(19, 8) NOT NULL,
+    projected_btc_yield_per_unit_day NUMERIC(19, 8) NOT NULL,
+    projected_yield_multiplier NUMERIC(10, 8) NOT NULL DEFAULT 1.00000000,
+    available_hashrate NUMERIC(19, 8) NOT NULL,
+    min_rental_hours INTEGER NOT NULL DEFAULT 1,
+    max_rental_hours INTEGER NOT NULL DEFAULT 168,
+    provider VARCHAR(64) NOT NULL DEFAULT 'KEROSENE_INTERNAL',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_rig_offers_active
+    ON financial.mining_rig_offers(active);
+
+CREATE INDEX IF NOT EXISTS idx_mining_rig_offers_algorithm
+    ON financial.mining_rig_offers(algorithm);
+
+INSERT INTO financial.mining_rig_offers (
+    rig_code,
+    display_name,
+    algorithm,
+    hash_unit,
+    price_per_unit_day_btc,
+    projected_btc_yield_per_unit_day,
+    projected_yield_multiplier,
+    available_hashrate,
+    min_rental_hours,
+    max_rental_hours,
+    provider,
+    active,
+    created_at,
+    updated_at
+)
+SELECT
+    'sha256-hydro-240',
+    'Hydro SHA256 240TH',
+    'SHA256',
+    'TH',
+    0.00000850,
+    0.00000720,
+    0.98500000,
+    1200.00000000,
+    1,
+    168,
+    'KEROSENE_INTERNAL',
+    TRUE,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+WHERE NOT EXISTS (
+    SELECT 1 FROM financial.mining_rig_offers WHERE rig_code = 'sha256-hydro-240'
+);
+
+INSERT INTO financial.mining_rig_offers (
+    rig_code,
+    display_name,
+    algorithm,
+    hash_unit,
+    price_per_unit_day_btc,
+    projected_btc_yield_per_unit_day,
+    projected_yield_multiplier,
+    available_hashrate,
+    min_rental_hours,
+    max_rental_hours,
+    provider,
+    active,
+    created_at,
+    updated_at
+)
+SELECT
+    'sha256-pro-150',
+    'Pro SHA256 150TH',
+    'SHA256',
+    'TH',
+    0.00000720,
+    0.00000610,
+    0.98250000,
+    900.00000000,
+    1,
+    168,
+    'KEROSENE_INTERNAL',
+    TRUE,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+WHERE NOT EXISTS (
+    SELECT 1 FROM financial.mining_rig_offers WHERE rig_code = 'sha256-pro-150'
+);
+
+INSERT INTO financial.mining_rig_offers (
+    rig_code,
+    display_name,
+    algorithm,
+    hash_unit,
+    price_per_unit_day_btc,
+    projected_btc_yield_per_unit_day,
+    projected_yield_multiplier,
+    available_hashrate,
+    min_rental_hours,
+    max_rental_hours,
+    provider,
+    active,
+    created_at,
+    updated_at
+)
+SELECT
+    'scrypt-rack-18g',
+    'Scrypt Rack 18GH',
+    'SCRYPT',
+    'GH',
+    0.00012000,
+    0.00010100,
+    0.98000000,
+    180.00000000,
+    1,
+    72,
+    'KEROSENE_INTERNAL',
+    TRUE,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+WHERE NOT EXISTS (
+    SELECT 1 FROM financial.mining_rig_offers WHERE rig_code = 'scrypt-rack-18g'
+);
+
+CREATE TABLE IF NOT EXISTS financial.mining_allocations (
+    id UUID PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    wallet_id BIGINT NOT NULL REFERENCES financial.wallets(id) ON DELETE CASCADE,
+    rig_id BIGINT NOT NULL REFERENCES financial.mining_rig_offers(id) ON DELETE RESTRICT,
+    wallet_name_snapshot VARCHAR(255) NOT NULL,
+    rig_name_snapshot VARCHAR(255) NOT NULL,
+    algorithm VARCHAR(64) NOT NULL,
+    hash_unit VARCHAR(16) NOT NULL,
+    allocated_hashrate NUMERIC(19, 8) NOT NULL,
+    duration_hours INTEGER NOT NULL,
+    rental_cost_btc NUMERIC(19, 8) NOT NULL,
+    projected_gross_yield_btc NUMERIC(19, 8) NOT NULL,
+    projected_net_yield_btc NUMERIC(19, 8) NOT NULL,
+    payout_address TEXT,
+    pool_url TEXT,
+    worker_name VARCHAR(255),
+    provider_rental_reference VARCHAR(255),
+    status VARCHAR(32) NOT NULL,
+    refunded_amount_btc NUMERIC(19, 8),
+    settled_at TIMESTAMP,
+    starts_at TIMESTAMP NOT NULL,
+    ends_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_mining_allocations_user_created
+    ON financial.mining_allocations(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_mining_allocations_status
+    ON financial.mining_allocations(status);
+
+CREATE INDEX IF NOT EXISTS idx_mining_allocations_wallet
+    ON financial.mining_allocations(wallet_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 010: Inbound network transfer lifecycle metadata
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_type_status
+    ON financial.network_transfers(transfer_type, status);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 011: Treasury configuration for real audit xpub scanning
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.treasury_config (
+    id BIGSERIAL PRIMARY KEY,
+    max_withdraw_limit NUMERIC(19, 8) NOT NULL DEFAULT 1.00000000,
+    audit_xpub TEXT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 012: Persistent idempotency for on-chain deposits
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.processed_transactions (
+    id UUID PRIMARY KEY,
+    txid VARCHAR(128) NOT NULL UNIQUE,
+    source VARCHAR(64) NOT NULL,
+    processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_transactions_txid
+    ON financial.processed_transactions(txid);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 013: Auth account password hash + activation audit timestamp
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+
+UPDATE auth.users_credentials
+    SET password_hash = passphrase
+    WHERE password_hash IS NULL
+      AND passphrase IS NOT NULL;
+
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP;
+
+UPDATE auth.users_credentials
+    SET activated_at = CURRENT_TIMESTAMP
+    WHERE is_active = TRUE
+      AND activated_at IS NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 014: Auth support tables required by the current JPA model
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS auth.users_device (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_device_user_id
+    ON auth.users_device(user_id);
+
+CREATE TABLE IF NOT EXISTS public.user_backup_codes (
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    code_hash VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_backup_codes_user_id
+    ON public.user_backup_codes(user_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 015: Deposit history table for inbound on-chain tracking
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.deposits (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    txid VARCHAR(255) NOT NULL UNIQUE,
+    from_address VARCHAR(255) NOT NULL,
+    to_address VARCHAR(255) NOT NULL,
+    amount_btc NUMERIC(19, 8) NOT NULL,
+    network_fee NUMERIC(19, 8),
+    confirmations BIGINT NOT NULL DEFAULT 0,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_user_created
+    ON public.deposits(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_deposits_status
+    ON public.deposits(status);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 016: Audit and treasury support tables
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.merkle_audit (
+    id UUID PRIMARY KEY,
+    merkle_root VARCHAR(64) NOT NULL,
+    ledger_count BIGINT NOT NULL,
+    anchor_txid VARCHAR(64),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_merkle_audit_created_at
+    ON financial.merkle_audit(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS financial.siphon_requests (
+    id UUID PRIMARY KEY,
+    amount NUMERIC(19, 8) NOT NULL,
+    requested_at TIMESTAMP NOT NULL,
+    executable_after TIMESTAMP NOT NULL,
+    status VARCHAR(32) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_siphon_requests_status_eta
+    ON financial.siphon_requests(status, executable_after);
+
+CREATE TABLE IF NOT EXISTS financial.platform_revenue (
+    id BIGSERIAL PRIMARY KEY,
+    accumulated_profit NUMERIC(19, 8) NOT NULL DEFAULT 0,
+    hmac_sha256 VARCHAR(255) NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

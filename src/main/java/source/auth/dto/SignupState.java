@@ -5,8 +5,7 @@ import source.auth.model.enums.AccountSecurityType;
 
 /**
  * Holds the temporary onboarding state for a user while they complete the
- * multi-step authentication process (PoW -> TOTP -> Passkey) and wait for
- * the mandatory Bitcoin payment confirmations.
+ * multi-step authentication process (PoW -> optional TOTP -> Passkey).
  */
 public class SignupState implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -15,7 +14,7 @@ public class SignupState implements Serializable {
     private String username;
 
     /**
-     * Hashed passphrase (done at signup time).
+     * Hashed account password.
      */
     private char[] passphrase;
 
@@ -57,6 +56,12 @@ public class SignupState implements Serializable {
      * Safe to store in Redis because it is already ciphertext.
      */
     private String platformCosignerSecret;
+
+    private Integer shamirTotalShares;
+
+    private Integer shamirThreshold;
+
+    private Integer multisigThreshold;
 
     public SignupState() {
     }
@@ -196,6 +201,30 @@ public class SignupState implements Serializable {
 
     public void setPlatformCosignerSecret(String platformCosignerSecret) {
         this.platformCosignerSecret = platformCosignerSecret;
+    }
+
+    public Integer getShamirTotalShares() {
+        return shamirTotalShares;
+    }
+
+    public void setShamirTotalShares(Integer shamirTotalShares) {
+        this.shamirTotalShares = shamirTotalShares;
+    }
+
+    public Integer getShamirThreshold() {
+        return shamirThreshold;
+    }
+
+    public void setShamirThreshold(Integer shamirThreshold) {
+        this.shamirThreshold = shamirThreshold;
+    }
+
+    public Integer getMultisigThreshold() {
+        return multisigThreshold;
+    }
+
+    public void setMultisigThreshold(Integer multisigThreshold) {
+        this.multisigThreshold = multisigThreshold;
     }
 
     public java.util.List<String> getBackupCodes() {

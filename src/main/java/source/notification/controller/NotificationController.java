@@ -5,8 +5,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import source.notification.service.NotificationService;
 import source.common.dto.ApiResponse;
-
-import java.util.Map;
+import source.notification.dto.NotificationSendRequest;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 
 @RestController
 @RequestMapping("/notifications")
@@ -16,10 +17,10 @@ public class NotificationController {
     private NotificationService notificationService;
 
     @PostMapping("/send")
-    public ResponseEntity<ApiResponse<String>> sendNotification(@RequestBody Map<String, String> payload) {
-        String userIdStr = payload.get("userId");
-        String title = payload.get("title");
-        String body = payload.get("body");
+    public ResponseEntity<ApiResponse<String>> sendNotification(@RequestBody NotificationSendRequest request) {
+        String userIdStr = request.userId();
+        String title = request.title();
+        String body = request.body();
 
         if (userIdStr == null || title == null || body == null) {
             return ResponseEntity.badRequest()
@@ -29,7 +30,16 @@ public class NotificationController {
 
         try {
             Long userId = Long.parseLong(userIdStr);
-            notificationService.notifyUser(userId, title, body);
+            notificationService.notifyUser(
+                    userId,
+                    NotificationKind.fromValue(request.kind()),
+                    NotificationSeverity.fromValue(request.severity()),
+                    title,
+                    body,
+                    request.deeplink(),
+                    request.entityType(),
+                    request.entityId(),
+                    request.metadata());
             return ResponseEntity
                     .ok(ApiResponse.success("Push notification has been successfully dispatched to the target user."));
         } catch (NumberFormatException e) {

@@ -1,10 +1,12 @@
 package source.auth.application.orchestrator.signup;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -17,6 +19,7 @@ import source.auth.application.service.cripto.contracts.Hasher;
 import source.auth.application.service.pow.PowService;
 import source.auth.application.service.security.profile.AccountSecurityProfileResolver;
 import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import source.auth.dto.SignupState;
 import source.auth.dto.SignupResponseDTO;
 import source.auth.dto.UserDTO;
 
@@ -25,6 +28,7 @@ public class StartSignup {
 
     private static final int BACKUP_CODE_COUNT = 10;
     private static final int BACKUP_CODE_BOUND = 100_000_000;
+    private static final Duration SIGNUP_STATE_TTL = Duration.ofHours(24);
 
     private final TOTPKeyGenerate totpGenerator;
     private final SignupVerifier verifier;
@@ -76,12 +80,24 @@ public class StartSignup {
             Arrays.fill(passphrase, '\0');
         }
 
-        dto.setPassphrase(hashedPassphrase.toCharArray());
-        dto.setTotpSecret(totpKey);
-        dto.setBackupCodes(backupCodes.hashedCodes());
-        stateStore.createPendingUser(dto);
+        String sessionId = UUID.randomUUID().toString().replace("-", "");
 
-        return new SignupResponseDTO(otpUri, backupCodes.rawCodes());
+        SignupState state = new SignupState();
+        state.setSessionId(sessionId);
+        state.setUsername(normalizedUsername);
+        state.setPassphrase(hashedPassphrase.toCharArray());
+        state.setTotpSecret(totpKey);
+        state.setTotpVerified(false);
+        state.setPasskeyRegistered(false);
+        state.setPaymentConfirmed(false);
+        state.setAccountSecurity(dto.getAccountSecurity());
+        state.setShamirTotalShares(dto.getShamirTotalShares());
+        state.setShamirThreshold(dto.getShamirThreshold());
+        state.setMultisigThreshold(dto.getMultisigThreshold());
+        state.setBackupCodes(backupCodes.hashedCodes());
+        stateStore.saveSignupState(sessionId, state, SIGNUP_STATE_TTL);
+
+        return new SignupResponseDTO(sessionId, otpUri, backupCodes.rawCodes(), true);
     }
 
     private BackupCodes generateBackupCodes() {

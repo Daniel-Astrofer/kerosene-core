@@ -1,8 +1,5 @@
 package source.auth.application.orchestrator.signup;
 
-import java.time.Duration;
-import java.util.UUID;
-
 import org.springframework.stereotype.Component;
 
 import source.auth.AuthConstants;
@@ -11,12 +8,9 @@ import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.auth.dto.SignupState;
 import source.auth.dto.UserDTO;
-import source.auth.model.enums.AccountSecurityType;
 
 @Component
 public class VerifySignupTotp {
-
-    private static final Duration SIGNUP_STATE_TTL = Duration.ofMinutes(1440);
 
     private final TOTPVerifier totpVerifier;
     private final SignupStateStore stateStore;
@@ -27,42 +21,24 @@ public class VerifySignupTotp {
     }
 
     public String execute(UserDTO dto) {
-        UserDTO cachedUser = stateStore.findPendingUser(dto);
+        if (dto.getSessionId() == null || dto.getSessionId().isBlank()) {
+            throw new AuthExceptions.InvalidCredentials("Signup sessionId required.");
+        }
 
-        if (cachedUser == null) {
+        SignupState state = stateStore.findSignupState(dto.getSessionId());
+        if (state == null) {
             throw new AuthExceptions.TotpTimeExceededException(AuthConstants.ERR_TOTP_EXPIRED);
         }
 
-        if (dto.getTotpCode() == null || dto.getTotpCode().isEmpty()) {
-            throw new AuthExceptions.InvalidCredentials("TOTP code required to complete registration.");
+        if (dto.getTotpCode() == null || dto.getTotpCode().isBlank()) {
+            state.setTotpVerified(false);
+            stateStore.saveSignupState(dto.getSessionId(), state, java.time.Duration.ofHours(24));
+            return dto.getSessionId();
         }
-        totpVerifier.totpVerify(cachedUser.getTotpSecret(), dto.getTotpCode());
 
-        String sessionId = UUID.randomUUID().toString().replace("-", "");
-        SignupState state = buildSignupState(sessionId, cachedUser);
-
-        stateStore.saveSignupState(sessionId, state, SIGNUP_STATE_TTL);
-        stateStore.deletePendingUser(cachedUser);
-
-        return sessionId;
-    }
-
-    private static SignupState buildSignupState(String sessionId, UserDTO cachedUser) {
-        SignupState state = new SignupState();
-        state.setSessionId(sessionId);
-        state.setUsername(cachedUser.getUsername());
-        state.setPassphrase(cachedUser.getPassphrase());
-        state.setTotpSecret(cachedUser.getTotpSecret());
+        totpVerifier.totpVerify(state.getTotpSecret(), dto.getTotpCode());
         state.setTotpVerified(true);
-        state.setPasskeyRegistered(false);
-        state.setPaymentConfirmed(false);
-        state.setAccountSecurity(cachedUser.getAccountSecurity() != null
-                ? cachedUser.getAccountSecurity()
-                : AccountSecurityType.STANDARD);
-        state.setShamirTotalShares(cachedUser.getShamirTotalShares());
-        state.setShamirThreshold(cachedUser.getShamirThreshold());
-        state.setMultisigThreshold(cachedUser.getMultisigThreshold());
-        state.setBackupCodes(cachedUser.getBackupCodes());
-        return state;
+        stateStore.saveSignupState(dto.getSessionId(), state, java.time.Duration.ofHours(24));
+        return dto.getSessionId();
     }
 }

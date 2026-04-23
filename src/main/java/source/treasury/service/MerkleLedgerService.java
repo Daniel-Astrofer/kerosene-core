@@ -3,6 +3,8 @@ package source.treasury.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import source.treasury.application.port.out.MerkleLedgerPort;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * auditar milhões de registros validando apenas o "Top Hash".
  */
 @Service
-public class MerkleLedgerService {
+public class MerkleLedgerService implements MerkleLedgerPort {
 
     private static final Logger log = LoggerFactory.getLogger(MerkleLedgerService.class);
 
@@ -35,6 +37,7 @@ public class MerkleLedgerService {
      * @param entryData Dados concatenados da linha (ID + Amount + Timestamp)
      * @return O novo Merkle Root
      */
+    @Override
     public String appendEntry(String entryData) {
         String prevRoot = currentRoot.get();
         String newLeaf = sha256(entryData);
@@ -48,6 +51,7 @@ public class MerkleLedgerService {
         return newRoot;
     }
 
+    @Override
     public String getCurrentRoot() {
         return currentRoot.get();
     }

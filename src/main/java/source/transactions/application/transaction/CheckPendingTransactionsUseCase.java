@@ -1,24 +1,25 @@
 package source.transactions.application.transaction;
 
 import org.springframework.stereotype.Service;
+import source.transactions.application.transaction.monitoring.MonitorPendingTransactionUseCase;
 import source.transactions.model.PendingTransaction;
 
 @Service
 public class CheckPendingTransactionsUseCase {
 
     private final TransactionPendingPort transactionPendingPort;
-    private final TransactionMonitorPort transactionMonitorPort;
+    private final MonitorPendingTransactionUseCase monitorPendingTransactionUseCase;
 
     public CheckPendingTransactionsUseCase(
             TransactionPendingPort transactionPendingPort,
-            TransactionMonitorPort transactionMonitorPort) {
+            MonitorPendingTransactionUseCase monitorPendingTransactionUseCase) {
         this.transactionPendingPort = transactionPendingPort;
-        this.transactionMonitorPort = transactionMonitorPort;
+        this.monitorPendingTransactionUseCase = monitorPendingTransactionUseCase;
     }
 
     public void checkAll() {
         for (PendingTransaction transaction : transactionPendingPort.findPendingTransactions()) {
-            transactionMonitorPort.checkTransaction(transaction);
+            monitorPendingTransactionUseCase.check(transaction);
         }
     }
 }

@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,5 +78,22 @@ class PaymentLinkCreatorTest {
 
         assertEquals("bc1qfallback", paymentLink.getDepositAddress());
         assertEquals("session-1", paymentLink.getSessionId());
+    }
+
+    @Test
+    void keepsStaticAddressForAccountActivationLinksWithoutWalletLookup() {
+        PaymentLinkDTO paymentLink = paymentLinkCreator.createForAccountActivation(
+                11L,
+                new BigDecimal("0.00005000"));
+
+        assertNotNull(paymentLink.getId());
+        assertEquals("bc1qfallback", paymentLink.getDepositAddress());
+        assertEquals(Long.valueOf(11L), paymentLink.getUserId());
+        assertEquals(PaymentLinkDescription.ACCOUNT_ACTIVATION, paymentLink.getDescription());
+        assertEquals(PaymentLinkStatus.PENDING, paymentLink.getStatus());
+        verify(paymentLinkStore).save(paymentLink);
+        verify(paymentLinkHistoryPort).recordCreated(paymentLink);
+        verify(paymentLinkWalletPort, never()).findPrimaryWallet(11L);
+        verify(addressAllocationPort, never()).allocate(any(), any(), any(), eq(true));
     }
 }

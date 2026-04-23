@@ -10,6 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AccountSecurityProfileDTOTest {
 
     @Test
+    void standardRequiresPasskeyForTransactions() {
+        UserDataBase user = new UserDataBase();
+        user.setAccountSecurity(AccountSecurityType.STANDARD);
+
+        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true);
+
+        assertTrue(profile.requiredFactors().contains("PASSKEY"));
+        assertFalse(profile.requiredFactors().contains("TOTP"));
+    }
+
+    @Test
     void multisigThresholdTwoDoesNotRequirePasskeyJustBecauseOneExists() {
         UserDataBase user = new UserDataBase();
         user.setAccountSecurity(AccountSecurityType.MULTISIG_2FA);

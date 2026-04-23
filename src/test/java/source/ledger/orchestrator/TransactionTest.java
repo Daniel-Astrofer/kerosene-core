@@ -1,176 +1,216 @@
 package source.ledger.orchestrator;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.application.service.user.UserService;
+import source.auth.AuthExceptions;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
 import source.auth.model.entity.UserDataBase;
+import source.auth.model.enums.AccountSecurityType;
+import source.ledger.application.transaction.AuthenticatedUserPort;
+import source.ledger.application.transaction.InternalTransferHistoryPort;
+import source.ledger.application.transaction.TransactionIdempotencyPort;
+import source.ledger.application.transaction.TransactionLedgerService;
+import source.ledger.application.transaction.TransactionNotificationPort;
+import source.ledger.application.transaction.TransactionParticipantResolver;
+import source.ledger.application.transaction.TransactionProcessingUseCase;
+import source.ledger.application.transaction.handler.AuthenticatedSenderHandler;
+import source.ledger.application.transaction.handler.TransactionAuthenticationHandler;
+import source.ledger.application.transaction.handler.TransactionExecutionHandler;
+import source.ledger.application.transaction.handler.TransactionHistoryHandler;
+import source.ledger.application.transaction.handler.TransactionIdempotencyHandler;
+import source.ledger.application.transaction.handler.TransactionNotificationHandler;
+import source.ledger.application.transaction.handler.TransactionTimestampValidationHandler;
+import source.ledger.application.transaction.handler.TransactionWalletResolutionHandler;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.exceptions.LedgerExceptions;
 import source.ledger.service.LedgerContract;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletContract;
 
 import java.math.BigDecimal;
-import java.util.Optional;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Transaction Orchestrator Tests")
 class TransactionTest {
 
-        @Mock
-        private WalletContract walletService;
+    @Mock
+    private AuthenticatedUserPort authenticatedUserPort;
 
-        @Mock
-        private LedgerContract ledgerService;
+    @Mock
+    private TransactionParticipantResolver participantResolver;
 
-        @Mock
-        private UserService userService;
+    @Mock
+    private TransactionalAuthenticationPort authenticationPort;
 
-        @Mock
-        private SecurityContext securityContext;
+    @Mock
+    private TransactionIdempotencyPort transactionIdempotencyPort;
 
-        @Mock
-        private Authentication authentication;
+    @Mock
+    private LedgerContract ledgerService;
 
-        @InjectMocks
-        private Transaction transaction;
+    @Mock
+    private InternalTransferHistoryPort historyPort;
 
-        private TransactionDTO transactionDTO;
-        private UserDataBase sender;
-        private UserDataBase receiver;
-        private WalletEntity senderWallet;
-        private WalletEntity receiverWallet;
-        private LedgerEntity senderLedger;
-        private LedgerEntity receiverLedger;
+    @Mock
+    private TransactionNotificationPort notificationPort;
 
-        @BeforeEach
-        void setUp() throws Exception {
-                sender = new UserDataBase();
-                setPrivateId(sender, 1L);
-                sender.setUsername("sender");
+    private TransactionProcessingUseCase transactionProcessingUseCase;
 
-                receiver = new UserDataBase();
-                setPrivateId(receiver, 2L);
-                receiver.setUsername("receiver");
+    private TransactionDTO transactionDTO;
+    private UserDataBase sender;
+    private UserDataBase receiver;
+    private WalletEntity senderWallet;
+    private WalletEntity receiverWallet;
+    private LedgerEntity receiverLedger;
 
-                senderWallet = new WalletEntity();
-                senderWallet.setId(1L);
-                senderWallet.setName("SenderWallet");
-                senderWallet.setPassphraseHash("sender-addr");
-                senderWallet.setUser(sender);
+    @BeforeEach
+    void setUp() throws Exception {
+        transactionProcessingUseCase = new TransactionProcessingUseCase(List.of(
+                new TransactionTimestampValidationHandler(),
+                new AuthenticatedSenderHandler(authenticatedUserPort, participantResolver),
+                new TransactionAuthenticationHandler(authenticationPort),
+                new TransactionIdempotencyHandler(transactionIdempotencyPort),
+                new TransactionWalletResolutionHandler(participantResolver),
+                new TransactionExecutionHandler(new TransactionLedgerService(ledgerService)),
+                new TransactionHistoryHandler(historyPort),
+                new TransactionNotificationHandler(notificationPort)));
 
-                receiverWallet = new WalletEntity();
-                receiverWallet.setId(2L);
-                receiverWallet.setName("ReceiverWallet");
-                receiverWallet.setPassphraseHash("receiver-addr");
-                receiverWallet.setUser(receiver);
+        sender = new UserDataBase();
+        setPrivateId(sender, 1L);
+        sender.setUsername("sender");
+        sender.setPassphrase("sender-passphrase-hash");
+        sender.setTOTPSecret("sender-totp-secret");
+        sender.setAccountSecurity(AccountSecurityType.MULTISIG_2FA);
+        sender.setMultisigThreshold(2);
 
-                senderLedger = new LedgerEntity(senderWallet, "Sender ledger");
-                senderLedger.setId(1);
-                senderLedger.setBalance(new BigDecimal("500.00"));
+        receiver = new UserDataBase();
+        setPrivateId(receiver, 2L);
+        receiver.setUsername("receiver");
 
-                receiverLedger = new LedgerEntity(receiverWallet, "Receiver ledger");
-                receiverLedger.setId(2);
-                receiverLedger.setBalance(new BigDecimal("100.00"));
+        senderWallet = new WalletEntity();
+        senderWallet.setId(1L);
+        senderWallet.setName("SenderWallet");
+        senderWallet.setPassphraseHash("sender-addr");
+        senderWallet.setUser(sender);
 
-                transactionDTO = new TransactionDTO();
-                transactionDTO.setSender("sender");
-                transactionDTO.setReceiver("receiver");
-                transactionDTO.setAmount(new BigDecimal("50.00"));
-                transactionDTO.setContext("Payment for services");
+        receiverWallet = new WalletEntity();
+        receiverWallet.setId(2L);
+        receiverWallet.setName("ReceiverWallet");
+        receiverWallet.setPassphraseHash("receiver-addr");
+        receiverWallet.setUser(receiver);
 
-                // Setup security context
-                SecurityContextHolder.setContext(securityContext);
-        }
+        receiverLedger = new LedgerEntity(receiverWallet, "Receiver ledger");
+        receiverLedger.setId(2);
+        receiverLedger.setBalance(new BigDecimal("100.00"));
 
-        private void setPrivateId(Object target, Long id) throws Exception {
-                java.lang.reflect.Field field = target.getClass().getDeclaredField("id");
-                field.setAccessible(true);
-                field.set(target, id);
-        }
+        transactionDTO = new TransactionDTO();
+        transactionDTO.setSender("SenderWallet");
+        transactionDTO.setReceiver("receiver");
+        transactionDTO.setAmount(new BigDecimal("50.00"));
+        transactionDTO.setContext("Payment for services");
+        transactionDTO.setConfirmationPassphrase("sender-passphrase");
+        transactionDTO.setTotpCode("123456");
 
-        @Test
-        @DisplayName("Should process transaction successfully")
-        void shouldProcessTransactionSuccessfully() {
-                when(securityContext.getAuthentication()).thenReturn(authentication);
-                when(authentication.getName()).thenReturn("1");
-                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
-                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
-                when(userService.findByUsername("receiver")).thenReturn(receiver);
-                when(walletService.findByUserId(2L)).thenReturn(java.util.List.of(receiverWallet));
+        lenient().when(authenticatedUserPort.getAuthenticatedUserId()).thenReturn(1L);
+        lenient().when(participantResolver.resolveAuthenticatedSender(1L)).thenReturn(sender);
+        lenient().when(transactionIdempotencyPort.reserve(anyString(), anyLong(), any(TimeUnit.class)))
+                .thenReturn(true);
+        lenient().when(participantResolver.resolveSenderWallet(sender, "SenderWallet")).thenReturn(senderWallet);
+        lenient().when(participantResolver.resolveReceiverWallet("receiver")).thenReturn(receiverWallet);
+        lenient().when(ledgerService.updateBalance(anyLong(), any(BigDecimal.class), anyString()))
+                .thenReturn(receiverLedger);
+    }
 
-                when(ledgerService.findByWalletId(anyLong())).thenReturn(senderLedger);
-                when(ledgerService.updateBalance(anyLong(), any(BigDecimal.class), anyString()))
-                                .thenReturn(receiverLedger);
+    private void setPrivateId(Object target, Long id) throws Exception {
+        java.lang.reflect.Field field = target.getClass().getDeclaredField("id");
+        field.setAccessible(true);
+        field.set(target, id);
+    }
 
-                assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
+    @Test
+    @DisplayName("Should process transaction successfully")
+    void shouldProcessTransactionSuccessfully() {
+        assertDoesNotThrow(() -> transactionProcessingUseCase.process(transactionDTO));
 
-                verify(ledgerService, times(2)).updateBalance(anyLong(), any(BigDecimal.class), anyString());
-        }
+        verify(ledgerService, times(2)).updateBalance(anyLong(), any(BigDecimal.class), anyString());
+        verify(historyPort).recordInternalTransfer(any());
+        verify(notificationPort, times(2)).notifyUser(anyLong(), any(source.notification.model.UserNotificationPayload.class));
+    }
 
-        @Test
-        @DisplayName("Should throw exception when receiver not found")
-        void shouldThrowExceptionWhenReceiverNotFound() {
-                when(securityContext.getAuthentication()).thenReturn(authentication);
-                when(authentication.getName()).thenReturn("1");
-                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
-                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
-                when(userService.findByUsername("receiver")).thenReturn(null);
+    @Test
+    @DisplayName("Should throw exception when receiver not found")
+    void shouldThrowExceptionWhenReceiverNotFound() {
+        when(participantResolver.resolveReceiverWallet("receiver"))
+                .thenThrow(new LedgerExceptions.ReceiverNotFoundException("receiver not found"));
 
-                assertThrows(LedgerExceptions.LedgerNotFoundException.class, () -> {
-                        transaction.processTransaction(transactionDTO);
-                });
+        assertThrows(LedgerExceptions.ReceiverNotFoundException.class,
+                () -> transactionProcessingUseCase.process(transactionDTO));
 
-                verify(ledgerService, never()).updateBalance(anyLong(), any(BigDecimal.class), anyString());
-        }
+        verify(ledgerService, never()).updateBalance(anyLong(), any(BigDecimal.class), anyString());
+    }
 
-        @Test
-        @DisplayName("Should use default context when not provided")
-        void shouldUseDefaultContextWhenNotProvided() {
-                transactionDTO.setContext(null);
+    @Test
+    @DisplayName("Should use default context when not provided")
+    void shouldUseDefaultContextWhenNotProvided() {
+        transactionDTO.setContext(null);
 
-                when(securityContext.getAuthentication()).thenReturn(authentication);
-                when(authentication.getName()).thenReturn("1");
-                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
-                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
-                when(userService.findByUsername("receiver")).thenReturn(receiver);
-                when(walletService.findByUserId(2L)).thenReturn(java.util.List.of(receiverWallet));
-                when(ledgerService.findByWalletId(anyLong())).thenReturn(senderLedger);
+        assertDoesNotThrow(() -> transactionProcessingUseCase.process(transactionDTO));
 
-                assertDoesNotThrow(() -> transaction.processTransaction(transactionDTO));
+        verify(ledgerService, times(2)).updateBalance(
+                anyLong(),
+                any(BigDecimal.class),
+                eq("Transfer from @sender to @receiver"));
+    }
 
-                verify(ledgerService).updateBalance(anyLong(), any(BigDecimal.class), eq("Debit transaction"));
-        }
+    @Test
+    @DisplayName("Should negate amount for debit operation")
+    void shouldNegateAmountForDebitOperation() {
+        transactionProcessingUseCase.process(transactionDTO);
 
-        @Test
-        @DisplayName("Should negate amount for debit operation")
-        void shouldNegateAmountForDebitOperation() {
-                when(securityContext.getAuthentication()).thenReturn(authentication);
-                when(authentication.getName()).thenReturn("1");
-                when(userService.buscarPorId(1L)).thenReturn(Optional.of(sender));
-                when(walletService.findByUserId(1L)).thenReturn(java.util.List.of(senderWallet));
-                when(userService.findByUsername("receiver")).thenReturn(receiver);
-                when(walletService.findByUserId(2L)).thenReturn(java.util.List.of(receiverWallet));
-                when(ledgerService.findByWalletId(anyLong())).thenReturn(senderLedger);
+        verify(ledgerService).updateBalance(
+                eq(senderWallet.getId()),
+                eq(transactionDTO.getAmount().negate()),
+                anyString());
+    }
 
-                transaction.processTransaction(transactionDTO);
+    @Test
+    @DisplayName("Should not reserve idempotency key before passkey challenge")
+    void shouldNotReserveIdempotencyKeyBeforePasskeyChallenge() {
+        transactionDTO.setIdempotencyKey("idem-passkey-retry");
+        transactionDTO.setRequestTimestamp(System.currentTimeMillis());
 
-                verify(ledgerService).updateBalance(
-                                eq(senderWallet.getId()),
-                                argThat(amount -> amount.compareTo(transactionDTO.getAmount().negate()) == 0),
-                                anyString());
-        }
+        doThrow(new AuthExceptions.AuthValidationException("PASSKEY_CHALLENGE_REQUIRED:challenge-123"))
+                .when(authenticationPort)
+                .authorize(any(TransactionalAuthenticationRequest.class));
+
+        AuthExceptions.AuthValidationException ex = assertThrows(
+                AuthExceptions.AuthValidationException.class,
+                () -> transactionProcessingUseCase.process(transactionDTO));
+
+        assertTrue(ex.getMessage().contains("PASSKEY_CHALLENGE_REQUIRED:challenge-123"));
+        verify(transactionIdempotencyPort, never()).reserve(anyString(), anyLong(), any(TimeUnit.class));
+        verifyNoInteractions(ledgerService);
+    }
 }

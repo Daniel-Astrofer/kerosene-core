@@ -25,28 +25,25 @@ public class PaymentLinkService {
     private final PaymentLinkConfirmer paymentLinkConfirmer;
     private final PaymentLinkCompleter paymentLinkCompleter;
     private final PaymentLinkStore paymentLinkStore;
-    private final OnboardingPaymentFinalizer onboardingPaymentFinalizer;
-    private final boolean voucherMockAcceptAnyTxid;
-
     public PaymentLinkService(
             PaymentLinkCreator paymentLinkCreator,
             PaymentLinkReader paymentLinkReader,
             PaymentLinkConfirmer paymentLinkConfirmer,
             PaymentLinkCompleter paymentLinkCompleter,
-            PaymentLinkStore paymentLinkStore,
-            OnboardingPaymentFinalizer onboardingPaymentFinalizer,
-            @Value("${voucher.mock.accept-any-txid:false}") boolean voucherMockAcceptAnyTxid) {
+            PaymentLinkStore paymentLinkStore) {
         this.paymentLinkCreator = paymentLinkCreator;
         this.paymentLinkReader = paymentLinkReader;
         this.paymentLinkConfirmer = paymentLinkConfirmer;
         this.paymentLinkCompleter = paymentLinkCompleter;
         this.paymentLinkStore = paymentLinkStore;
-        this.onboardingPaymentFinalizer = onboardingPaymentFinalizer;
-        this.voucherMockAcceptAnyTxid = voucherMockAcceptAnyTxid;
     }
 
     public PaymentLinkDTO createPaymentLink(Long userId, BigDecimal amountBtc, String description) {
         return paymentLinkCreator.createForUser(userId, amountBtc, description);
+    }
+
+    public PaymentLinkDTO createAccountActivationPaymentLink(Long userId, BigDecimal amountBtc) {
+        return paymentLinkCreator.createForAccountActivation(userId, amountBtc);
     }
 
     public PaymentLinkDTO createOnboardingPaymentLink(String sessionId, BigDecimal amountBtc, String description) {
@@ -54,15 +51,7 @@ public class PaymentLinkService {
     }
 
     public PaymentLinkDTO getPublicOnboardingPaymentLink(String linkId) {
-        PaymentLinkDTO paymentLink = paymentLinkReader.getPublicOnboardingPaymentLink(linkId);
-        if (voucherMockAcceptAnyTxid
-                && paymentLinkReader.isOnboardingPaymentLink(paymentLink)
-                && PaymentLinkStatus.VERIFYING_ONBOARDING.equals(paymentLink.getStatus())
-                && paymentLink.getTxid() != null
-                && !paymentLink.getTxid().isBlank()) {
-            return onboardingPaymentFinalizer.finalizeConfirmedPayment(paymentLink);
-        }
-        return paymentLink;
+        return paymentLinkReader.getPublicOnboardingPaymentLink(linkId);
     }
 
     public PaymentLinkDTO confirmPublicOnboardingPayment(String linkId, String txid, String fromAddress) {
@@ -70,11 +59,7 @@ public class PaymentLinkService {
         if (paymentLink == null) {
             throw new PaymentLinkExceptions.PaymentLinkNotFound("Onboarding payment link nao encontrado");
         }
-        PaymentLinkDTO confirmed = confirmPayment(linkId, txid, fromAddress);
-        if (voucherMockAcceptAnyTxid && paymentLinkReader.isOnboardingPaymentLink(confirmed)) {
-            return onboardingPaymentFinalizer.finalizeConfirmedPayment(confirmed);
-        }
-        return confirmed;
+        return confirmPayment(linkId, txid, fromAddress);
     }
 
     public PaymentLinkDTO getPaymentLink(String linkId) {

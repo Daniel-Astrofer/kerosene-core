@@ -37,14 +37,16 @@ public class MiningController {
     @PostMapping("/allocations")
     public ResponseEntity<ApiResponse<MiningAllocationResponseDTO>> createAllocation(
             @RequestBody MiningAllocationRequestDTO request,
-            Authentication authentication) {
+            Authentication authentication)
+    {
         MiningAllocationResponseDTO response = miningService.createAllocation(authenticatedUserId(authentication), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Mining allocation created successfully.", response));
     }
 
     @GetMapping("/allocations")
-    public ResponseEntity<ApiResponse<List<MiningAllocationResponseDTO>>> listAllocations(Authentication authentication) {
+    public ResponseEntity<ApiResponse<List<MiningAllocationResponseDTO>>> listAllocations(Authentication authentication)
+    {
         List<MiningAllocationResponseDTO> response = miningService.listAllocations(authenticatedUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success("Mining allocations retrieved successfully.", response));
     }
@@ -52,7 +54,8 @@ public class MiningController {
     @GetMapping("/allocations/{allocationId}")
     public ResponseEntity<ApiResponse<MiningAllocationResponseDTO>> getAllocation(
             @PathVariable UUID allocationId,
-            Authentication authentication) {
+            Authentication authentication)
+    {
         MiningAllocationResponseDTO response = miningService.getAllocation(authenticatedUserId(authentication), allocationId);
         return ResponseEntity.ok(ApiResponse.success("Mining allocation retrieved successfully.", response));
     }
@@ -60,7 +63,8 @@ public class MiningController {
     @PostMapping("/allocations/{allocationId}/cancel")
     public ResponseEntity<ApiResponse<MiningAllocationResponseDTO>> cancelAllocation(
             @PathVariable UUID allocationId,
-            Authentication authentication) {
+            Authentication authentication)
+    {
         MiningAllocationResponseDTO response = miningService.cancelAllocation(authenticatedUserId(authentication), allocationId);
         return ResponseEntity.ok(ApiResponse.success("Mining allocation cancelled successfully.", response));
     }

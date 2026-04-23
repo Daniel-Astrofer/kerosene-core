@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import source.common.infra.RedisAvailabilityGuard;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.LightningClient;
 
@@ -23,6 +24,7 @@ public class LiquidityMonitorService {
     private final BlockchainClient blockchainClient;
     private final LightningClient lightningClient;
     private final FeeCalculator feeCalculator;
+    private final RedisAvailabilityGuard redisAvailabilityGuard;
 
     // Security Thresholds
     @Value("${liquidity.min.onchain.reserve:5000000}")
@@ -48,11 +50,13 @@ public class LiquidityMonitorService {
     public LiquidityMonitorService(StringRedisTemplate redisTemplate,
                                    BlockchainClient blockchainClient,
                                    LightningClient lightningClient,
-                                   FeeCalculator feeCalculator) {
+                                   FeeCalculator feeCalculator,
+                                   RedisAvailabilityGuard redisAvailabilityGuard) {
         this.redisTemplate = redisTemplate;
         this.blockchainClient = blockchainClient;
         this.lightningClient = lightningClient;
         this.feeCalculator = feeCalculator;
+        this.redisAvailabilityGuard = redisAvailabilityGuard;
     }
 
     /**
@@ -60,6 +64,12 @@ public class LiquidityMonitorService {
      */
     @Scheduled(fixedRate = 600000)
     public void checkLiquidityHealth() {
+        if (!redisAvailabilityGuard.isAvailable()) {
+            log.debug("[LiquidityMonitor] Skipping cycle because Redis is unavailable: {}",
+                    redisAvailabilityGuard.describeLastFailure());
+            return;
+        }
+
         long onchainBalance = blockchainClient.getHotWalletBalance();
         long localChannelBalance = lightningClient.getLocalBalance();
         long remoteChannelBalance = lightningClient.getRemoteBalance();

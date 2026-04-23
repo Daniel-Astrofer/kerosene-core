@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
@@ -29,9 +31,21 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final SuicideService suicideService;
+    private final boolean constantTimePaddingEnabled;
+    private final long constantTimeTargetMs;
+
+    @Autowired
+    public ParanoidSecurityFilter(
+            SuicideService suicideService,
+            @Value("${security.constant-time-padding.enabled:false}") boolean constantTimePaddingEnabled,
+            @Value("${security.constant-time-padding.target-ms:250}") long constantTimeTargetMs) {
+        this.suicideService = suicideService;
+        this.constantTimePaddingEnabled = constantTimePaddingEnabled;
+        this.constantTimeTargetMs = Math.max(0, constantTimeTargetMs);
+    }
 
     public ParanoidSecurityFilter(SuicideService suicideService) {
-        this.suicideService = suicideService;
+        this(suicideService, false, 250);
     }
 
     @Override
@@ -118,20 +132,27 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
             secureRandom.nextBytes(padding);
             response.setHeader("X-Pad-Noise", Base64.getEncoder().encodeToString(padding));
 
-            // B) Constant Time Responses (Anti-Side-Channel Timing Attack)
-            long duration = System.currentTimeMillis() - startTime;
-            // Padroniza as respostas de fluxos logicos sensiveis em exatamente 250ms
-            String path = request.getRequestURI();
-            if (path.contains("/auth/") || path.contains("/voucher/") || path.contains("/ledger/")) {
-                long targetTime = 250;
-                if (duration < targetTime) {
-                    try {
-                        Thread.sleep(targetTime - duration);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-            }
+            applyConstantTimePadding(request.getRequestURI(), startTime);
+        }
+    }
+
+    private void applyConstantTimePadding(String path, long startTime) {
+        if (!constantTimePaddingEnabled) {
+            return;
+        }
+        if (!(path.contains("/auth/") || path.contains("/voucher/") || path.contains("/ledger/"))) {
+            return;
+        }
+
+        long duration = System.currentTimeMillis() - startTime;
+        if (duration >= constantTimeTargetMs) {
+            return;
+        }
+
+        try {
+            Thread.sleep(constantTimeTargetMs - duration);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

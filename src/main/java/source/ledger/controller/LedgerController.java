@@ -6,6 +6,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import source.auth.AuthExceptions;
 import source.ledger.dto.LedgerDTO;
+import source.ledger.dto.InternalTransactionResponseDTO;
 import source.ledger.dto.PaymentRequestPublicDTO;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.dto.InternalPaymentRequestDTO;
@@ -22,6 +23,7 @@ import source.common.dto.ApiResponse;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -59,7 +61,7 @@ public class LedgerController {
     }
 
     @PostMapping("/transaction")
-    public ResponseEntity<ApiResponse<Void>> transaction(@RequestBody TransactionDTO dto) {
+    public ResponseEntity<ApiResponse<InternalTransactionResponseDTO>> transaction(@RequestBody TransactionDTO dto) {
         Long userId = getAuthenticatedUserId();
         enforceTxRateLimit(userId);
 
@@ -68,8 +70,18 @@ public class LedgerController {
         // for which of the authenticated user's OWN wallets to send from.
         // Ownership is fully enforced inside Transaction.resolveSenderWallet().
         LogContext.timed("PROCESS_TRANSACTION", () -> transaction.processTransaction(dto));
+        String txid = dto.getIdempotencyKey() != null && !dto.getIdempotencyKey().isBlank()
+                ? dto.getIdempotencyKey()
+                : UUID.randomUUID().toString();
+        InternalTransactionResponseDTO response = new InternalTransactionResponseDTO(
+                txid,
+                "confirmed",
+                dto.getAmount(),
+                dto.getSender(),
+                dto.getReceiver(),
+                dto.getContext());
         return ResponseEntity
-                .ok(ApiResponse.success("Transaction successfully processed and ledger has been updated.", null));
+                .ok(ApiResponse.success("Transaction successfully processed and ledger has been updated.", response));
     }
 
     /**
@@ -164,7 +176,11 @@ public class LedgerController {
     public record CreatePaymentRequestReq(BigDecimal amount, String receiverWalletName) {
     }
 
-    public record PayPaymentRequestReq(String payerWalletName) {
+    public record PayPaymentRequestReq(
+            String payerWalletName,
+            String totpCode,
+            String passkeyAssertionJson,
+            String confirmationPassphrase) {
     }
 
     @PostMapping("/payment-request")
@@ -192,7 +208,13 @@ public class LedgerController {
             @PathVariable String linkId, @RequestBody PayPaymentRequestReq req) {
         Long userId = getAuthenticatedUserId();
         enforceTxRateLimit(userId);
-        InternalPaymentRequestDTO dto = paymentRequestService.payRequest(linkId, userId, req.payerWalletName());
+        InternalPaymentRequestDTO dto = paymentRequestService.payRequest(
+                linkId,
+                userId,
+                req.payerWalletName(),
+                req.totpCode(),
+                req.passkeyAssertionJson(),
+                req.confirmationPassphrase());
         return ResponseEntity.ok(ApiResponse.success("Payment successful.", dto));
     }
 

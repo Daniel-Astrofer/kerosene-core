@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import source.security.VaultKeyProvider;
 
 /**
  * Periodically triggers a Merkle root snapshot of all internal ledger balances.
@@ -21,13 +22,20 @@ public class MerkleAuditScheduler {
     private static final Logger log = LoggerFactory.getLogger(MerkleAuditScheduler.class);
 
     private final MerkleAuditService auditService;
+    private final VaultKeyProvider vaultKeyProvider;
 
-    public MerkleAuditScheduler(MerkleAuditService auditService) {
+    public MerkleAuditScheduler(MerkleAuditService auditService, VaultKeyProvider vaultKeyProvider) {
         this.auditService = auditService;
+        this.vaultKeyProvider = vaultKeyProvider;
     }
 
     @Scheduled(fixedDelayString = "${audit.merkle.interval-ms:300000}", initialDelayString = "${audit.merkle.initial-delay-ms:60000}")
     public void runAudit() {
+        if (!vaultKeyProvider.isReady()) {
+            log.info("[MerkleAudit] Skipping cycle: Vault master key not available yet.");
+            return;
+        }
+
         try {
             MerkleAuditEntity checkpoint = auditService.computeAndPersist();
             log.info("[MerkleAudit] Checkpoint persisted — root={} ledgers={}",

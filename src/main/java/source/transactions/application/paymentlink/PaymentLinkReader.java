@@ -50,6 +50,12 @@ public class PaymentLinkReader {
                 && !paymentLink.getSessionId().isBlank();
     }
 
+    public boolean isAccountActivationPaymentLink(PaymentLinkDTO paymentLink) {
+        return paymentLink != null
+                && PaymentLinkDescription.ACCOUNT_ACTIVATION.equals(paymentLink.getDescription())
+                && paymentLink.getUserId() != null;
+    }
+
     private PaymentLinkDTO expireIfNeeded(PaymentLinkDTO paymentLink) {
         if (paymentLink == null) {
             return null;

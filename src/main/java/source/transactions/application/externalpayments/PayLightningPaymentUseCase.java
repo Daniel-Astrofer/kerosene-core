@@ -3,15 +3,18 @@ package source.transactions.application.externalpayments;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
+import source.notification.model.UserNotificationPayload;
 import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.dto.LightningPaymentRequestDTO;
 import source.transactions.infra.CustodyGateway;
 import source.transactions.model.ExternalTransferEntity;
-import source.transactions.service.WalletAuthorizationService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 public class PayLightningPaymentUseCase {
@@ -20,7 +23,7 @@ public class PayLightningPaymentUseCase {
     private final ExternalPaymentsLedgerPort ledgerPort;
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalPaymentsNotificationPort notificationPort;
-    private final WalletAuthorizationService walletAuthorizationService;
+    private final ExternalPaymentsAuthorizationPort authorizationPort;
     private final CustodyGateway custodyGateway;
     private final ExternalPaymentsFeePolicy feePolicy;
     private final ExternalPaymentsMath externalPaymentsMath;
@@ -32,7 +35,7 @@ public class PayLightningPaymentUseCase {
             ExternalPaymentsLedgerPort ledgerPort,
             ExternalTransfersPort externalTransfersPort,
             ExternalPaymentsNotificationPort notificationPort,
-            WalletAuthorizationService walletAuthorizationService,
+            ExternalPaymentsAuthorizationPort authorizationPort,
             CustodyGateway custodyGateway,
             ExternalPaymentsFeePolicy feePolicy,
             ExternalPaymentsMath externalPaymentsMath,
@@ -42,7 +45,7 @@ public class PayLightningPaymentUseCase {
         this.ledgerPort = ledgerPort;
         this.externalTransfersPort = externalTransfersPort;
         this.notificationPort = notificationPort;
-        this.walletAuthorizationService = walletAuthorizationService;
+        this.authorizationPort = authorizationPort;
         this.custodyGateway = custodyGateway;
         this.feePolicy = feePolicy;
         this.externalPaymentsMath = externalPaymentsMath;
@@ -58,7 +61,7 @@ public class PayLightningPaymentUseCase {
         }
 
         WalletEntity wallet = walletPort.requireWallet(userId, request.fromWalletName());
-        WalletAuthorizationService.AuthorizationResult authorization = walletAuthorizationService.authorizeOutboundTransfer(
+        ExternalPaymentsAuthorizationPort.AuthorizationResult authorization = authorizationPort.authorizeOutboundTransfer(
                 userId,
                 wallet,
                 request.totpCode(),
@@ -129,8 +132,18 @@ public class PayLightningPaymentUseCase {
                 LocalDateTime.now()));
         notificationPort.notifyUser(
                 userId,
-                "Pagamento Lightning enviado",
-                "Pagamento Lightning externo encaminhado com sucesso.");
+                UserNotificationPayload.create(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.SUCCESS,
+                        "Pagamento Lightning enviado",
+                        "Pagamento Lightning externo encaminhado com sucesso.",
+                        "/history",
+                        "external_transfer",
+                        transfer.getId() != null ? transfer.getId().toString() : null,
+                        Map.of(
+                                "walletName", wallet.getName(),
+                                "amountBtc", request.amount().toPlainString(),
+                                "network", "LIGHTNING")));
 
         return externalTransferFactory.toResponseDTO(transfer);
     }

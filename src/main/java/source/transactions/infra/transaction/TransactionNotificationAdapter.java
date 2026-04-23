@@ -1,12 +1,15 @@
 package source.transactions.infra.transaction;
 
 import org.springframework.stereotype.Component;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
 import source.transactions.application.transaction.TransactionNotificationPort;
 import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 @Component
 public class TransactionNotificationAdapter implements TransactionNotificationPort {
@@ -32,7 +35,16 @@ public class TransactionNotificationAdapter implements TransactionNotificationPo
             body = String.format("O envio de %s BTC foi transmitido com sucesso.", amount.toPlainString());
         }
 
-        notificationService.notifyUser(userId, "Transação Transmitida", body);
+        notificationService.notifyUser(
+                userId,
+                NotificationKind.PAYMENT_SENT,
+                NotificationSeverity.INFO,
+                "Transação Transmitida",
+                body,
+                "/history",
+                "transaction",
+                null,
+                amount == null ? Map.of() : Map.of("amountBtc", amount.toPlainString()));
     }
 
     @Override
@@ -56,6 +68,19 @@ public class TransactionNotificationAdapter implements TransactionNotificationPo
             body += " Mensagem: " + message;
         }
 
-        notificationService.notifyUser(wallet.getUser().getId(), "Recurso Recebido", body);
+        notificationService.notifyUser(
+                wallet.getUser().getId(),
+                NotificationKind.DEPOSIT_DETECTED,
+                NotificationSeverity.INFO,
+                "Recurso Recebido",
+                body,
+                "/deposits",
+                "wallet",
+                wallet.getId() != null ? wallet.getId().toString() : null,
+                amount == null
+                        ? Map.of("walletName", wallet.getName())
+                        : Map.of(
+                                "walletName", wallet.getName(),
+                                "amountBtc", amount.toPlainString()));
     }
 }

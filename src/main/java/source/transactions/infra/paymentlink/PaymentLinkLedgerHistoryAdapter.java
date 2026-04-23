@@ -32,6 +32,7 @@ public class PaymentLinkLedgerHistoryAdapter implements PaymentLinkHistoryPort {
             history.setContext("On-Chain Deposit via Link: " + paymentLink.getId());
             history.setReceiverUserId(paymentLink.getUserId());
             history.setReceiverIdentifier(paymentLink.getDepositAddress());
+            history.setSenderIdentifier("BITCOIN_NETWORK_PENDING");
             history.setTransactionType("DEPOSIT");
             history.setStatus("PENDING");
             historyRepository.save(history);

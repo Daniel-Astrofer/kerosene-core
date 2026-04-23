@@ -5,11 +5,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import source.auth.application.service.account.AccountActivationService;
 import source.transactions.dto.*;
+import source.transactions.service.MockDepositCreditService;
 import source.transactions.service.PaymentLinkService;
 import source.transactions.service.TransactionService;
+import source.transactions.service.ExternalPaymentsService;
 import source.common.dto.ApiResponse;
-import org.springframework.beans.factory.annotation.Value;
+import source.transactions.dto.OnchainAddressRequestDTO;
+import source.transactions.dto.WalletNetworkAddressDTO;
+import source.wallet.model.WalletEntity;
+import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -31,13 +37,23 @@ public class TransactionController {
 
         private final TransactionService service;
         private final PaymentLinkService paymentLinkService;
+        private final MockDepositCreditService mockDepositCreditService;
+        private final ExternalPaymentsService externalPaymentsService;
+        private final WalletService walletService;
+        private final AccountActivationService accountActivationService;
 
-        @Value("${bitcoin.deposit-address}")
-        private String systemDepositAddress;
-
-        public TransactionController(TransactionService service, PaymentLinkService paymentLinkService) {
+        public TransactionController(TransactionService service,
+                        PaymentLinkService paymentLinkService,
+                        MockDepositCreditService mockDepositCreditService,
+                        ExternalPaymentsService externalPaymentsService,
+                        WalletService walletService,
+                        AccountActivationService accountActivationService) {
                 this.service = service;
                 this.paymentLinkService = paymentLinkService;
+                this.mockDepositCreditService = mockDepositCreditService;
+                this.externalPaymentsService = externalPaymentsService;
+                this.walletService = walletService;
+                this.accountActivationService = accountActivationService;
         }
 
         // ==================== DEPOSIT ENDPOINTS ====================
@@ -49,10 +65,24 @@ public class TransactionController {
          * @return Endereço Bitcoin (Base58 ou Bech32)
          */
         @GetMapping("/deposit-address")
-        public ResponseEntity<ApiResponse<String>> getDepositAddress(HttpServletRequest request) {
+        public ResponseEntity<ApiResponse<String>> getDepositAddress(HttpServletRequest request, Authentication auth) {
+                Long userId = getAuthenticatedUserId(auth);
+                mockDepositCreditService.creditOnDepositAddressRequest(userId);
+                WalletEntity wallet = walletService.findPrimaryWallet(userId);
+                if (wallet == null) {
+                        throw new IllegalStateException("User has no wallet configured to receive on-chain deposits.");
+                }
+
+                WalletNetworkAddressDTO allocation = externalPaymentsService.issueOnchainAddress(
+                                userId,
+                                new OnchainAddressRequestDTO(wallet.getName(), true));
+
+                String message = mockDepositCreditService.isEnabled()
+                                ? "Dedicated custodial deposit address issued successfully. Mock local deposit credited with 100 BTC."
+                                : "Dedicated custodial deposit address issued successfully. Send only Bitcoin (BTC) to this address.";
                 return ResponseEntity.ok(ApiResponse.success(
-                                "System master deposit address retrieved successfully. Please send only Bitcoin (BTC) to this address.",
-                                systemDepositAddress));
+                                message,
+                                allocation.onchainAddress()));
         }
 
         // ==================== TRANSACTION ENDPOINTS ====================
@@ -139,6 +169,7 @@ public class TransactionController {
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> createPaymentLink(@RequestBody CreatePaymentLinkRequest req,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
+                accountActivationService.assertInboundEnabled(userId);
                 PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, req.getAmount(),
                                 req.getDescription());
                 return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse
@@ -147,10 +178,10 @@ public class TransactionController {
         }
 
         /**
-         * Obtém informações de um payment link
+         * Obtém informações de um payment link autenticado.
          * 
          * @param linkId ID único do payment link
-         * @return DTO com dados do payment link (público, sem autenticação)
+         * @return DTO com dados do payment link
          */
         @GetMapping("/payment-link/{linkId}")
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> getPaymentLink(@PathVariable String linkId,
@@ -166,8 +197,7 @@ public class TransactionController {
         }
 
         /**
-         * Confirma o pagamento de um payment link
-         * Valida a transação na blockchain antes de confirmar
+         * Confirma o pagamento de um payment link autenticado.
          * 
          * @param linkId ID do payment link
          * @param req    DTO com TXID e endereço de origem

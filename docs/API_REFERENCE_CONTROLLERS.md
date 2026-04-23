@@ -1,10 +1,10 @@
-# Referencia da API a partir dos Controllers
+# Referencia da API a partir dos Controllers e DTOs
 
 Consulte [README.md](README.md) para a navegacao completa da documentacao do servico.
 
 ## Escopo
 
-Esta documentacao foi extraida do codigo-fonte dos controllers em `src/main/java/source/**`, da configuracao de seguranca em [Security.java](/home/omega/Kerosene/backend/kerosene/src/main/java/source/auth/application/infra/security/Security.java), e dos handlers de erro globais.
+Esta documentacao foi extraida do codigo-fonte dos controllers e DTOs em `src/main/java/source/**`, da configuracao de seguranca em [Security.java](/home/omega/Kerosene/backend/kerosene/src/main/java/source/auth/application/infra/security/Security.java), e dos handlers de erro globais.
 
 Regras usadas nesta leitura:
 
@@ -12,6 +12,37 @@ Regras usadas nesta leitura:
 - Os status de erro listados por endpoint vieram de `return` explicito, `GlobalExceptionHandler`, `RestResponseErrors`, `ResponseStatusException` e filtros de seguranca.
 - Salvo quando a linha informar outro comportamento, excecoes nao tratadas acabam em `500 ApiErr`.
 - Falta de `@RequestParam`, `@PathVariable`, `@RequestBody` obrigatorio, falha de desserializacao e `@Valid` caem em `400 SpringErr`.
+
+Cobertura verificada nesta revisao:
+
+- `20` classes com `@RestController` em `src/main/java/source/**`.
+- `76` metodos HTTP mapeados por `@GetMapping`, `@PostMapping`, `@PutMapping` ou `@DeleteMapping`.
+- DTOs publicos sob `source.auth.dto`, `source.common.dto`, `source.ledger.dto`, `source.mining.dto`, `source.notification.dto`, `source.transactions.dto` e `source.wallet.dto`.
+
+Controllers cobertos:
+
+- `source.auth.controller.UserController`
+- `source.auth.controller.AccountActivationController`
+- `source.auth.controller.AccountSecurityController`
+- `source.auth.controller.AccountSecurityStatusController`
+- `source.auth.controller.BackupCodesController`
+- `source.auth.controller.EmergencyRecoveryController`
+- `source.auth.controller.MeController`
+- `source.auth.controller.PasskeyController`
+- `source.auth.controller.TotpController`
+- `source.ledger.controller.LedgerController`
+- `source.ledger.controller.LedgerAuditController`
+- `source.ledger.audit.MerkleAuditController`
+- `source.mining.controller.MiningController`
+- `source.notification.controller.NotificationController`
+- `source.security.SovereigntyStatusController`
+- `source.transactions.controller.TransactionController`
+- `source.transactions.controller.NetworkPaymentsController`
+- `source.transactions.controller.EconomyController`
+- `source.transactions.controller.OnrampController`
+- `source.wallet.controller.WalletController`
+
+Observacao: `Security.java` ainda libera `/voucher/**`, mas nao existe `VoucherController` ativo em `src/main/java/source/**` nesta revisao.
 
 ## Envelopes e formatos de resposta
 
@@ -61,15 +92,35 @@ Observacao importante:
 
 ## Endpoints
 
-### Auth: `UsuarioController`
+### Auth: `UserController`
 
 | Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
 | --- | --- | --- | --- | --- | --- |
 | `GET /auth/pow/challenge` | Publico | sem body | `200 ApiOk<PowChallengeData>` | - | `data.challenge` |
 | `POST /auth/login` | Publico | body `UserDTO.login` | `202 ApiOk<String>` | `400/401/403/404/408` via handlers de auth | `data` = `preAuthToken` |
-| `POST /auth/signup` | Publico | body `UserDTO.signup` | `200 ApiOk<SignupResponseDTO>` | `400/401/409` via handlers de auth | `data.otpUri`, `data.backupCodes[]` |
+| `POST /auth/signup` | Publico | body `UserDTO.signup` | `200 ApiOk<SignupResponseDTO>` | `400/401/409` via handlers de auth; `503 ApiErr` se Vault nao estiver pronto | `data.sessionId`, `data.otpUri`, `data.backupCodes[]`, `data.totpOptional` |
 | `POST /auth/signup/totp/verify` | Publico | body `UserDTO.signupTotpVerify` | `202 ApiOk<String>` | `400/401/408` via handlers de auth | `data` = `sessionId` de onboarding |
 | `POST /auth/login/totp/verify` | Publico | body `UserDTO.loginTotpVerify` | `202 ApiOk<String>` | `401/403/408` via handlers de auth | `data` = string no formato `"<userId> <jwt>"` |
+
+### Auth: `MeController`
+
+| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
+| --- | --- | --- | --- | --- | --- |
+| `GET /auth/me` | JWT | sem body | `200 ApiOk<CurrentUserData>` | `401` sem envelope se nao autenticado; `401 ApiErr`; `404 ApiErr` | identificadores e flags do usuario autenticado |
+
+### Auth: `AccountActivationController`
+
+| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
+| --- | --- | --- | --- | --- | --- |
+| `GET /auth/activation-status` | JWT | sem body | `200 ApiOk<AccountActivationStatusDTO>` | `401 ApiErr` usuario autenticado nao encontrado | status de ativacao da conta |
+| `POST /auth/activation-status/deposit-link` | JWT | body vazio | `200 ApiOk<AccountActivationStatusDTO>` | `401 ApiErr` usuario autenticado nao encontrado | status com payment link de ativacao criado ou reutilizado |
+| `POST /auth/activation-status/{linkId}/confirm` | JWT | path `linkId:string`; body `ActivationConfirmRequest` | `200 ApiOk<AccountActivationStatusDTO>` | `400 ApiErr`; `404 ApiErr`; `409 ApiErr`; `410 ApiErr` | status apos submeter txid do deposito |
+
+Observacoes:
+
+- Links de ativacao usam `PaymentLinkDescription.ACCOUNT_ACTIVATION`, ficam ligados ao `userId` autenticado e nao exigem wallet primaria do usuario.
+- A criacao do link de ativacao usa o endereco estatico/fallback de deposito do backend, porque o fluxo acontece antes de liberar recebimentos inbound.
+- Confirmar o link muda o payment link para `verifying_activation`; a conta so vira ativa quando `AccountActivationMonitorService` finaliza a confirmacao on-chain ou quando `voucher.mock.accept-any-txid=true` em ambiente local/teste.
 
 ### Auth: `PasskeyController`
 
@@ -79,7 +130,7 @@ Observacao importante:
 | `POST /auth/passkey/register` | JWT | body `PasskeyRegistrationRequest` | `200 ApiOk<String>` | `400 ApiErr`; `401 ApiErr` challenge expirada/assinatura invalida; `404 ApiErr` usuario nao encontrado | `data` = `"OK"` |
 | `POST /auth/passkey/verify` | Publico | body `PasskeyVerifyRequest` | `200 ApiOk<String>` | `400 ApiErr`; `401 ApiErr`; `404 ApiErr` | `data` = JWT |
 | `POST /auth/passkey/onboarding/start` | Publico | query `sessionId:string` | `200 ApiOk<String>` | `404 ApiErr` sessao expirada | `data` = challenge de onboarding |
-| `POST /auth/passkey/onboarding/finish` | Publico | query `sessionId:string`; body `PasskeyRegistrationRequest` | `200 ApiOk<String>` | `400 ApiErr`; `401 ApiErr`; `404 ApiErr` | `data` = `"OK"` |
+| `POST /auth/passkey/onboarding/finish` | Publico | query `sessionId:string`; body `PasskeyRegistrationRequest` | `200 ApiOk<String>` | `400 ApiErr`; `401 ApiErr`; `404 ApiErr`; `503 ApiErr` se Vault nao estiver pronto | `data` = string no formato `"<userId> <jwt>"` |
 
 ### Auth: `AccountSecurityController`
 
@@ -87,6 +138,27 @@ Observacao importante:
 | --- | --- | --- | --- | --- | --- |
 | `GET /auth/security/profile` | JWT | sem body | `200 ApiOk<AccountSecurityProfileDTO>` | `401 ApiErr/LegacyErr` contexto invalido | perfil de seguranca da conta |
 | `PUT /auth/security/profile` | JWT | body `AccountSecurityUpdateRequestDTO` | `200 ApiOk<AccountSecurityProfileDTO>` | `400 ApiErr`; `401 ApiErr/LegacyErr` | perfil atualizado |
+
+### Auth: `AccountSecurityStatusController`
+
+| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
+| --- | --- | --- | --- | --- | --- |
+| `GET /auth/security-status` | JWT | sem body | `200 ApiOk<AccountSecurityStatusDTO>` | `401 ApiErr/LegacyErr`; `404 ApiErr` | resumo de protecoes configuradas, backup codes e ativacao |
+
+### Auth: `TotpController`
+
+| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
+| --- | --- | --- | --- | --- | --- |
+| `POST /auth/totp/setup` | JWT | sem body | `200 ApiOk<TotpSetupResponseDTO>` | `401 ApiErr/LegacyErr`; `404 ApiErr` | nova seed TOTP e `otpUri` para QR code |
+| `POST /auth/totp/verify` | JWT | body `TotpVerifyRequest` | `200 ApiOk<BackupCodesStatusDTO>` | `400 ApiErr`; `401 ApiErr/LegacyErr`; `404 ApiErr` | TOTP habilitado e status dos backup codes |
+| `DELETE /auth/totp` | JWT | sem body | `200 ApiOk<String>` | `401 ApiErr/LegacyErr`; `404 ApiErr` | `data` = `"OK"` |
+
+### Auth: `BackupCodesController`
+
+| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
+| --- | --- | --- | --- | --- | --- |
+| `GET /auth/backup-codes` | JWT | sem body | `200 ApiOk<BackupCodesStatusDTO>` | `401 ApiErr/LegacyErr`; `404 ApiErr` | status dos backup codes |
+| `POST /auth/backup-codes/regenerate` | JWT | sem body | `200 ApiOk<BackupCodesStatusDTO>` | `401 ApiErr/LegacyErr`; `404 ApiErr` | novos backup codes brutos em `newlyGeneratedCodes` |
 
 ### Auth: `EmergencyRecoveryController`
 
@@ -197,17 +269,6 @@ Observacao:
 | --- | --- | --- | --- | --- | --- |
 | `POST /notifications/send` | JWT | body `NotificationSendRequest` | `200 ApiOk<String>` | `400 ApiErr` campos ausentes ou `userId` invalido | `data = null`; sucesso via `message` |
 
-### Voucher: `VoucherController`
-
-| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
-| --- | --- | --- | --- | --- | --- |
-| `POST /voucher/request` | Publico | sem body | `200 ApiOk<VoucherRequestDataResponse>` | - | endereco e valor de deposito do voucher |
-| `POST /voucher/confirm` | Publico | query `pendingVoucherId:string`, `txid:string` | `200 ApiOk<String>` | `400 ApiErr` (`VOUCHER_ERROR`) | `data` = codigo do voucher |
-| `POST /voucher/onboarding-link` | Publico | query `sessionId:string` | `200 ApiOk<PaymentLinkDTO>` | `400 ApiErr` sessao/passkey; `500 ApiErr` (`ONBOARDING_SERVER_ERROR`) | payment link fixo de onboarding |
-| `GET /voucher/onboarding-link/{linkId}` | Publico | path `linkId:string` | `200 ApiOk<PaymentLinkDTO>` | `404 ApiErr` | status publico do onboarding link |
-| `POST /voucher/onboarding-link/{linkId}/confirm` | Publico | path `linkId:string`; body `ConfirmPaymentRequest` | `200 ApiOk<PaymentLinkDTO>` | `400 ApiErr` (`ONBOARDING_CONFIRM_ERROR`) | onboarding payment confirmado |
-| `POST /voucher/onboarding-mock-confirm` | Publico | query `sessionId:string` | `200 ApiOk<String>` | `400 ApiErr` (`MOCK_ERROR`) | `data` = `"OK"` |
-
 ### Sovereignty: `SovereigntyStatusController`
 
 | Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
@@ -230,14 +291,14 @@ Observacao:
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
 | `username` | `string` | sim | Normalizado para lowercase pelo backend. |
-| `passphrase` | `string` | sim | Frase BIP39. |
+| `password` ou `passphrase` | `string` | sim | Campo JSON primario e `password`; `passphrase` e aceito como alias. Frase BIP39. |
 
 #### `UserDTO.signup`
 
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
 | `username` | `string` | sim | Validado por formato e tamanho. |
-| `passphrase` | `string` | sim | Deve passar nas regras BIP39. |
+| `password` ou `passphrase` | `string` | sim | Campo JSON primario e `password`; `passphrase` e aceito como alias. Deve passar nas regras BIP39. |
 | `challenge` | `string` | sim | Challenge de PoW obtido em `/auth/pow/challenge`. |
 | `nonce` | `string` | sim | Nonce calculado pelo cliente para o PoW. |
 | `voucherCode` | `string` | nao | Presente no DTO, mas nao e usado diretamente pelo controller. |
@@ -250,8 +311,8 @@ Observacao:
 
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
-| `username` | `string` | sim | Usado para localizar o cadastro temporario no Redis. |
-| `totpCode` | `string` | sim | Codigo TOTP da seed retornada no signup. |
+| `sessionId` | `string` | sim | Retornado em `/auth/signup`; usado para localizar o cadastro temporario no Redis. |
+| `totpCode` | `string` | nao | Codigo TOTP da seed retornada no signup. Se omitido, o backend mantem TOTP como nao verificado e retorna o mesmo `sessionId`. |
 
 #### `UserDTO.loginTotpVerify`
 
@@ -264,8 +325,42 @@ Observacao:
 
 | Campo | Tipo | Observacao |
 | --- | --- | --- |
+| `sessionId` | `string` | Sessao temporaria de onboarding salva em Redis por 24 horas. |
 | `otpUri` | `string` | URI para QR Code TOTP. |
 | `backupCodes` | `string[]` | 10 codigos brutos retornados ao cliente uma unica vez. |
+| `totpOptional` | `boolean` | `true` no fluxo atual; o usuario pode finalizar sem verificar TOTP neste passo. |
+
+#### `CurrentUserData`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `id` | `string` | ID do usuario como texto. |
+| `userId` | `string` | Mesmo valor de `id`, mantido por compatibilidade com clientes. |
+| `username` | `string` | Username persistido. |
+| `testBalanceClaimed` | `boolean` | Flag de saldo de teste ja aplicado. |
+| `passkeyEnabledForTransactions` | `boolean` | Flag de passkey para autorizacao transacional. |
+| `createdAt` | `string` | `LocalDateTime.toString()`, presente apenas quando existe no usuario. |
+
+#### `AccountActivationStatusDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `activated` | `boolean` | `true` quando a conta ja foi ativada. |
+| `canReceiveInbound` | `boolean` | Mesmo valor pratico de `activated`; recebimento fica bloqueado antes da ativacao. |
+| `requiresActivationDeposit` | `boolean` | `true` enquanto a conta exige deposito de ativacao. |
+| `requiredAmountBtc` | `decimal` | Valor exigido para ativacao. |
+| `paymentLinkId` | `string` | ID do payment link `ACCOUNT_ACTIVATION`, quando existente. |
+| `depositAddress` | `string` | Endereco a pagar para ativacao, quando o link ja existe. |
+| `paymentStatus` | `string` | Status do payment link: `pending`, `expired`, `verifying_activation` ou `completed`. |
+| `warningMessage` | `string` | Mensagem de bloqueio exibivel ao usuario enquanto nao ativado. |
+| `activatedAt` | `datetime` | Data/hora da ativacao, ou `null`. |
+
+#### `ActivationConfirmRequest`
+
+| Campo | Tipo | Obrigatorio | Observacao |
+| --- | --- | --- | --- |
+| `txid` | `string` | sim | TXID informado para confirmar o deposito de ativacao. |
+| `fromAddress` | `string` | nao | Endereco de origem, quando disponivel. |
 
 #### `PasskeyRegistrationRequest`
 
@@ -282,6 +377,7 @@ Observacao:
 
 Observacao:
 
+- Em `/auth/passkey/register`, `publicKeyCose` precisa existir; o fallback `publicKey` nao e usado neste metodo.
 - Em `/auth/passkey/onboarding/finish`, pelo menos um entre `publicKeyCose` e `publicKey` precisa existir.
 
 #### `PasskeyVerifyRequest`
@@ -314,6 +410,40 @@ Observacao:
 | `passkeyAvailable` | `boolean` | Existe passkey cadastrada. |
 | `passkeyEnabledForTransactions` | `boolean` | Flag persistida no usuario. |
 | `requiredFactors` | `string[]` | Fatores exigidos pelo modo atual. |
+
+#### `AccountSecurityStatusDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `passwordConfigured` | `boolean` | Existe passphrase/senha configurada. |
+| `passkeyRegistered` | `boolean` | Existe ao menos uma passkey cadastrada. |
+| `totpEnabled` | `boolean` | TOTP esta habilitado para a conta. |
+| `backupCodesRemaining` | `integer` | Quantidade de backup codes ainda disponiveis. |
+| `unprotected` | `boolean` | `true` quando a conta esta sem protecoes suficientes. |
+| `warningMessage` | `string` | Mensagem exibivel quando existe risco ou falta de configuracao. |
+| `accountActivated` | `boolean` | Conta ja passou pela ativacao financeira. |
+| `inboundEnabled` | `boolean` | Recebimento inbound esta liberado. |
+
+#### `TotpSetupResponseDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `otpUri` | `string` | URI `otpauth://` para QR code. |
+| `secret` | `string` | Seed TOTP em texto para exibicao/manual entry. |
+
+#### `TotpVerifyRequest`
+
+| Campo | Tipo | Obrigatorio | Observacao |
+| --- | --- | --- | --- |
+| `totpCode` | `string` | sim | Codigo de 6 digitos gerado pela seed em setup. |
+
+#### `BackupCodesStatusDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `enabled` | `boolean` | Backup codes existem para a conta. |
+| `remainingCodes` | `integer` | Quantidade restante. |
+| `newlyGeneratedCodes` | `string[]` | Novos codigos brutos; preenchido apenas em geracao/regeneracao. |
 
 #### `EmergencyRecoveryStartRequest`
 
@@ -634,7 +764,7 @@ Observacao:
 | `netAmountBtc` | `decimal` | Valor liquido. |
 | `description` | `string` | Descricao. |
 | `depositAddress` | `string` | Endereco de deposito. |
-| `status` | `string` | Ex.: `pending`, `paid`, `expired`, `completed`. |
+| `status` | `string` | Ex.: `pending`, `paid`, `expired`, `completed`, `verifying_onboarding`, `verifying_activation`. |
 | `txid` | `string` | TXID associado. |
 | `expiresAt` | `datetime` | Expiracao. |
 | `createdAt` | `datetime` | Criacao. |
@@ -829,21 +959,17 @@ Observacao:
 
 #### `NotificationSendRequest`
 
-`NotificationController` recebe um `Map<String,String>` com:
-
-| Campo | Tipo | Obrigatorio |
-| --- | --- | --- |
-| `userId` | `string` | sim |
-| `title` | `string` | sim |
-| `body` | `string` | sim |
-
-#### `VoucherRequestDataResponse`
-
-| Campo | Tipo |
-| --- | --- |
-| `depositAddress` | `string` |
-| `amountSats` | `long` |
-| `pendingVoucherId` | `string` |
+| Campo | Tipo | Obrigatorio | Observacao |
+| --- | --- | --- | --- |
+| `userId` | `string` | sim | Deve parsear para `Long`. |
+| `title` | `string` | sim | Titulo da notificacao. |
+| `body` | `string` | sim | Corpo da notificacao. |
+| `kind` | `string` | nao | Valores aceitos: `system_info`, `security_login_detected`, `security_recovery_completed`, `account_created`, `transfer_received`, `transfer_sent`, `payment_request_created`, `payment_request_paid`, `deposit_detected`, `deposit_confirmed`, `payment_sent`, `mining_started`, `mining_completed`, `mining_cancelled`. Valor ausente/desconhecido vira `system_info`. |
+| `severity` | `string` | nao | `info`, `success`, `warning`, `error`. Valor ausente/desconhecido vira `info`. |
+| `deeplink` | `string` | nao | Rota/deeplink do cliente. |
+| `entityType` | `string` | nao | Tipo da entidade relacionada. |
+| `entityId` | `string` | nao | Identificador da entidade relacionada. |
+| `metadata` | `Map<string,string>` | nao | Metadados livres para o cliente. |
 
 #### `PowChallengeData`
 
@@ -884,7 +1010,7 @@ Observacao:
 | `transactionsAccepted` | `long` |
 | `requiredNodes` | `integer` |
 | `totalNodes` | `integer` |
-| `jurisdictions` | `string[]` |
+| `remotePeers` | `integer` |
 | `consensusAlgorithm` | `string` |
 
 `ledgerIntegrity`:
@@ -927,13 +1053,94 @@ Observacao:
 | `transactionsProposed` | `long` |
 | `transactionsAccepted` | `long` |
 
+### DTOs sem endpoint REST direto nesta revisao
+
+Os tipos abaixo existem em pacotes `dto`, mas nao aparecem como request/response direto de nenhum metodo HTTP ativo. Eles estao documentados para fechar a cobertura de DTOs.
+
+#### `DepositConfirmRequest`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `txid` | `string` | TXID do deposito. |
+| `fromAddress` | `string` | Endereco de origem. |
+| `amount` | `decimal` | Valor em BTC. |
+
+#### `DepositDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `id` | `long` | ID interno. |
+| `userId` | `long` | Usuario relacionado. |
+| `txid` | `string` | TXID observado. |
+| `fromAddress` | `string` | Endereco de origem. |
+| `toAddress` | `string` | Endereco de destino. |
+| `amountBtc` | `decimal` | Valor em BTC. |
+| `confirmations` | `long` | Confirmacoes on-chain. |
+| `status` | `string` | Ex.: `pending`, `confirmed`, `credited`. |
+| `createdAt` | `datetime` | Criacao. |
+| `confirmedAt` | `datetime` | Confirmacao. |
+
+#### `SignedTransactionDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `rawTxHex` | `string` | Transacao assinada em hex. |
+| `description` | `string` | Descricao livre. |
+
+#### `SignupState`
+
+DTO serializavel usado como estado temporario de onboarding no Redis, nao como payload publico direto.
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `sessionId` | `string` | Sessao de signup. |
+| `username` | `string` | Username normalizado. |
+| `passphrase` | `char[]` | Hash da passphrase em memoria/Redis. |
+| `totpSecret` | `string` | Seed TOTP temporaria ate finalizacao. |
+| `totpVerified` | `boolean` | TOTP foi verificado no onboarding. |
+| `passkeyRegistered` | `boolean` | Passkey foi registrada no onboarding. |
+| `paymentConfirmed` | `boolean` | Pagamento de onboarding confirmado, quando aplicavel. |
+| `btcDepositAddress` | `string` | Endereco BTC temporario. |
+| `passkeyPublicKey` | `string` | Chave publica fallback. |
+| `passkeyPublicKeyCose` | `string` | Chave publica COSE. |
+| `passkeyCredentialId` | `string` | Credential ID WebAuthn. |
+| `passkeyUserHandle` | `string` | User handle WebAuthn. |
+| `passkeyDeviceName` | `string` | Nome do dispositivo. |
+| `passkeyCredentialJson` | `string` | JSON derivado/armazenado da credencial. |
+| `backupCodes` | `string[]` | Hashes dos backup codes. |
+| `accountSecurity` | `enum` | `STANDARD`, `SHAMIR`, `MULTISIG_2FA`, `PASSKEY`. |
+| `platformCosignerSecret` | `string` | Segredo coassinador cifrado. |
+| `shamirTotalShares` | `integer` | Configuracao SHAMIR. |
+| `shamirThreshold` | `integer` | Configuracao SHAMIR. |
+| `multisigThreshold` | `integer` | Threshold multisig. |
+
+#### `EmergencyRecoveryState`
+
+DTO serializavel usado como estado temporario de recovery no Redis, nao como payload publico direto.
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `sessionId` | `string` | Sessao de recovery. |
+| `username` | `string` | Usuario recuperado. |
+| `hashedPassphrase` | `string` | Nova passphrase ja hasheada. |
+| `encryptedTotpSecret` | `string` | Nova seed TOTP cifrada. |
+| `passkeyChallenge` | `string` | Challenge usado para registrar nova passkey. |
+| `matchedBackupCodeHashes` | `string[]` | Hashes de recovery codes validados. |
+
+#### `UserDTOContract`
+
+Interface interna implementada por `UserDTO`; define getters/setters para `username`, `password/passphrase`, `totpSecret`, `totpCode`, `sessionId` e `preAuthToken`. Nao e schema JSON independente.
+
 ## Inconsistencias encontradas durante a analise
 
 1. Comentarios de "rota publica" nao batem com a seguranca real.
    `Security.java` libera explicitamente apenas `/auth/**` previstos, `/voucher/**` e Swagger. Portanto `/ledger/**`, `/transactions/**`, `/api/**`, `/audit/**`, `/v1/audit/**`, `/wallet/**`, `/mining/**`, `/notifications/**` e `/sovereignty/**` exigem JWT hoje.
 
-2. O contrato de erro nao e uniforme.
+2. `/voucher/**` esta liberado na security, mas nao ha `VoucherController` ativo em `src/main/java/source/**`.
+   Na pratica, a rota fica sem contrato REST implementado nesta revisao.
+
+3. O contrato de erro nao e uniforme.
    A aplicacao usa ao mesmo tempo `ApiResponse`, `ResponseError`, `Map` bruto e erros padrao do Spring.
 
-3. `RestResponseErrors` convive com `GlobalExceptionHandler`.
+4. `RestResponseErrors` convive com `GlobalExceptionHandler`.
    Isso faz alguns erros de auth, wallet e replay terem envelope ambiguo em runtime.

@@ -12,6 +12,8 @@ import source.mining.entity.MiningAllocationEntity;
 import source.mining.entity.MiningRigOfferEntity;
 import source.mining.exception.MiningExceptions;
 import source.mining.repository.MiningAllocationRepository;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletService;
@@ -20,6 +22,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -114,8 +117,20 @@ public class MiningAllocationUseCase {
                 allocation.getProviderRentalReference(),
                 "Mining allocation opened for " + allocatedHashrate + " " + rig.getHashUnit(),
                 LocalDateTime.now()));
-        notifyUser(userId, "Locacao de hashpower iniciada",
-                "Locacao do rig " + rig.getDisplayName() + " iniciada com sucesso.");
+        notifyUser(
+                userId,
+                NotificationKind.MINING_STARTED,
+                NotificationSeverity.SUCCESS,
+                "Locacao de hashpower iniciada",
+                "Locacao do rig " + rig.getDisplayName() + " iniciada com sucesso.",
+                "/mining",
+                "mining_allocation",
+                allocation.getId() != null ? allocation.getId().toString() : null,
+                Map.of(
+                        "walletName", wallet.getName(),
+                        "rigName", rig.getDisplayName(),
+                        "durationHours", String.valueOf(request.durationHours()),
+                        "amountBtc", rentalCost.toPlainString()));
 
         return toAllocationDTO(allocation);
     }
@@ -232,9 +247,27 @@ public class MiningAllocationUseCase {
         return null;
     }
 
-    private void notifyUser(Long userId, String title, String body) {
+    private void notifyUser(
+            Long userId,
+            NotificationKind kind,
+            NotificationSeverity severity,
+            String title,
+            String body,
+            String deeplink,
+            String entityType,
+            String entityId,
+            Map<String, String> metadata) {
         try {
-            notificationService.notifyUser(userId, title, body);
+            notificationService.notifyUser(
+                    userId,
+                    kind,
+                    severity,
+                    title,
+                    body,
+                    deeplink,
+                    entityType,
+                    entityId,
+                    metadata);
         } catch (Exception ex) {
             log.warn("Failed to emit mining notification: {}", ex.getMessage());
         }

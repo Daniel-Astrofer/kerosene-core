@@ -21,13 +21,16 @@ public class StartLogin {
     private final LoginVerifier verifier;
     private final RedisServicer redisService;
     private final LoginThrottlePolicy throttlePolicy;
+    private final IssueSessionToken issueSessionToken;
 
     public StartLogin(LoginVerifier verifier,
             RedisServicer redisService,
-            LoginThrottlePolicy throttlePolicy) {
+            LoginThrottlePolicy throttlePolicy,
+            IssueSessionToken issueSessionToken) {
         this.verifier = verifier;
         this.redisService = redisService;
         this.throttlePolicy = throttlePolicy;
+        this.issueSessionToken = issueSessionToken;
     }
 
     public String start(UserDTOContract dto) {
@@ -38,6 +41,10 @@ public class StartLogin {
 
         try {
             UserDataBase user = verifier.matcherWithoutDevice(dto);
+            if (!user.hasTotpEnabled()) {
+                throttlePolicy.clearLoginFailures(throttleUsername);
+                return issueSessionToken.issue(user);
+            }
             String preAuthToken = UUID.randomUUID().toString();
             redisService.setValue(preAuthKey(preAuthToken), user.getUsername(), PRE_AUTH_TTL_SECONDS);
             throttlePolicy.clearLoginFailures(throttleUsername);

@@ -1,15 +1,16 @@
 package source.transactions.infra;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 
 /**
  * Client to interact with mempool.space or local mempool instance (Agente 4).
@@ -20,12 +21,14 @@ public class MempoolClient {
 
     private static final Logger log = LoggerFactory.getLogger(MempoolClient.class);
     private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
     private final String mempoolUrl = "https://mempool.space/api/v1/fees/recommended";
 
-    public MempoolClient() {
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
+    public MempoolClient(
+            @Qualifier("mempoolHttpClient") HttpClient httpClient,
+            ObjectMapper objectMapper) {
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     public record RecommendedFees(long fastestFee, long halfHourFee, long hourFee, long economyFee) {}
@@ -40,8 +43,7 @@ public class MempoolClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                JsonNode node = mapper.readTree(response.body());
+                JsonNode node = objectMapper.readTree(response.body());
 
                 return new RecommendedFees(
                     node.get("fastestFee").asLong(),

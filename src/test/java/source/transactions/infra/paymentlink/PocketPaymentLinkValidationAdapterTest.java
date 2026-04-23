@@ -33,6 +33,25 @@ class PocketPaymentLinkValidationAdapterTest {
     }
 
     @Test
+    void shouldAcceptAnyNonBlankTxidForAccountActivationWhenVoucherMockModeIsEnabled() {
+        BlockchainClient blockchainClient = mock(BlockchainClient.class);
+        PocketPaymentLinkValidationAdapter adapter = new PocketPaymentLinkValidationAdapter(
+                blockchainClient,
+                3,
+                false,
+                true);
+
+        PaymentLinkDTO paymentLink = new PaymentLinkDTO();
+        paymentLink.setDescription(PaymentLinkDescription.ACCOUNT_ACTIVATION);
+
+        assertDoesNotThrow(() -> adapter.validateConfirmedTransaction(
+                paymentLink,
+                "qualquer-txid-informado-pelo-cliente",
+                "sender-address"));
+        verifyNoInteractions(blockchainClient);
+    }
+
+    @Test
     void shouldRejectBlankTxidEvenWhenVoucherMockModeIsEnabled() {
         BlockchainClient blockchainClient = mock(BlockchainClient.class);
         PocketPaymentLinkValidationAdapter adapter = new PocketPaymentLinkValidationAdapter(

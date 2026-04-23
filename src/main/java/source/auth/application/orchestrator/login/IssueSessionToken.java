@@ -7,7 +7,11 @@ import org.springframework.stereotype.Component;
 
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.model.entity.UserDataBase;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
+
+import java.util.Map;
 
 @Component
 public class IssueSessionToken {
@@ -31,8 +35,16 @@ public class IssueSessionToken {
 
     private void notifyLogin(Long userId) {
         try {
-            notificationService.notifyUser(userId, "Acesso Detectado",
-                    "Um novo acesso foi identificado em sua conta Kerosene. Caso não reconheça esta ação, verifique suas sessões ativas imediatamente.");
+            notificationService.notifyUser(
+                    userId,
+                    NotificationKind.SECURITY_LOGIN_DETECTED,
+                    NotificationSeverity.WARNING,
+                    "Acesso Detectado",
+                    "Um novo acesso foi identificado em sua conta Kerosene. Caso não reconheça esta ação, verifique suas sessões ativas imediatamente.",
+                    "/settings",
+                    "user",
+                    String.valueOf(userId),
+                    Map.of("scope", "session"));
         } catch (Exception e) {
             log.warn("Falha ao enviar notificação de login para usuário {}", userId, e);
         }

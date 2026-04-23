@@ -10,12 +10,15 @@ import source.mining.entity.MiningAllocationEntity;
 import source.mining.entity.MiningRigOfferEntity;
 import source.mining.exception.MiningExceptions;
 import source.mining.repository.MiningAllocationRepository;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 public class MiningSettlementService {
@@ -83,8 +86,17 @@ public class MiningSettlementService {
                 LocalDateTime.now()));
         notifyUser(
                 allocation.getUserId(),
+                NotificationKind.MINING_COMPLETED,
+                NotificationSeverity.SUCCESS,
                 "Locacao de hashpower concluida",
-                "Os rendimentos projetados da locacao foram creditados na sua carteira.");
+                "Os rendimentos projetados da locacao foram creditados na sua carteira.",
+                "/mining",
+                "mining_allocation",
+                allocation.getId() != null ? allocation.getId().toString() : null,
+                Map.of(
+                        "walletName", allocation.getWalletNameSnapshot(),
+                        "rigName", allocation.getRigNameSnapshot(),
+                        "amountBtc", allocation.getProjectedNetYieldBtc().toPlainString()));
     }
 
     @Transactional
@@ -130,8 +142,19 @@ public class MiningSettlementService {
                 allocation.getProviderRentalReference(),
                 "Mining allocation cancelled with pro-rated refund.",
                 LocalDateTime.now()));
-        notifyUser(userId, "Locacao de hashpower cancelada",
-                "A locacao foi cancelada e o ajuste proporcional foi creditado.");
+        notifyUser(
+                userId,
+                NotificationKind.MINING_CANCELLED,
+                NotificationSeverity.WARNING,
+                "Locacao de hashpower cancelada",
+                "A locacao foi cancelada e o ajuste proporcional foi creditado.",
+                "/mining",
+                "mining_allocation",
+                allocation.getId() != null ? allocation.getId().toString() : null,
+                Map.of(
+                        "walletName", allocation.getWalletNameSnapshot(),
+                        "rigName", allocation.getRigNameSnapshot(),
+                        "amountBtc", creditBack.toPlainString()));
 
         return saved;
     }
@@ -140,9 +163,27 @@ public class MiningSettlementService {
         return value.setScale(8, RoundingMode.HALF_UP);
     }
 
-    private void notifyUser(Long userId, String title, String body) {
+    private void notifyUser(
+            Long userId,
+            NotificationKind kind,
+            NotificationSeverity severity,
+            String title,
+            String body,
+            String deeplink,
+            String entityType,
+            String entityId,
+            Map<String, String> metadata) {
         try {
-            notificationService.notifyUser(userId, title, body);
+            notificationService.notifyUser(
+                    userId,
+                    kind,
+                    severity,
+                    title,
+                    body,
+                    deeplink,
+                    entityType,
+                    entityId,
+                    metadata);
         } catch (Exception ex) {
             log.warn("Failed to emit mining notification: {}", ex.getMessage());
         }

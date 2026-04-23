@@ -15,7 +15,11 @@ public interface WalletContract {
 
     WalletEntity findById(Long id);
 
+    List<WalletEntity> findAll();
+
     WalletEntity findByPassphraseHash(String passphraseHash);
+
+    WalletEntity findByDepositAddress(String depositAddress);
 
     boolean existsByUserIdAndName(Long id, String name);
 

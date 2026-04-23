@@ -31,4 +31,9 @@ public class PendingTransactionRedisAdapter implements TransactionPendingPort {
     public List<PendingTransaction> findPendingTransactions() {
         return pendingTransactionRedisRepository.findByStatus("PENDING");
     }
+
+    @Override
+    public List<PendingTransaction> findTransactionsByUserId(Long userId) {
+        return pendingTransactionRedisRepository.findByUserId(userId);
+    }
 }

@@ -3,6 +3,7 @@ package source.treasury.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import source.treasury.domain.service.FeeMarkupPolicy;
 
 /**
  * Oráculo de Taxas Dinâmicas
@@ -13,17 +14,18 @@ import org.springframework.stereotype.Service;
 public class FeeEstimatorService {
 
     private static final Logger log = LoggerFactory.getLogger(FeeEstimatorService.class);
+    private final FeeMarkupPolicy feeMarkupPolicy;
 
-    // Configurações de Markup (Insurance against fee spikes)
-    private static final double NETWORK_MULTIPLICATOR = 1.10;
-    private static final long FIXED_FEE_SATS = 500;
+    public FeeEstimatorService(FeeMarkupPolicy feeMarkupPolicy) {
+        this.feeMarkupPolicy = feeMarkupPolicy;
+    }
 
     /**
      * Calcula a taxa cobrada do usuário final com base na estimativa atual.
      * Retorna a taxa em Satoshis.
      */
     public long calculateUserFee(long estimatedNetworkFeeSats) {
-        long finalFee = (long) Math.ceil(estimatedNetworkFeeSats * NETWORK_MULTIPLICATOR) + FIXED_FEE_SATS;
+        long finalFee = feeMarkupPolicy.apply(estimatedNetworkFeeSats);
         log.info("[FeeEstimator] Rede: {} sats. Taxa final p/ Usuário (Markup 10% + 500sats): {} sats",
                  estimatedNetworkFeeSats, finalFee);
         return finalFee;

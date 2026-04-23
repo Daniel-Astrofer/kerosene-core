@@ -17,6 +17,7 @@ public record ExternalTransferResponseDTO(
         BigDecimal platformFeeBtc,
         BigDecimal totalDebitedBtc,
         String externalReference,
+        LocalDateTime expiresAt,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         String context) {

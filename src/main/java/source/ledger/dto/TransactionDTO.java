@@ -8,7 +8,8 @@ import java.math.BigDecimal;
  * Suporta múltiplos formatos para sender e receiver:
  * - Username do usuário (ex: "what")
  * - ID da carteira (ex: "1", "2", etc)
- * - Hash/Endereço da carteira (ex: "1A1z7agoat7F9gq5...")
+ * - Endereço blockchain da carteira (ex: "bc1q...")
+ * - Hash público de destino da carteira (ex: SHA-256 hexadecimal exposto em payment requests)
  *
  * Campos de segurança adicionados:
  * - idempotencyKey: UUID gerado pelo app para prevenção de double-spend.
@@ -119,6 +120,18 @@ public class TransactionDTO {
         this.passkeyAssertionJson = passkeyAssertionJson;
     }
 
+    public boolean hasPasskeyAssertion() {
+        return passkeyAssertionJson != null && !passkeyAssertionJson.isBlank();
+    }
+
+    public boolean hasConfirmationPassphrase() {
+        return confirmationPassphrase != null && !confirmationPassphrase.isBlank();
+    }
+
+    public boolean hasTotpCode() {
+        return totpCode != null && !totpCode.isBlank();
+    }
+
     public String getConfirmationPassphrase() {
         return confirmationPassphrase;
     }
@@ -152,7 +165,8 @@ public class TransactionDTO {
         if (identifier == null || identifier.trim().isEmpty()) {
             return false;
         }
-        return identifier.matches("^(1|3|bc1)[a-zA-Z0-9]{25,62}$");
+        // Support Mainnet (1, 3, bc1) and Testnet (m, n, 2, tb1)
+        return identifier.matches("^(1|3|bc1|m|n|2|tb1)[a-zA-Z0-9]{25,90}$");
     }
 
     /**

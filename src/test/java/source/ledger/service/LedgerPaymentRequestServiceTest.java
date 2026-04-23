@@ -6,14 +6,22 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
+import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
 import source.auth.model.entity.UserDataBase;
+import source.ledger.application.paymentrequest.CreateInternalPaymentRequestUseCase;
+import source.ledger.application.paymentrequest.GetInternalPaymentRequestUseCase;
+import source.ledger.application.paymentrequest.InternalPaymentRequestStore;
+import source.ledger.application.paymentrequest.PayInternalPaymentRequestUseCase;
+import source.ledger.application.paymentrequest.PaymentRequestDestinationHashService;
+import source.ledger.application.paymentrequest.PaymentRequestHistoryService;
+import source.ledger.application.paymentrequest.PaymentRequestNotificationService;
+import source.ledger.application.paymentrequest.PaymentRequestReceiverResolver;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.dto.PaymentRequestPublicDTO;
 import source.ledger.dto.TransactionDTO;
+import source.ledger.entity.LedgerTransactionHistory;
 import source.ledger.event.PaymentRequestEventPublisher;
 import source.ledger.orchestrator.TransactionContract;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
@@ -24,11 +32,13 @@ import source.wallet.service.WalletContract;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,19 +47,26 @@ import static org.mockito.Mockito.when;
 class LedgerPaymentRequestServiceTest {
 
     @Mock
-    private RedisTemplate<String, InternalPaymentRequestDTO> redisTemplate;
-    @Mock
-    private ValueOperations<String, InternalPaymentRequestDTO> valueOperations;
+    private InternalPaymentRequestStore paymentRequestStore;
+
     @Mock
     private WalletContract walletService;
+
     @Mock
     private UserService userService;
+
+    @Mock
+    private AccountActivationService accountActivationService;
+
     @Mock
     private TransactionContract transactionOrchestrator;
+
     @Mock
     private NotificationService notificationService;
+
     @Mock
     private PaymentRequestEventPublisher paymentEventPublisher;
+
     @Mock
     private LedgerTransactionHistoryRepository historyRepository;
 
@@ -57,15 +74,29 @@ class LedgerPaymentRequestServiceTest {
 
     @BeforeEach
     void setUp() {
+        PaymentRequestDestinationHashService destinationHashService = new PaymentRequestDestinationHashService();
+        PaymentRequestReceiverResolver receiverResolver =
+                new PaymentRequestReceiverResolver(walletService, destinationHashService);
+        PaymentRequestHistoryService historyService = new PaymentRequestHistoryService(historyRepository);
+        PaymentRequestNotificationService notificationService =
+                new PaymentRequestNotificationService(this.notificationService, paymentEventPublisher);
+
         service = new LedgerPaymentRequestService(
-                redisTemplate,
-                walletService,
-                userService,
-                transactionOrchestrator,
-                notificationService,
-                paymentEventPublisher,
-                historyRepository);
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+                new CreateInternalPaymentRequestUseCase(
+                        paymentRequestStore,
+                        walletService,
+                        userService,
+                        accountActivationService,
+                        destinationHashService,
+                        historyService,
+                        notificationService),
+                new GetInternalPaymentRequestUseCase(paymentRequestStore, receiverResolver),
+                new PayInternalPaymentRequestUseCase(
+                        paymentRequestStore,
+                        receiverResolver,
+                        transactionOrchestrator,
+                        historyService,
+                        notificationService));
     }
 
     @Test
@@ -94,20 +125,25 @@ class LedgerPaymentRequestServiceTest {
         assertEquals(created.getDestinationHash(), publicView.getDestinationHash());
         assertFalse(publicView.getDestinationHash().contains("MAIN"));
 
-        verify(valueOperations).set(
-                eq("internal_payment_req:" + created.getId()),
-                eq(created),
-                eq(30L),
-                eq(TimeUnit.MINUTES));
+        verify(paymentRequestStore).save(eq(created), eq(30L), eq(TimeUnit.MINUTES));
+
+        ArgumentCaptor<LedgerTransactionHistory> historyCaptor =
+                ArgumentCaptor.forClass(LedgerTransactionHistory.class);
+        verify(historyRepository).save(historyCaptor.capture());
+        LedgerTransactionHistory history = historyCaptor.getValue();
+        assertEquals("PAYER_PENDING", history.getSenderIdentifier());
+        assertEquals("MAIN", history.getReceiverIdentifier());
+        assertEquals("PAYMENT_LINK", history.getTransactionType());
     }
 
     @Test
     void payRequestUsesLockedWalletIdInsteadOfClientVisibleDestination() {
         UserDataBase requester = user(10L, "alice");
         WalletEntity receiverWallet = wallet(55L, requester, "MAIN", "bc1qreceiverlockedaddress0000000000000000000000");
+        String linkId = UUID.randomUUID().toString();
 
         InternalPaymentRequestDTO req = new InternalPaymentRequestDTO();
-        req.setId("link-1");
+        req.setId(linkId);
         req.setRequesterUserId(10L);
         req.setReceiverWalletId(55L);
         req.setReceiverWalletName("MAIN");
@@ -117,10 +153,10 @@ class LedgerPaymentRequestServiceTest {
         req.setCreatedAt(LocalDateTime.now());
         req.setExpiresAt(LocalDateTime.now().plusMinutes(10));
 
-        when(valueOperations.get("internal_payment_req:link-1")).thenReturn(req);
+        when(paymentRequestStore.findById(linkId)).thenReturn(req);
         when(walletService.findById(55L)).thenReturn(receiverWallet);
 
-        service.payRequest("link-1", 22L, "PAYER", "123456", null, "passphrase");
+        service.payRequest(linkId, 22L, "PAYER", "123456", null, "passphrase");
 
         ArgumentCaptor<TransactionDTO> txCaptor = ArgumentCaptor.forClass(TransactionDTO.class);
         verify(transactionOrchestrator).processTransaction(txCaptor.capture());
@@ -128,10 +164,13 @@ class LedgerPaymentRequestServiceTest {
         assertEquals("PAYER", tx.getSender());
         assertEquals("55", tx.getReceiver());
         assertEquals(new BigDecimal("0.12500000"), tx.getAmount());
-        assertEquals("Payment Link link-1", tx.getContext());
+        assertEquals("Payment Link " + linkId, tx.getContext());
 
         assertEquals("PAID", req.getStatus());
-        verify(valueOperations).set(eq("internal_payment_req:link-1"), eq(req), eq(30L), eq(TimeUnit.MINUTES));
+        verify(historyRepository).updateStatus(UUID.fromString(linkId), "CONCLUDED");
+        verify(paymentRequestStore).save(eq(req), eq(30L), eq(TimeUnit.MINUTES));
+        verify(this.notificationService).notifyUser(eq(10L), any(source.notification.model.UserNotificationPayload.class));
+        verify(paymentEventPublisher).publishPaymentPaid(req);
     }
 
     private UserDataBase user(Long id, String username) {

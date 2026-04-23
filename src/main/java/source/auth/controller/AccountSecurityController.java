@@ -9,7 +9,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.auth.AuthExceptions;
-import source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository;
+import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.service.security.profile.AdvancedAccountSecurityAvailability;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.dto.AccountSecurityProfileDTO;
 import source.auth.dto.AccountSecurityUpdateRequestDTO;
@@ -23,12 +24,15 @@ public class AccountSecurityController {
 
     private final UserServiceContract userService;
     private final PasskeyCredentialRepository passkeyCredentialRepository;
+    private final AdvancedAccountSecurityAvailability advancedAccountSecurityAvailability;
 
     public AccountSecurityController(
             UserServiceContract userService,
-            PasskeyCredentialRepository passkeyCredentialRepository) {
+            PasskeyCredentialRepository passkeyCredentialRepository,
+            AdvancedAccountSecurityAvailability advancedAccountSecurityAvailability) {
         this.userService = userService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
+        this.advancedAccountSecurityAvailability = advancedAccountSecurityAvailability;
     }
 
     @GetMapping("/profile")
@@ -76,6 +80,7 @@ public class AccountSecurityController {
         AccountSecurityType mode = request.getAccountSecurity() != null
                 ? request.getAccountSecurity()
                 : AccountSecurityType.STANDARD;
+        advancedAccountSecurityAvailability.assertSupported(mode);
 
         switch (mode) {
             case SHAMIR -> {

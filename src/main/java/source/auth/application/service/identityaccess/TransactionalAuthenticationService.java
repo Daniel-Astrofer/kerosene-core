@@ -15,6 +15,7 @@ import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
+import source.common.util.CryptoUtils;
 
 import java.util.Base64;
 
@@ -182,14 +183,23 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             String clientDataJSON = requiredText(node, "clientDataJSON");
             String credentialId = requiredText(node, "credentialId");
 
-            byte[] credentialIdBytes = decodeCredentialId(credentialId);
+            byte[] credentialIdBytes = CryptoUtils.decodeBase64(credentialId);
+
+            log.info("Searching for passkey: userId={}, credentialId={} (string: {})",
+                    user.getId(), bytesToHex(credentialIdBytes), credentialId);
+
             PasskeyCredential credential = passkeyCredentialRepository
                     .findByCredentialIdAndUserId(credentialIdBytes, user.getId())
-                    .orElseThrow(() -> new AuthExceptions.AuthValidationException(
-                            "Passkey credential not found for this user."));
+                    .orElseThrow(() -> {
+                        log.error("Passkey NOT FOUND for user {}: credentialId={} (decodes to hex: {})",
+                                user.getUsername(), credentialId, bytesToHex(credentialIdBytes));
+                        return new AuthExceptions.AuthValidationException(
+                            "Passkey credential not found for this user.");
+                    });
 
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(user.getUsername());
             if (consumedChallenge == null) {
+                log.warn("Passkey challenge expired or not found for user {}", user.getUsername());
                 throw new AuthExceptions.AuthValidationException("Passkey challenge expired. Please retry.");
             }
 
@@ -275,16 +285,13 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return value;
     }
 
-    private byte[] decodeCredentialId(String credentialId) {
-        try {
-            return Base64.getUrlDecoder().decode(credentialId);
-        } catch (IllegalArgumentException urlException) {
-            try {
-                return Base64.getDecoder().decode(credentialId);
-            } catch (IllegalArgumentException standardException) {
-                throw new AuthExceptions.AuthValidationException("Invalid passkey credential id encoding.");
-            }
+    private String bytesToHex(byte[] bytes) {
+        if (bytes == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
         }
+        return sb.toString();
     }
 
     private boolean hasText(String value) {

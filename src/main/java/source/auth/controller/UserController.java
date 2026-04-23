@@ -41,13 +41,13 @@ public class UserController {
     public ResponseEntity<ApiResponse<String>> login(@RequestBody UserDTO userDTO) {
         String id = login.loginUser(userDTO);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.success("Login request received. Please proceed with TOTP verification.", id));
+                .body(ApiResponse.success("Login processed. Proceed with TOTP only when your account has it enabled.", id));
     }
 
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<SignupResponseDTO>> signup(@RequestBody UserDTO dto) {
         return ResponseEntity.ok(ApiResponse.success(
-                "Account credentials validated. Please configure your authenticator app using the provided setup key and safely store your backup codes.",
+                "Account credentials validated. TOTP is optional, but the setup secret and backup codes are available now if you want to enable it before finishing passkey enrollment.",
                 signup.signupUser(dto)));
     }
 
@@ -56,7 +56,7 @@ public class UserController {
 
         String token = signup.createUser(userDTO);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse
-                .success("Device verified and account successfully created. You are now fully authenticated.", token));
+                .success("Signup security session updated successfully.", token));
     }
 
     @PostMapping("/login/totp/verify")

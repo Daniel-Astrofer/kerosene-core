@@ -14,7 +14,8 @@ services:
       # No default value — Docker Compose will fail loudly if this is not in .env
       - FOUNDER_TOTP_SECRET=${FOUNDER_TOTP_SECRET}
     networks:
-      - net_vault
+      net_vault:
+        ipv4_address: 172.24.0.10
     cap_add:
       - IPC_LOCK
 
@@ -27,7 +28,27 @@ services:
       - tor_keys_vault:/var/lib/tor/kerosene_service
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks: [net_vault, tor_egress]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/tor-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
     depends_on: [kerosene-vault]
+
+  kerosene-vault-arm:
+    image: curlimages/curl:8.10.1
+    container_name: kerosene-vault-arm
+    restart: "no"
+    env_file: .env
+    environment:
+      - VAULT_URL=http://kerosene-vault:8090/v1/vault/arm
+      - VAULT_ARM_MAX_WAIT_SECONDS=120
+    volumes:
+      - ../../scripts/arm-vault-compose.sh:/arm-vault.sh:ro
+    entrypoint: ["/bin/sh", "/arm-vault.sh"]
+    networks: [net_vault]
+    depends_on:
+      kerosene-vault: { condition: service_started }
 
   # ══════════════════════════════════════════════════════════════════
   # Distributed Infrastructure: SWEDEN (Primary Node)
@@ -65,7 +86,7 @@ services:
     networks:
       - net_db_is
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U api_system -d kerosene"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d kerosene"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -83,6 +104,11 @@ services:
       - redis_data_is:/data
     networks:
       - net_db_is
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   mpc-sidecar-is:
     build:
@@ -91,10 +117,29 @@ services:
     restart: unless-stopped
     tmpfs:
       - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
+    volumes:
+      - ./certs:/certs:ro
     environment:
       - MPC_RUNTIME_MODE=HARDWARE_ENCLAVE
+      - MPC_TLS_CERT_FILE=/certs/server.crt
+      - MPC_TLS_KEY_FILE=/certs/server.key
+      - MPC_TLS_CA_FILE=/certs/rootCA.crt
     networks:
       - net_mpc
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 50051"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  shard-identity-init-is:
+    image: alpine:3.20
+    container_name: kerosene-shard-identity-init-is
+    command: ["sh", "-c", "mkdir -p /identity && chown -R 65532:65532 /identity && chmod 700 /identity"]
+    restart: "no"
+    network_mode: none
+    volumes:
+      - shard_identity_is:/identity
 
   kerosene-app-is:
     build:
@@ -115,17 +160,26 @@ services:
       - ./deploy/panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_is:/var/run/tor/socks
+      - vanguards_state_is:/var/run/tor/vanguards:ro
       - tor_keys_vault:/vault-onion:ro
+      - shard_identity_is:/opt/kerosene/identity
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://kerosene_db_is:5432/kerosene?targetServerType=primary&ssl=true&sslmode=verify-ca&sslrootcert=/certs/rootCA.crt&sslcert=/certs/client.crt&sslkey=/certs/client.key.der
       - REGION=IS
       - MPC_SIDECAR_HOST=mpc-sidecar-is
+      - MPC_SIDECAR_TLS_ENABLED=true
+      - MPC_SIDECAR_TLS_CERT_CHAIN=/certs/client.crt
+      - MPC_SIDECAR_TLS_PRIVATE_KEY=/certs/client.key
+      - MPC_SIDECAR_TLS_CA=/certs/rootCA.crt
       - SPRING_DATA_REDIS_HOST=kerosene_redis_is
       - VAULT_ENABLED=true
       - VAULT_ONION_FILE=/vault-onion/hostname
       - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
+      - VAULT_BOOTSTRAP_STARTUP_TIMEOUT_MS=180000
+      - SHARD_IDENTITY_PATH=/opt/kerosene/identity
+      - TOR_HEALTH_VANGUARDS_STATE_FILE=/var/run/tor/vanguards/vanguards.state
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
@@ -134,7 +188,13 @@ services:
       - net_tor
     depends_on:
       db-is: { condition: service_healthy }
-      mpc-sidecar-is: { condition: service_started }
+      redis-is: { condition: service_healthy }
+      mpc-sidecar-is: { condition: service_healthy }
+      kerosene-vault-arm: { condition: service_completed_successfully }
+      kerosene-tor-vault: { condition: service_healthy }
+      kerosene-tor-is: { condition: service_healthy }
+      kerosene-vanguards-is: { condition: service_healthy }
+      shard-identity-init-is: { condition: service_completed_successfully }
 
   # ══════════════════════════════════════════════════════════════════
   # Distributed Infrastructure: SWITZERLAND (ch)
@@ -168,7 +228,7 @@ services:
     networks:
       - net_db_ch
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U api_system -d kerosene"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d kerosene"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -185,6 +245,11 @@ services:
       - redis_data_ch:/data
     networks:
       - net_db_ch
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   mpc-sidecar-ch:
     build:
@@ -193,10 +258,29 @@ services:
     restart: unless-stopped
     tmpfs:
       - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
+    volumes:
+      - ./certs:/certs:ro
     environment:
       - MPC_RUNTIME_MODE=HARDWARE_ENCLAVE
+      - MPC_TLS_CERT_FILE=/certs/server.crt
+      - MPC_TLS_KEY_FILE=/certs/server.key
+      - MPC_TLS_CA_FILE=/certs/rootCA.crt
     networks:
       - net_mpc
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 50051"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  shard-identity-init-ch:
+    image: alpine:3.20
+    container_name: kerosene-shard-identity-init-ch
+    command: ["sh", "-c", "mkdir -p /identity && chown -R 65532:65532 /identity && chmod 700 /identity"]
+    restart: "no"
+    network_mode: none
+    volumes:
+      - shard_identity_ch:/identity
 
   kerosene-app-ch:
     build: .
@@ -211,17 +295,26 @@ services:
       - ./deploy/panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_ch:/var/run/tor/socks
+      - vanguards_state_ch:/var/run/tor/vanguards:ro
       - tor_keys_vault:/vault-onion:ro
+      - shard_identity_ch:/opt/kerosene/identity
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://kerosene_db_ch:5432/kerosene?targetServerType=primary&ssl=true&sslmode=verify-ca&sslrootcert=/certs/rootCA.crt&sslcert=/certs/client.crt&sslkey=/certs/client.key.der
       - REGION=CH
       - MPC_SIDECAR_HOST=mpc-sidecar-ch
+      - MPC_SIDECAR_TLS_ENABLED=true
+      - MPC_SIDECAR_TLS_CERT_CHAIN=/certs/client.crt
+      - MPC_SIDECAR_TLS_PRIVATE_KEY=/certs/client.key
+      - MPC_SIDECAR_TLS_CA=/certs/rootCA.crt
       - SPRING_DATA_REDIS_HOST=kerosene_redis_ch
       - VAULT_ENABLED=true
       - VAULT_ONION_FILE=/vault-onion/hostname
       - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
+      - VAULT_BOOTSTRAP_STARTUP_TIMEOUT_MS=180000
+      - SHARD_IDENTITY_PATH=/opt/kerosene/identity
+      - TOR_HEALTH_VANGUARDS_STATE_FILE=/var/run/tor/vanguards/vanguards.state
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
@@ -230,7 +323,13 @@ services:
       - net_tor
     depends_on:
       db-ch: { condition: service_healthy }
-      mpc-sidecar-ch: { condition: service_started }
+      redis-ch: { condition: service_healthy }
+      mpc-sidecar-ch: { condition: service_healthy }
+      kerosene-vault-arm: { condition: service_completed_successfully }
+      kerosene-tor-vault: { condition: service_healthy }
+      kerosene-tor-ch: { condition: service_healthy }
+      kerosene-vanguards-ch: { condition: service_healthy }
+      shard-identity-init-ch: { condition: service_completed_successfully }
 
   # ══════════════════════════════════════════════════════════════════
   # Distributed Infrastructure: SINGAPORE (sg)
@@ -264,7 +363,7 @@ services:
     networks:
       - net_db_sg
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U api_system -d kerosene"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d kerosene"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -281,6 +380,11 @@ services:
       - redis_data_sg:/data
     networks:
       - net_db_sg
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   mpc-sidecar-sg:
     build:
@@ -289,10 +393,29 @@ services:
     restart: unless-stopped
     tmpfs:
       - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
+    volumes:
+      - ./certs:/certs:ro
     environment:
       - MPC_RUNTIME_MODE=HARDWARE_ENCLAVE
+      - MPC_TLS_CERT_FILE=/certs/server.crt
+      - MPC_TLS_KEY_FILE=/certs/server.key
+      - MPC_TLS_CA_FILE=/certs/rootCA.crt
     networks:
       - net_mpc
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 50051"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  shard-identity-init-sg:
+    image: alpine:3.20
+    container_name: kerosene-shard-identity-init-sg
+    command: ["sh", "-c", "mkdir -p /identity && chown -R 65532:65532 /identity && chmod 700 /identity"]
+    restart: "no"
+    network_mode: none
+    volumes:
+      - shard_identity_sg:/identity
 
   kerosene-app-sg:
     build: .
@@ -307,17 +430,26 @@ services:
       - ./deploy/panic.sh:/opt/kerosene/panic.sh:ro
       - ./certs:/certs:ro
       - tor_socks_sg:/var/run/tor/socks
+      - vanguards_state_sg:/var/run/tor/vanguards:ro
       - tor_keys_vault:/vault-onion:ro
+      - shard_identity_sg:/opt/kerosene/identity
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - SPRING_DATASOURCE_URL=jdbc:postgresql://kerosene_db_sg:5432/kerosene?targetServerType=primary&ssl=true&sslmode=verify-ca&sslrootcert=/certs/rootCA.crt&sslcert=/certs/client.crt&sslkey=/certs/client.key.der
       - REGION=SG
       - MPC_SIDECAR_HOST=mpc-sidecar-sg
+      - MPC_SIDECAR_TLS_ENABLED=true
+      - MPC_SIDECAR_TLS_CERT_CHAIN=/certs/client.crt
+      - MPC_SIDECAR_TLS_PRIVATE_KEY=/certs/client.key
+      - MPC_SIDECAR_TLS_CA=/certs/rootCA.crt
       - SPRING_DATA_REDIS_HOST=kerosene_redis_sg
       - VAULT_ENABLED=true
       - VAULT_ONION_FILE=/vault-onion/hostname
       - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
+      - VAULT_BOOTSTRAP_STARTUP_TIMEOUT_MS=180000
+      - SHARD_IDENTITY_PATH=/opt/kerosene/identity
+      - TOR_HEALTH_VANGUARDS_STATE_FILE=/var/run/tor/vanguards/vanguards.state
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
@@ -326,7 +458,13 @@ services:
       - net_tor
     depends_on:
       db-sg: { condition: service_healthy }
-      mpc-sidecar-sg: { condition: service_started }
+      redis-sg: { condition: service_healthy }
+      mpc-sidecar-sg: { condition: service_healthy }
+      kerosene-vault-arm: { condition: service_completed_successfully }
+      kerosene-tor-vault: { condition: service_healthy }
+      kerosene-tor-sg: { condition: service_healthy }
+      kerosene-vanguards-sg: { condition: service_healthy }
+      shard-identity-init-sg: { condition: service_completed_successfully }
 
   # Tor nodes (Identity redundancy)
   kerosene-tor-is:
@@ -335,14 +473,45 @@ services:
     environment:
       - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
     volumes:
+      - tor_data_is:/var/lib/tor
       - ./tor/torrc-is:/etc/tor/torrc:ro
       - ./tor/entrypoint.sh:/entrypoint.sh:ro
       - tor_keys_is:/var/lib/tor/kerosene_service
       - tor_socks_is:/var/run/tor/socks
+      - tor_control_is:/var/run/tor/control
       - ./tor/onion_auth_is:/var/lib/tor/onion_auth:ro
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks: [net_tor, tor_egress]
-    depends_on: [kerosene-app-is]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/tor-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  kerosene-vanguards-is:
+    build:
+      context: ./tor/vanguards
+      dockerfile: Dockerfile
+    container_name: kerosene-vanguards-is
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=16m,mode=1777
+    volumes:
+      - tor_control_is:/var/run/tor/control:ro
+      - tor_data_is:/var/lib/tor:ro
+      - vanguards_state_is:/var/lib/vanguards
+    network_mode: none
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/vanguards-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    depends_on:
+      kerosene-tor-is: { condition: service_healthy }
 
   kerosene-tor-ch:
     image: debian:bookworm-slim
@@ -350,14 +519,45 @@ services:
     environment:
       - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
     volumes:
+      - tor_data_ch:/var/lib/tor
       - ./tor/torrc-ch:/etc/tor/torrc:ro
       - ./tor/entrypoint.sh:/entrypoint.sh:ro
       - tor_keys_ch:/var/lib/tor/kerosene_service
       - tor_socks_ch:/var/run/tor/socks
+      - tor_control_ch:/var/run/tor/control
       - ./tor/onion_auth_ch:/var/lib/tor/onion_auth:ro
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks: [net_tor, tor_egress]
-    depends_on: [kerosene-app-ch]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/tor-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  kerosene-vanguards-ch:
+    build:
+      context: ./tor/vanguards
+      dockerfile: Dockerfile
+    container_name: kerosene-vanguards-ch
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=16m,mode=1777
+    volumes:
+      - tor_control_ch:/var/run/tor/control:ro
+      - tor_data_ch:/var/lib/tor:ro
+      - vanguards_state_ch:/var/lib/vanguards
+    network_mode: none
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/vanguards-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    depends_on:
+      kerosene-tor-ch: { condition: service_healthy }
 
   kerosene-tor-sg:
     image: debian:bookworm-slim
@@ -365,20 +565,54 @@ services:
     environment:
       - MASTER_ONION=sc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4kc7shmzjad.onion
     volumes:
+      - tor_data_sg:/var/lib/tor
       - ./tor/torrc-sg:/etc/tor/torrc:ro
       - ./tor/entrypoint.sh:/entrypoint.sh:ro
       - tor_keys_sg:/var/lib/tor/kerosene_service
       - tor_socks_sg:/var/run/tor/socks
+      - tor_control_sg:/var/run/tor/control
       - ./tor/onion_auth_sg:/var/lib/tor/onion_auth:ro
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks: [net_tor, tor_egress]
-    depends_on: [kerosene-app-sg]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/tor-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  kerosene-vanguards-sg:
+    build:
+      context: ./tor/vanguards
+      dockerfile: Dockerfile
+    container_name: kerosene-vanguards-sg
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=16m,mode=1777
+    volumes:
+      - tor_control_sg:/var/run/tor/control:ro
+      - tor_data_sg:/var/lib/tor:ro
+      - vanguards_state_sg:/var/lib/vanguards
+    network_mode: none
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/vanguards-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    depends_on:
+      kerosene-tor-sg: { condition: service_healthy }
 
 networks:
   net_db_is:
   net_db_ch:
   net_db_sg:
   net_vault:
+    ipam:
+      config:
+        - subnet: 172.24.0.0/24
   net_mpc:
   net_tor:
   tor_egress: {}
@@ -397,3 +631,15 @@ volumes:
   tor_socks_is:
   tor_socks_ch:
   tor_socks_sg:
+  tor_data_is:
+  tor_data_ch:
+  tor_data_sg:
+  tor_control_is:
+  tor_control_ch:
+  tor_control_sg:
+  vanguards_state_is:
+  vanguards_state_ch:
+  vanguards_state_sg:
+  shard_identity_is:
+  shard_identity_ch:
+  shard_identity_sg:

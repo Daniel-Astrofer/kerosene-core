@@ -97,9 +97,9 @@ Observacao:
 
 No profile `docker`, o backend usa:
 
-- `ddl-auto=update`
-- `spring.sql.init.mode=always`
-- `classpath:db/migration.sql`
+- `ddl-auto=validate`
+- `spring.sql.init.mode=never`
+- `db/migration.sql` aplicado fora da JVM, antes do boot do app
 
 ### Redis
 

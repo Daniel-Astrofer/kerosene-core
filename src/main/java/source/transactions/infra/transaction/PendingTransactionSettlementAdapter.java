@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import source.ledger.entity.LedgerTransactionHistory;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
 import source.ledger.service.LedgerService;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
 import source.transactions.application.transaction.monitoring.PendingTransactionSettlementPort;
 import source.transactions.model.PendingTransaction;
@@ -16,6 +18,7 @@ import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -82,11 +85,20 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
             try {
                 notificationService.notifyUser(
                         senderWallet.getUser().getId(),
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.SUCCESS,
                         "Transferência Confirmada",
                         String.format(
                                 "A transferência de %s BTC da carteira '%s' foi confirmada na rede Blockchain.",
                                 transaction.getAmount().toPlainString(),
-                                senderWallet.getName()));
+                                senderWallet.getName()),
+                        "/history",
+                        "transaction",
+                        transaction.getTxid(),
+                        Map.of(
+                                "walletName", senderWallet.getName(),
+                                "amountBtc", transaction.getAmount().toPlainString(),
+                                "confirmations", String.valueOf(confirmations)));
 
                 historyRepository.findByBlockchainTxid(transaction.getTxid()).ifPresent(history -> {
                     history.setStatus("CONCLUDED");
@@ -127,12 +139,22 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
             try {
                 notificationService.notifyUser(
                         receiverWallet.getUser().getId(),
+                        NotificationKind.DEPOSIT_CONFIRMED,
+                        NotificationSeverity.SUCCESS,
                         "Depósito Confirmado",
                         String.format(
                                 "O aporte bruto de %s BTC na carteira '%s' foi confirmado. Liquido creditado: %s BTC.",
                                 transaction.getAmount().toPlainString(),
                                 receiverWallet.getName(),
-                                netCredit.toPlainString()));
+                                netCredit.toPlainString()),
+                        "/deposits",
+                        "transaction",
+                        transaction.getTxid(),
+                        Map.of(
+                                "walletName", receiverWallet.getName(),
+                                "grossAmountBtc", transaction.getAmount().toPlainString(),
+                                "netAmountBtc", netCredit.toPlainString(),
+                                "confirmations", String.valueOf(confirmations)));
 
                 upsertDepositHistory(transaction, confirmations, depositFee, netCredit, receiverWallet);
             } catch (Exception ex) {

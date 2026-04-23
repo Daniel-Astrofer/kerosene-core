@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 import source.ledger.entity.LedgerTransactionHistory;
@@ -21,6 +22,19 @@ public interface LedgerTransactionHistoryRepository extends JpaRepository<Ledger
 
     @Query("SELECT l FROM LedgerTransactionHistory l WHERE l.senderUserId = :userId OR l.receiverUserId = :userId ORDER BY l.createdAt DESC")
     java.util.List<LedgerTransactionHistory> findUserHistory(Long userId, Pageable pageable);
+
+    @Query("""
+            SELECT l
+            FROM LedgerTransactionHistory l
+            WHERE (l.senderUserId = :userId OR l.receiverUserId = :userId)
+              AND l.createdAt >= :start
+              AND l.createdAt < :end
+            ORDER BY l.createdAt DESC
+            """)
+    java.util.List<LedgerTransactionHistory> findMovementHistoryForUser(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 
     @Transactional
     @Modifying

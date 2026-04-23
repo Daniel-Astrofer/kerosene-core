@@ -33,6 +33,11 @@ public class WalletPersistenceAdapter implements WalletPersistencePort {
     }
 
     @Override
+    public List<WalletEntity> findAll() {
+        return walletRepository.findAll();
+    }
+
+    @Override
     public WalletEntity findByName(String name) {
         return walletRepository.findByName(name);
     }

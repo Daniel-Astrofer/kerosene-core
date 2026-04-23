@@ -1,5 +1,6 @@
 package source.wallet.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -13,5 +14,11 @@ public record WalletResponseDTO(
                 LocalDateTime createdAt,
                 LocalDateTime updatedAt,
                 Boolean isActive,
-                String totpUri) {
+                String totpUri,
+                String depositAddress,
+                String lightningAddress,
+                Boolean xpubConfigured,
+                String cardType,
+                BigDecimal withdrawalFeeRate,
+                BigDecimal depositFeeRate) {
 }

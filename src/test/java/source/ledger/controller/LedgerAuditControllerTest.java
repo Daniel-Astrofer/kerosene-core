@@ -9,7 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
-import source.auth.application.service.validation.totp.contratcs.TOTPVerifier;
+import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.ledger.repository.LedgerEntryRepository;
 
 import java.math.BigDecimal;
@@ -44,7 +44,7 @@ class LedgerAuditControllerTest {
     void shouldRejectSiphonWhenFounderSecretIsMissing() {
         ReflectionTestUtils.setField(controller, "founderTotpSecret", "");
 
-        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "Yubikey Signature");
+        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "Yubikey Signature", Map.of());
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         assertTrue(response.getBody().get("error").contains("not configured"));
@@ -55,7 +55,7 @@ class LedgerAuditControllerTest {
     void shouldRejectSiphonWhenHardwareSignatureDoesNotMatch() throws Exception {
         doNothing().when(totpVerifier).totpVerify("founder-secret", "123456");
 
-        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "wrong-signature");
+        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "wrong-signature", Map.of());
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         assertTrue(response.getBody().get("error").contains("Hardware"));
@@ -67,7 +67,7 @@ class LedgerAuditControllerTest {
         doNothing().when(totpVerifier).totpVerify("founder-secret", "123456");
         when(ledgerEntryRepository.calculatePlatformProfitPending()).thenReturn(BigDecimal.ZERO);
 
-        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "Yubikey Signature");
+        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "Yubikey Signature", Map.of());
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertTrue(response.getBody().get("message").contains("No fees"));
@@ -79,7 +79,7 @@ class LedgerAuditControllerTest {
         doNothing().when(totpVerifier).totpVerify("founder-secret", "123456");
         when(ledgerEntryRepository.calculatePlatformProfitPending()).thenReturn(new BigDecimal("10.5"));
 
-        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "Yubikey Signature");
+        ResponseEntity<Map<String, String>> response = controller.siphonFees("123456", "Yubikey Signature", Map.of());
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertTrue(response.getBody().get("message").contains("Succeeded"));

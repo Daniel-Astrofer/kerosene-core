@@ -47,9 +47,7 @@ public record AccountSecurityProfileDTO(
             }
             case PASSKEY -> factors.add("PASSKEY");
             case STANDARD -> {
-                if (Boolean.TRUE.equals(user.getPasskeyEnabledForTransactions())) {
-                    factors.add("PASSKEY");
-                }
+                factors.add("PASSKEY");
             }
         }
 

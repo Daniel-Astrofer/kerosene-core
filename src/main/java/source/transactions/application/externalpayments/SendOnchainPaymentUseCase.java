@@ -3,16 +3,18 @@ package source.transactions.application.externalpayments;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
+import source.notification.model.UserNotificationPayload;
 import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.dto.OnchainSendRequestDTO;
 import source.transactions.exception.ExternalPaymentsExceptions;
-import source.transactions.infra.CustodyGateway;
 import source.transactions.model.ExternalTransferEntity;
-import source.transactions.service.WalletAuthorizationService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Service
 public class SendOnchainPaymentUseCase {
@@ -21,8 +23,8 @@ public class SendOnchainPaymentUseCase {
     private final ExternalPaymentsLedgerPort ledgerPort;
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalPaymentsNotificationPort notificationPort;
-    private final WalletAuthorizationService walletAuthorizationService;
-    private final CustodyGateway custodyGateway;
+    private final ExternalPaymentsAuthorizationPort authorizationPort;
+    private final ExternalPaymentsCustodyPort custodyPort;
     private final ExternalPaymentsFeePolicy feePolicy;
     private final ExternalPaymentsMath externalPaymentsMath;
     private final ExternalTransferFactory externalTransferFactory;
@@ -33,8 +35,8 @@ public class SendOnchainPaymentUseCase {
             ExternalPaymentsLedgerPort ledgerPort,
             ExternalTransfersPort externalTransfersPort,
             ExternalPaymentsNotificationPort notificationPort,
-            WalletAuthorizationService walletAuthorizationService,
-            CustodyGateway custodyGateway,
+            ExternalPaymentsAuthorizationPort authorizationPort,
+            ExternalPaymentsCustodyPort custodyPort,
             ExternalPaymentsFeePolicy feePolicy,
             ExternalPaymentsMath externalPaymentsMath,
             ExternalTransferFactory externalTransferFactory,
@@ -43,8 +45,8 @@ public class SendOnchainPaymentUseCase {
         this.ledgerPort = ledgerPort;
         this.externalTransfersPort = externalTransfersPort;
         this.notificationPort = notificationPort;
-        this.walletAuthorizationService = walletAuthorizationService;
-        this.custodyGateway = custodyGateway;
+        this.authorizationPort = authorizationPort;
+        this.custodyPort = custodyPort;
         this.feePolicy = feePolicy;
         this.externalPaymentsMath = externalPaymentsMath;
         this.externalTransferFactory = externalTransferFactory;
@@ -60,7 +62,7 @@ public class SendOnchainPaymentUseCase {
         }
 
         WalletEntity wallet = walletPort.requireWallet(userId, request.fromWalletName());
-        WalletAuthorizationService.AuthorizationResult authorization = walletAuthorizationService.authorizeOutboundTransfer(
+        ExternalPaymentsAuthorizationPort.AuthorizationResult authorization = authorizationPort.authorizeOutboundTransfer(
                 userId,
                 wallet,
                 request.totpCode(),
@@ -77,8 +79,8 @@ public class SendOnchainPaymentUseCase {
         String context = "EXTERNAL_ONCHAIN_PAYMENT:" + externalPaymentsMath.safeText(request.description());
         ledgerPort.updateBalance(wallet.getId(), totalDebited.negate(), context);
 
-        CustodyGateway.PaymentResult payment = custodyGateway.sendOnchain(
-                new CustodyGateway.OnchainPaymentCommand(
+        ExternalPaymentsCustodyPort.PaymentResult payment = custodyPort.sendOnchain(
+                new ExternalPaymentsCustodyPort.OnchainPaymentCommand(
                         userId,
                         wallet.getId(),
                         wallet.getName(),
@@ -118,13 +120,24 @@ public class SendOnchainPaymentUseCase {
                 LocalDateTime.now()));
         notificationPort.notifyUser(
                 userId,
-                "Pagamento on-chain enviado",
-                "Pagamento externo enviado para " + request.toAddress() + ".");
+                UserNotificationPayload.create(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.SUCCESS,
+                        "Pagamento on-chain enviado",
+                        "Pagamento externo enviado para " + request.toAddress() + ".",
+                        "/history",
+                        "external_transfer",
+                        transfer.getId() != null ? transfer.getId().toString() : null,
+                        Map.of(
+                                "walletName", wallet.getName(),
+                                "amountBtc", request.amount().toPlainString(),
+                                "network", "ONCHAIN",
+                                "destination", request.toAddress())));
 
         return externalTransferFactory.toResponseDTO(transfer);
     }
 
     private String resolveProviderName() {
-        return custodyGateway.providerName() != null ? custodyGateway.providerName() : localAddressProviderName;
+        return custodyPort.providerName() != null ? custodyPort.providerName() : localAddressProviderName;
     }
 }

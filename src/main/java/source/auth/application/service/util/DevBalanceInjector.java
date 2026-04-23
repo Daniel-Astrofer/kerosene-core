@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.auth.application.infra.persistance.jpa.UserRepository;
+import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.model.entity.UserDataBase;
 import source.ledger.service.LedgerService;
 import source.wallet.model.WalletEntity;

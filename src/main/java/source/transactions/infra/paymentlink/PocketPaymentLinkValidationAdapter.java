@@ -41,7 +41,7 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
             throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction("Transacao nao e valida");
         }
 
-        if (isAllowedMockVoucher(paymentLink) || bitcoinMockMode) {
+        if (isAllowedMockPaymentLink(paymentLink) || bitcoinMockMode) {
             log.warn("[PaymentLink] Mock transaction accepted for link {} while mock mode is enabled.",
                     paymentLink.getId());
             return;
@@ -68,11 +68,12 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
         }
     }
 
-    private boolean isAllowedMockVoucher(PaymentLinkDTO paymentLink) {
+    private boolean isAllowedMockPaymentLink(PaymentLinkDTO paymentLink) {
         if (!voucherMockMode || paymentLink == null || paymentLink.getDescription() == null) {
             return false;
         }
 
-        return PaymentLinkDescription.ONBOARDING_VOUCHER.equals(paymentLink.getDescription());
+        return PaymentLinkDescription.ONBOARDING_VOUCHER.equals(paymentLink.getDescription())
+                || PaymentLinkDescription.ACCOUNT_ACTIVATION.equals(paymentLink.getDescription());
     }
 }

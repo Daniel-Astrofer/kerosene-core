@@ -9,6 +9,9 @@ public class PaymentLinkDTO {
     private Long userId; // Can be null if tied to an onboarding session
     private String sessionId; // Used for onboarding before a User is persisted
     private BigDecimal amountBtc;
+    private BigDecimal grossAmountBtc;
+    private BigDecimal depositFeeBtc;
+    private BigDecimal netAmountBtc;
     private String description;
     private String depositAddress;
     private String status; // "pending", "paid", "expired", "completed"
@@ -59,6 +62,30 @@ public class PaymentLinkDTO {
 
     public void setAmountBtc(BigDecimal amountBtc) {
         this.amountBtc = amountBtc;
+    }
+
+    public BigDecimal getGrossAmountBtc() {
+        return grossAmountBtc;
+    }
+
+    public void setGrossAmountBtc(BigDecimal grossAmountBtc) {
+        this.grossAmountBtc = grossAmountBtc;
+    }
+
+    public BigDecimal getDepositFeeBtc() {
+        return depositFeeBtc;
+    }
+
+    public void setDepositFeeBtc(BigDecimal depositFeeBtc) {
+        this.depositFeeBtc = depositFeeBtc;
+    }
+
+    public BigDecimal getNetAmountBtc() {
+        return netAmountBtc;
+    }
+
+    public void setNetAmountBtc(BigDecimal netAmountBtc) {
+        this.netAmountBtc = netAmountBtc;
     }
 
     public String getDescription() {

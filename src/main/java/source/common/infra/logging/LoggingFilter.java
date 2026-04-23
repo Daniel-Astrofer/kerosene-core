@@ -13,9 +13,12 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Component
@@ -24,8 +27,16 @@ public class LoggingFilter extends OncePerRequestFilter {
     private static final Logger accessLogger = LoggerFactory.getLogger("source.common.infra.logging.LoggingFilter");
 
     private static final Pattern SENSITIVE_KEYS_PATTERN = Pattern.compile(
-            "\"(password|passphrase|private_key|mnemonic|secret|totp|totpSecret)\"\\s*:\\s*\"([^\"]*)\"",
+            "\"(password|passphrase|private_key|mnemonic|secret|totp|totpSecret|preAuthToken|sessionId|token|jwt|accessToken|refreshToken|otpUri|backupCodes|signature|credentialId|userHandle|publicKey|publicKeyCose)\"\\s*:\\s*(\"([^\"]*)\"|\\[[^\\]]*\\])",
             Pattern.CASE_INSENSITIVE);
+    private static final String REDACTED = "***MASKED***";
+    private static final String OMITTED_FOR_SECURITY = "[OMITTED_FOR_SECURITY]";
+    private static final Set<String> SENSITIVE_HEADERS = new HashSet<>(Arrays.asList(
+            "authorization",
+            "x-forwarded-for",
+            "cookie",
+            "set-cookie",
+            "x-new-token"));
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -59,9 +70,11 @@ public class LoggingFilter extends OncePerRequestFilter {
         }
 
         Map<String, String> safeHeaders = getSafeHeaders(request);
-        String safeRequestBody = maskSensitivePayload(
+        String safeRequestBody = safeBodyForLogging(
+                uri,
                 getPayload(request.getContentAsByteArray(), request.getCharacterEncoding()));
-        String safeResponseBody = maskSensitivePayload(
+        String safeResponseBody = safeBodyForLogging(
+                uri,
                 getPayload(response.getContentAsByteArray(), response.getCharacterEncoding()));
 
         // OpSec rule: IP is not logged correctly or is masked pseudo-anonymously
@@ -79,10 +92,8 @@ public class LoggingFilter extends OncePerRequestFilter {
                 String headerName = headerNames.nextElement();
                 String headerValue = request.getHeader(headerName);
 
-                if ("authorization".equalsIgnoreCase(headerName) ||
-                        "x-forwarded-for".equalsIgnoreCase(headerName) ||
-                        "cookie".equalsIgnoreCase(headerName)) {
-                    headers.put(headerName, "***MASKED***");
+                if (SENSITIVE_HEADERS.contains(headerName.toLowerCase())) {
+                    headers.put(headerName, REDACTED);
                 } else {
                     headers.put(headerName, headerValue);
                 }
@@ -106,6 +117,25 @@ public class LoggingFilter extends OncePerRequestFilter {
         if (payload == null || payload.isEmpty())
             return payload;
         // Replaces the actual value with ***MASKED***
-        return SENSITIVE_KEYS_PATTERN.matcher(payload).replaceAll("\"$1\":\"***MASKED***\"");
+        return SENSITIVE_KEYS_PATTERN.matcher(payload).replaceAll("\"$1\":\"" + REDACTED + "\"");
+    }
+
+    private String safeBodyForLogging(String uri, String payload) {
+        if (payload == null || payload.isEmpty()) {
+            return payload;
+        }
+        if (isSensitivePath(uri)) {
+            return OMITTED_FOR_SECURITY;
+        }
+        return maskSensitivePayload(payload);
+    }
+
+    private boolean isSensitivePath(String uri) {
+        if (uri == null) {
+            return false;
+        }
+        return uri.startsWith("/auth/")
+                || uri.equals("/auth")
+                || uri.startsWith("/voucher/");
     }
 }

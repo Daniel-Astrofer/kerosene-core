@@ -5,27 +5,22 @@ import source.transactions.dto.TransactionRequestDTO;
 import source.transactions.dto.UnsignedTransactionDTO;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Service
 public class CreateUnsignedTransactionUseCase {
 
-    static final String RAW_TX_HEX_PLACEHOLDER = "RAW_TX_HEX_PLACEHOLDER";
-
+    private final UnsignedTransactionBuilderPort unsignedTransactionBuilderPort;
     private final TransactionHistoryPort transactionHistoryPort;
 
-    public CreateUnsignedTransactionUseCase(TransactionHistoryPort transactionHistoryPort) {
+    public CreateUnsignedTransactionUseCase(
+            UnsignedTransactionBuilderPort unsignedTransactionBuilderPort,
+            TransactionHistoryPort transactionHistoryPort) {
+        this.unsignedTransactionBuilderPort = unsignedTransactionBuilderPort;
         this.transactionHistoryPort = transactionHistoryPort;
     }
 
     public UnsignedTransactionDTO create(TransactionRequestDTO request) {
-        UnsignedTransactionDTO unsignedTx = new UnsignedTransactionDTO();
-        unsignedTx.setTxId("temp-" + UUID.randomUUID());
-        unsignedTx.setFromAddress(request.getFromAddress());
-        unsignedTx.setToAddress(request.getToAddress());
-        unsignedTx.setTotalAmount(request.getAmount());
-        unsignedTx.setFee(request.getFeeSatoshis());
-        unsignedTx.setRawTxHex(RAW_TX_HEX_PLACEHOLDER);
+        UnsignedTransactionDTO unsignedTx = unsignedTransactionBuilderPort.build(request);
 
         transactionHistoryPort.recordUnsignedTransaction(new TransactionHistoryPort.UnsignedTransactionRecord(
                 request.getFromAddress(),

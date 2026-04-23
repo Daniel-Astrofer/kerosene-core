@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import source.auth.application.service.account.AccountActivationService;
 import source.security.VaultKeyProvider;
 import source.transactions.application.externalpayments.ExternalPaymentsLedgerPort;
 import source.transactions.application.externalpayments.ExternalPaymentsMath;
@@ -41,6 +42,9 @@ class InboundTransferMonitorServiceTest {
     private WalletCardProfileService walletCardProfileService;
 
     @Mock
+    private AccountActivationService accountActivationService;
+
+    @Mock
     private BlockchainClient blockchainClient;
 
     @Mock
@@ -57,6 +61,7 @@ class InboundTransferMonitorServiceTest {
                 notificationPort,
                 new ExternalPaymentsMath(),
                 walletCardProfileService,
+                accountActivationService,
                 blockchainClient,
                 custodyGateway,
                 vaultKeyProvider,
@@ -86,6 +91,7 @@ class InboundTransferMonitorServiceTest {
         assertEquals("COMPLETED", transferCaptor.getValue().getStatus());
         assertEquals(new BigDecimal("0.01500000"), transferCaptor.getValue().getAmountBtc());
         assertEquals(new BigDecimal("0.00012000"), transferCaptor.getValue().getPlatformFeeBtc());
+        verify(accountActivationService).activateUser(11L);
     }
 
     @Test
@@ -96,6 +102,7 @@ class InboundTransferMonitorServiceTest {
                 notificationPort,
                 new ExternalPaymentsMath(),
                 walletCardProfileService,
+                accountActivationService,
                 blockchainClient,
                 custodyGateway,
                 vaultKeyProvider,

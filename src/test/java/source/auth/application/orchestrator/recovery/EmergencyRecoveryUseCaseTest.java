@@ -3,16 +3,20 @@ package source.auth.application.orchestrator.recovery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
-import source.auth.application.infra.persistance.jpa.PasskeyCredentialRepository;
-import source.auth.application.infra.persistance.jpa.UserRepository;
-import source.auth.application.infra.persistance.redis.contracts.RedisContract;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
+import source.auth.application.infra.persistence.redis.contracts.RedisContract;
+import source.auth.application.port.out.AuthPasskeyGateway;
+import source.auth.application.port.out.AuthUserGateway;
 import source.auth.application.service.cripto.contracts.Cryptography;
 import source.auth.application.service.cripto.contracts.Hasher;
 import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.pow.PowService;
-import source.auth.application.service.validation.totp.contratcs.TOTPKeyGenerate;
-import source.auth.application.service.validation.totp.contratcs.TOTPVerifier;
+import source.auth.application.service.recovery.RecoveryCredentialRotator;
+import source.auth.application.service.recovery.RecoveryCodeService;
+import source.auth.application.service.recovery.RecoverySecretProtector;
+import source.auth.application.service.recovery.RecoveryStateStore;
+import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import source.auth.application.service.recovery.start.chain.EmergencyRecoveryStartChain;
+import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.auth.dto.EmergencyRecoveryFinishRequest;
 import source.auth.dto.EmergencyRecoveryFinishResponse;
 import source.auth.dto.EmergencyRecoveryStartRequest;
@@ -42,95 +46,81 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
 
 class EmergencyRecoveryUseCaseTest {
 
-    private SignupVerifier signupVerifier;
-    private PowService powService;
+    private EmergencyRecoveryStartChain recoveryStartChain;
     private Hasher hasher;
     private TOTPKeyGenerate totpKeyGenerate;
     private TOTPVerifier totpVerifier;
     private PasskeyService passkeyService;
-    private UserRepository userRepository;
-    private PasskeyCredentialRepository passkeyCredentialRepository;
+    private AuthUserGateway userGateway;
+    private AuthPasskeyGateway passkeyGateway;
     private RedisContract redisContract;
     private Cryptography cryptography;
     private VaultKeyProvider vaultKeyProvider;
     private NotificationService notificationService;
+    private RecoveryCodeService recoveryCodeService;
+    private RecoveryStateStore stateStore;
 
     private EmergencyRecoveryUseCase useCase;
 
     @BeforeEach
     void setUp() throws Exception {
-        signupVerifier = mock(SignupVerifier.class);
-        powService = mock(PowService.class);
+        recoveryStartChain = mock(EmergencyRecoveryStartChain.class);
         hasher = mock(Hasher.class);
         totpKeyGenerate = mock(TOTPKeyGenerate.class);
         totpVerifier = mock(TOTPVerifier.class);
         passkeyService = mock(PasskeyService.class);
-        userRepository = mock(UserRepository.class);
-        passkeyCredentialRepository = mock(PasskeyCredentialRepository.class);
+        userGateway = mock(AuthUserGateway.class);
+        passkeyGateway = mock(AuthPasskeyGateway.class);
         redisContract = mock(RedisContract.class);
         cryptography = mock(Cryptography.class);
         vaultKeyProvider = mock(VaultKeyProvider.class);
         notificationService = mock(NotificationService.class);
+        recoveryCodeService = mock(RecoveryCodeService.class);
 
         AtomicInteger hashCounter = new AtomicInteger();
         when(hasher.hash(any(char[].class))).thenAnswer(invocation -> "hash-" + hashCounter.getAndIncrement());
         when(vaultKeyProvider.getMasterKey()).thenReturn(new SecretKeySpec(new byte[32], "AES"));
 
-        useCase = new EmergencyRecoveryUseCase(
-                signupVerifier,
-                powService,
+        RecoverySecretProtector secretProtector = new RecoverySecretProtector(
                 hasher,
                 totpKeyGenerate,
+                cryptography,
+                vaultKeyProvider);
+        stateStore = new RecoveryStateStore(redisContract);
+        RecoveryCredentialRotator credentialRotator = new RecoveryCredentialRotator(
                 totpVerifier,
                 passkeyService,
-                userRepository,
-                passkeyCredentialRepository,
-                redisContract,
-                cryptography,
-                vaultKeyProvider,
+                userGateway,
+                passkeyGateway,
+                recoveryCodeService,
                 notificationService);
 
+        useCase = new EmergencyRecoveryUseCase(
+                recoveryStartChain,
+                secretProtector,
+                stateStore,
+                credentialRotator);
+
         ReflectionTestUtils.setField(useCase, "requiredRecoveryCodes", 3);
-        ReflectionTestUtils.setField(useCase, "recoverySessionTtlMinutes", 10L);
-        ReflectionTestUtils.setField(useCase, "clientWindowSeconds", 600L);
-        ReflectionTestUtils.setField(useCase, "clientMaxAttempts", 6L);
-        ReflectionTestUtils.setField(useCase, "usernameWindowSeconds", 1800L);
-        ReflectionTestUtils.setField(useCase, "usernameMaxAttempts", 4L);
-        ReflectionTestUtils.setField(useCase, "recoveryBlockSeconds", 1800L);
+        ReflectionTestUtils.setField(stateStore, "recoverySessionTtlMinutes", 10L);
     }
 
     @Test
-    void startShouldCreateRecoverySessionWhenCodesMatch() throws Exception {
+    void startShouldCreateRecoverySessionWhenChainSucceeds() throws Exception {
         EmergencyRecoveryStartRequest request = new EmergencyRecoveryStartRequest();
         request.setUsername("Alice");
         request.setNewPassphrase("legal winner thank year wave sausage worth useful legal winner thank yellow".toCharArray());
-        request.setRecoveryCodes(List.of("12345678", "23456789", "34567890"));
-        request.setChallenge("pow-challenge");
-        request.setNonce("nonce");
 
-        UserDataBase user = new UserDataBase();
-        user.setUsername("alice");
-        user.setPassphrase("current-passphrase-hash");
-        user.setBackupCodes(List.of("stored-1", "stored-2", "stored-3", "stored-4"));
+        EmergencyRecoveryStartContext context = new EmergencyRecoveryStartContext(request, "client-fingerprint");
+        context.setNormalizedUsername("alice");
+        context.setMatchedRecoveryCodeHashes(List.of("stored-1", "stored-2", "stored-3"));
 
-        when(powService.verifyChallenge("pow-challenge", "nonce")).thenReturn(true);
-        when(redisContract.getValue(anyString())).thenReturn(null);
-        when(redisContract.increment(anyString())).thenReturn(1L);
-        when(userRepository.findByUsername("alice")).thenReturn(user);
-        when(hasher.verify(any(char[].class), anyString())).thenAnswer(invocation -> {
-            String code = new String(invocation.getArgument(0, char[].class));
-            String storedHash = invocation.getArgument(1, String.class);
-            return switch (storedHash) {
-                case "current-passphrase-hash" -> false;
-                case "stored-1" -> "12345678".equals(code);
-                case "stored-2" -> "23456789".equals(code);
-                case "stored-3" -> "34567890".equals(code);
-                default -> false;
-            };
-        });
+        when(recoveryStartChain.handle(request, "client-fingerprint")).thenReturn(context);
         when(totpKeyGenerate.keyGenerator()).thenReturn("BASE32SECRET");
         when(cryptography.encrypt(any(byte[].class), any())).thenReturn("ciphertext".getBytes(StandardCharsets.UTF_8));
 
@@ -171,15 +161,22 @@ class EmergencyRecoveryUseCaseTest {
         request.setClientDataJSON("clientData");
         request.setDeviceName("Recovery Device");
 
+        RecoveryCodeService.GeneratedRecoveryCodes newCodes = new RecoveryCodeService.GeneratedRecoveryCodes(
+                List.of("11111111", "22222222", "33333333", "44444444", "55555555",
+                        "66666666", "77777777", "88888888", "99999999", "00000000"),
+                List.of("hash-1", "hash-2", "hash-3", "hash-4", "hash-5",
+                        "hash-6", "hash-7", "hash-8", "hash-9", "hash-10"));
+
         when(redisContract.getdelEmergencyRecoveryState("session-1")).thenReturn(state);
-        when(userRepository.findByUsername("alice")).thenReturn(user);
+        when(userGateway.findByUsername("alice")).thenReturn(user);
         when(cryptography.decrypt(any(byte[].class), any())).thenReturn("BASE32SECRET".getBytes(StandardCharsets.UTF_8));
         when(totpVerifier.totpMatcher("BASE32SECRET", "123456")).thenReturn(true);
         when(passkeyService.verifySignature(eq("alice"), eq("challenge-hex"), eq("signature"), any(byte[].class),
                 eq("authData"), eq("clientData"))).thenReturn(true);
-        when(passkeyCredentialRepository.findByUserId(7L)).thenReturn(List.of(new PasskeyCredential()));
-        when(userRepository.save(any(UserDataBase.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doNothing().when(notificationService).notifyUser(anyLong(), anyString(), anyString());
+        when(passkeyGateway.findByUserId(7L)).thenReturn(List.of(new PasskeyCredential()));
+        when(userGateway.save(any(UserDataBase.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(recoveryCodeService.generateNewBackupCodes()).thenReturn(newCodes);
+        doNothing().when(notificationService).notifyUser(anyLong(), any(), any(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
 
         EmergencyRecoveryFinishResponse response = useCase.finish(request);
 
@@ -189,8 +186,8 @@ class EmergencyRecoveryUseCaseTest {
         assertEquals("BASE32SECRET", user.getTOTPSecret());
         assertEquals(10, user.getBackupCodes().size());
         assertFalse(user.getBackupCodes().contains("stored-1"));
-        verify(passkeyCredentialRepository).deleteAll(any());
-        verify(passkeyCredentialRepository).save(any(PasskeyCredential.class));
-        verify(notificationService).notifyUser(eq(7L), anyString(), anyString());
+        verify(passkeyGateway).deleteAll(any());
+        verify(passkeyGateway).save(any(PasskeyCredential.class));
+        verify(notificationService).notifyUser(eq(7L), any(), any(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
     }
 }

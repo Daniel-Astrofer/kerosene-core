@@ -39,7 +39,7 @@ public class BroadcastTransactionUseCase {
             Long userId) {
         String txid = transactionBroadcastPort.sendRawTransaction(rawTxHex);
         if (txid == null || txid.isBlank()) {
-            log.error("Pocket Network broadcast failed: rawTxHex length={}, toAddress={}, userId={}",
+            log.error("Bitcoin broadcast failed: rawTxHex length={}, toAddress={}, userId={}",
                     rawTxHex != null ? rawTxHex.length() : 0, toAddress, userId);
             throw new TransactionExceptions.TransactionBroadcastFailed(
                     "Falha ao transmitir transação: o gateway blockchain não retornou um txid válido.");

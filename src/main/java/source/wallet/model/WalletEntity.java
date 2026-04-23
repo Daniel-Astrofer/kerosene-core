@@ -48,6 +48,12 @@ public class WalletEntity {
     @Column(name = "deposit_address", length = 100)
     private String depositAddress;
 
+    @Column(name = "lightning_address", length = 255)
+    private String lightningAddress;
+
+    @Column(name = "external_wallet_reference", length = 255)
+    private String externalWalletReference;
+
     @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "xpub", columnDefinition = "TEXT")
     private String xpub;
@@ -125,6 +131,22 @@ public class WalletEntity {
 
     public void setDepositAddress(String depositAddress) {
         this.depositAddress = depositAddress;
+    }
+
+    public String getLightningAddress() {
+        return lightningAddress;
+    }
+
+    public void setLightningAddress(String lightningAddress) {
+        this.lightningAddress = lightningAddress;
+    }
+
+    public String getExternalWalletReference() {
+        return externalWalletReference;
+    }
+
+    public void setExternalWalletReference(String externalWalletReference) {
+        this.externalWalletReference = externalWalletReference;
     }
 
     public String getXpub() {

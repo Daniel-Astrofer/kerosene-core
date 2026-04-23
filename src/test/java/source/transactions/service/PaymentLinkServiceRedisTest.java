@@ -2,18 +2,24 @@ package source.transactions.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import source.ledger.service.LedgerService;
+import source.transactions.application.paymentlink.PaymentLinkAddressAllocationPort;
+import source.transactions.application.paymentlink.PaymentLinkWalletPort;
 import source.transactions.dto.PaymentLinkDTO;
 
 import source.wallet.service.WalletService;
+import source.wallet.service.WalletCardProfileService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -34,13 +40,21 @@ public class PaymentLinkServiceRedisTest {
     @MockBean
     private WalletService walletService;
 
+    @MockBean
+    private PaymentLinkWalletPort paymentLinkWalletPort;
+
+    @MockBean
+    private PaymentLinkAddressAllocationPort paymentLinkAddressAllocationPort;
+
+    @MockBean
+    private WalletCardProfileService walletCardProfileService;
+
     @BeforeEach
     public void setup() {
-        try {
-            redisTemplate.getConnectionFactory().getConnection().flushDb(
+        Assumptions.assumeTrue(isRedisAvailable(), "Requires a local Redis instance for payment link integration tests.");
+        try (RedisConnection connection = redisTemplate.getConnectionFactory().getConnection()) {
+            connection.serverCommands().flushDb(
                     org.springframework.data.redis.connection.RedisServerCommands.FlushOption.ASYNC);
-        } catch (Exception e) {
-            // ignore
         }
     }
 
@@ -52,6 +66,7 @@ public class PaymentLinkServiceRedisTest {
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Depósito de teste";
+        stubPrimaryWalletAllocation(userId, 501L, "bc1quserlink1");
 
         PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
 
@@ -76,6 +91,7 @@ public class PaymentLinkServiceRedisTest {
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Teste Redis";
+        stubPrimaryWalletAllocation(userId, 502L, "bc1quserlink2");
 
         PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
         String linkId = createdLink.getId();
@@ -101,6 +117,8 @@ public class PaymentLinkServiceRedisTest {
         WalletEntity mockWallet = new WalletEntity();
         mockWallet.setId(999L);
         when(walletService.findByUserId(userId)).thenReturn(Collections.singletonList(mockWallet));
+        when(walletCardProfileService.calculateDepositFee(userId, amount)).thenReturn(new BigDecimal("0.00900000"));
+        stubPrimaryWalletAllocation(userId, 999L, "bc1qcreditwallet");
 
         PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, amount, description);
         String txid = "tx_mock_123";
@@ -110,7 +128,50 @@ public class PaymentLinkServiceRedisTest {
 
         assertEquals("paid", confirmed.getStatus());
         assertEquals(txid, confirmed.getTxid());
-        verify(ledgerService, times(1)).updateBalance(eq(999L), eq(amount), contains("PAYMENT_LINK_"));
+        assertEquals(new BigDecimal("1.0"), confirmed.getGrossAmountBtc());
+        assertEquals(new BigDecimal("0.00900000"), confirmed.getDepositFeeBtc());
+        assertEquals(new BigDecimal("0.99100000"), confirmed.getNetAmountBtc());
+        verify(ledgerService, times(1)).updateBalance(eq(999L), eq(new BigDecimal("0.99100000")), contains("PAYMENT_LINK_"));
+    }
+
+    @Test
+    public void testUserPaymentLinksReflectUpdatedPrimaryState() {
+        Long userId = 777L;
+        BigDecimal amount = new BigDecimal("0.25");
+
+        WalletEntity mockWallet = new WalletEntity();
+        mockWallet.setId(321L);
+        when(walletService.findByUserId(userId)).thenReturn(Collections.singletonList(mockWallet));
+        when(walletCardProfileService.calculateDepositFee(userId, amount)).thenReturn(BigDecimal.ZERO.setScale(8));
+        stubPrimaryWalletAllocation(userId, 321L, "bc1qlistsync");
+
+        PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, amount, "List sync test");
+        paymentLinkService.confirmPayment(link.getId(), "tx_sync_1", "sender");
+
+        List<PaymentLinkDTO> paymentLinks = paymentLinkService.getUserPaymentLinks(userId);
+
+        assertEquals(1, paymentLinks.size());
+        assertEquals(link.getId(), paymentLinks.get(0).getId());
+        assertEquals("paid", paymentLinks.get(0).getStatus());
+        assertEquals(new BigDecimal("0.25"), paymentLinks.get(0).getGrossAmountBtc());
+        assertEquals(BigDecimal.ZERO.setScale(8), paymentLinks.get(0).getDepositFeeBtc());
+        assertEquals(BigDecimal.ZERO.setScale(8).add(new BigDecimal("0.25")), paymentLinks.get(0).getNetAmountBtc());
+    }
+
+    @Test
+    public void testOnboardingPaymentGoesToVerifyingStateWithoutCreditingWallet() {
+        PaymentLinkDTO link = paymentLinkService.createOnboardingPaymentLink(
+                "signup-session-1",
+                new BigDecimal("0.00022000"),
+                PaymentLinkService.ONBOARDING_VOUCHER_DESCRIPTION);
+
+        PaymentLinkDTO confirmed = paymentLinkService.confirmPublicOnboardingPayment(
+                link.getId(),
+                "mock_tx_onboarding",
+                "sender");
+
+        assertEquals("verifying_onboarding", confirmed.getStatus());
+        verify(ledgerService, never()).updateBalance(anyLong(), any(), anyString());
     }
 
     /**
@@ -121,6 +182,7 @@ public class PaymentLinkServiceRedisTest {
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Teste TTL";
+        stubPrimaryWalletAllocation(userId, 503L, "bc1qttlwallet");
 
         PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
         String linkId = createdLink.getId();
@@ -141,6 +203,7 @@ public class PaymentLinkServiceRedisTest {
         Long userId = 1L;
         BigDecimal amountBtc = new BigDecimal("0.5");
         String description = "Teste remoção";
+        stubPrimaryWalletAllocation(userId, 504L, "bc1qremovewallet");
 
         PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
         String linkId = createdLink.getId();
@@ -156,5 +219,27 @@ public class PaymentLinkServiceRedisTest {
         // Validar que foi removido
         PaymentLinkDTO dtoAfterRemoval = redisTemplate.opsForValue().get(redisKey);
         assertNull(dtoAfterRemoval);
+    }
+
+    private void stubPrimaryWalletAllocation(Long userId, Long walletId, String depositAddress) {
+        WalletEntity wallet = new WalletEntity();
+        wallet.setId(walletId);
+        wallet.setName("PRIMARY");
+
+        when(paymentLinkWalletPort.findPrimaryWallet(userId)).thenReturn(wallet);
+        when(paymentLinkAddressAllocationPort.allocate(eq(userId), eq(wallet), anyString(), eq(true)))
+                .thenReturn(new PaymentLinkAddressAllocationPort.Allocation(
+                        depositAddress,
+                        "allocation-" + walletId,
+                        "KEROSENE_LOCAL",
+                        false));
+    }
+
+    private boolean isRedisAvailable() {
+        try (RedisConnection connection = redisTemplate.getConnectionFactory().getConnection()) {
+            return "PONG".equalsIgnoreCase(connection.ping());
+        } catch (Exception exception) {
+            return false;
+        }
     }
 }

@@ -10,4 +10,14 @@ public final class TransactionExceptions {
             super(message);
         }
     }
+
+    public static class TransactionBuildFailed extends RuntimeException {
+        public TransactionBuildFailed(String message) {
+            super(message);
+        }
+
+        public TransactionBuildFailed(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }

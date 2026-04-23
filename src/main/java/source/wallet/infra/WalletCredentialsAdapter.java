@@ -3,29 +3,28 @@ package source.wallet.infra;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import source.auth.AuthConstants;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
 import source.auth.application.service.cripto.contracts.Hasher;
 import source.wallet.application.port.out.WalletCredentialsPort;
+import source.wallet.domain.InternalWalletMnemonicPolicy;
 
 @Component
 public class WalletCredentialsAdapter implements WalletCredentialsPort {
 
-    private final SignupVerifier signupVerifier;
+    private final InternalWalletMnemonicPolicy mnemonicPolicy;
     private final Hasher hasher;
     private final source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate totpKeyGenerate;
 
     public WalletCredentialsAdapter(
-            SignupVerifier signupVerifier,
             @Qualifier("Argon2Hasher") Hasher hasher,
             source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate totpKeyGenerate) {
-        this.signupVerifier = signupVerifier;
+        this.mnemonicPolicy = new InternalWalletMnemonicPolicy();
         this.hasher = hasher;
         this.totpKeyGenerate = totpKeyGenerate;
     }
 
     @Override
     public void validateBip39Passphrase(String passphrase) {
-        signupVerifier.checkPassphraseBip39(passphrase.toCharArray());
+        mnemonicPolicy.validate(passphrase);
     }
 
     @Override

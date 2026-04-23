@@ -78,4 +78,12 @@ public class WithdrawRequestDTO {
     public void setPasskeyAssertionRequestJSON(String passkeyAssertionRequestJSON) {
         this.passkeyAssertionRequestJSON = passkeyAssertionRequestJSON;
     }
+
+    public boolean hasPasskeyAssertionResponseJSON() {
+        return passkeyAssertionResponseJSON != null && !passkeyAssertionResponseJSON.isBlank();
+    }
+
+    public boolean hasConfirmationPassphrase() {
+        return confirmationPassphrase != null && !confirmationPassphrase.isBlank();
+    }
 }

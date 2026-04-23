@@ -4,7 +4,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import source.auth.application.infra.security.ParanoidSecurityFilter;
@@ -12,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FailClosedFilterTest {
 
@@ -62,7 +62,7 @@ class FailClosedFilterTest {
         honeypotFilter.doFilter(request, response, filterChain);
 
         // Should return 400 Bad Request and NOT continue the chain
-        assert(response.getStatus() == HttpServletResponse.SC_BAD_REQUEST);
+        assertEquals(HttpServletResponse.SC_BAD_REQUEST, response.getStatus());
         verify(filterChain, never()).doFilter(any(), any());
     }
 
@@ -77,7 +77,49 @@ class FailClosedFilterTest {
         honeypotFilter.doFilter(request, response, filterChain);
 
         // Should return 200 (silently blackholed) and NOT continue the chain
-        assert(response.getStatus() == HttpServletResponse.SC_OK);
+        assertEquals(HttpServletResponse.SC_OK, response.getStatus());
         verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void honeypotFilter_ShouldForward_WhenPayloadIsLegitimate() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/login");
+        request.setContent("{\"username\":\"human\"}".getBytes());
+        request.setContentType("application/json");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        honeypotFilter.doFilter(request, response, filterChain);
+
+        assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+        verify(filterChain).doFilter(any(), any());
+    }
+
+    @Test
+    void honeypotFilter_ShouldSkipInspection_WhenRouteIsOutsideAuthFlow() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/ledger/tx");
+        request.setContent("{\"__hp\":\"triggered\"}".getBytes());
+        request.setContentType("application/json");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        honeypotFilter.doFilter(request, response, filterChain);
+
+        assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+        verify(filterChain).doFilter(any(), any());
+    }
+
+    @Test
+    void honeypotFilter_ShouldIgnoreGetRequests() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/auth/login");
+        request.setContent("{\"__hp\":\"triggered\"}".getBytes());
+        request.setContentType("application/json");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        honeypotFilter.doFilter(request, response, filterChain);
+
+        assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+        verify(filterChain).doFilter(any(), any());
     }
 }

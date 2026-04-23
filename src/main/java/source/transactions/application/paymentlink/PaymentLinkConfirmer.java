@@ -57,6 +57,13 @@ public class PaymentLinkConfirmer {
             return paymentLink;
         }
 
+        if (paymentLinkReader.isAccountActivationPaymentLink(paymentLink)) {
+            paymentLink.setStatus(PaymentLinkStatus.VERIFYING_ACTIVATION);
+            paymentLinkStore.save(paymentLink);
+            paymentLinkHistoryPort.markConfirmed(paymentLink, fromAddress);
+            return paymentLink;
+        }
+
         try {
             paymentLinkCreditPort.creditUserWallet(paymentLink);
             paymentLinkStore.save(paymentLink);

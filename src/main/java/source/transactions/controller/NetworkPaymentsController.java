@@ -62,7 +62,7 @@ public class NetworkPaymentsController {
                 authenticatedUserId(authentication),
                 request);
         return ResponseEntity.ok(ApiResponse.success(
-                "External on-chain payment has been queued and the 0.9% platform fee was applied.",
+                "External on-chain payment has been queued and the fee for your wallet card profile was applied.",
                 response));
     }
 
@@ -77,6 +77,16 @@ public class NetworkPaymentsController {
                 .body(ApiResponse.success("Lightning invoice created successfully.", response));
     }
 
+    @PostMapping("/transfers/{transferId}/cancel")
+    public ResponseEntity<ApiResponse<ExternalTransferResponseDTO>> cancelInboundTransfer(
+            @PathVariable UUID transferId,
+            Authentication authentication) {
+        ExternalTransferResponseDTO response = externalPaymentsService.cancelInboundTransfer(
+                authenticatedUserId(authentication),
+                transferId);
+        return ResponseEntity.ok(ApiResponse.success("Inbound transfer cancelled successfully.", response));
+    }
+
     @PostMapping("/lightning/pay")
     public ResponseEntity<ApiResponse<ExternalTransferResponseDTO>> payLightning(
             @RequestBody LightningPaymentRequestDTO request,
@@ -85,7 +95,7 @@ public class NetworkPaymentsController {
                 authenticatedUserId(authentication),
                 request);
         return ResponseEntity.ok(ApiResponse.success(
-                "Lightning payment sent successfully and the 0.9% external movement fee was applied.",
+                "Lightning payment sent successfully and the fee for your wallet card profile was applied.",
                 response));
     }
 

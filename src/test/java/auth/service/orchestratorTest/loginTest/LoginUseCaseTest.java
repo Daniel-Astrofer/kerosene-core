@@ -1,7 +1,7 @@
 /*package auth.service.orchestratorTest.loginTest;
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.application.infra.persistance.jpa.UserRepository;
+import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.login.LoginUseCase;
 import source.auth.application.service.authentication.contracts.LoginVerifier;
 import source.auth.application.service.device.UserDeviceService;

@@ -12,6 +12,10 @@ public interface CustodyGateway {
 
     GeneratedLightningInvoice createLightningInvoice(LightningInvoiceCommand command);
 
+    IncomingLightningInvoiceStatus getLightningInvoiceStatus(LightningInvoiceStatusCommand command);
+
+    boolean cancelLightningInvoice(LightningInvoiceCancellationCommand command);
+
     PaymentResult sendOnchain(OnchainPaymentCommand command);
 
     PaymentResult payLightning(LightningPaymentCommand command);
@@ -44,6 +48,31 @@ public interface CustodyGateway {
             String lightningAddress,
             String providerReference,
             LocalDateTime expiresAt) {
+    }
+
+    record LightningInvoiceStatusCommand(
+            Long userId,
+            Long walletId,
+            String walletName,
+            String paymentHash,
+            String providerReference,
+            String paymentRequest) {
+    }
+
+    record LightningInvoiceCancellationCommand(
+            Long userId,
+            Long walletId,
+            String walletName,
+            String paymentHash,
+            String providerReference,
+            String paymentRequest) {
+    }
+
+    record IncomingLightningInvoiceStatus(
+            String status,
+            Long receivedSats,
+            LocalDateTime settledAt,
+            String rawPayload) {
     }
 
     record OnchainPaymentCommand(
