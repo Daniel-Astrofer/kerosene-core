@@ -15,7 +15,7 @@ services:
       - FOUNDER_TOTP_SECRET=${FOUNDER_TOTP_SECRET}
     networks:
       net_vault:
-        ipv4_address: 172.24.0.10
+        ipv4_address: 10.240.0.10
     cap_add:
       - IPC_LOCK
 
@@ -23,7 +23,7 @@ services:
     image: debian:bookworm-slim
     container_name: kerosene-tor-vault
     volumes:
-      - ./tor/torrc-vault:/etc/tor/torrc:ro
+      - ./tor/torrc-vault-main:/etc/tor/torrc:ro
       - ./tor/entrypoint.sh:/entrypoint.sh:ro
       - tor_keys_vault:/var/lib/tor/kerosene_service
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
@@ -175,8 +175,8 @@ services:
       - MPC_SIDECAR_TLS_CA=/certs/rootCA.crt
       - SPRING_DATA_REDIS_HOST=kerosene_redis_is
       - VAULT_ENABLED=true
+      - VAULT_URL=http://kerosene-vault:8090
       - VAULT_ONION_FILE=/vault-onion/hostname
-      - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
       - VAULT_BOOTSTRAP_STARTUP_TIMEOUT_MS=180000
       - SHARD_IDENTITY_PATH=/opt/kerosene/identity
       - TOR_HEALTH_VANGUARDS_STATE_FILE=/var/run/tor/vanguards/vanguards.state
@@ -186,12 +186,12 @@ services:
       - net_db_is
       - net_mpc
       - net_tor
+      - net_vault
     depends_on:
       db-is: { condition: service_healthy }
       redis-is: { condition: service_healthy }
       mpc-sidecar-is: { condition: service_healthy }
       kerosene-vault-arm: { condition: service_completed_successfully }
-      kerosene-tor-vault: { condition: service_healthy }
       kerosene-tor-is: { condition: service_healthy }
       kerosene-vanguards-is: { condition: service_healthy }
       shard-identity-init-is: { condition: service_completed_successfully }
@@ -310,8 +310,8 @@ services:
       - MPC_SIDECAR_TLS_CA=/certs/rootCA.crt
       - SPRING_DATA_REDIS_HOST=kerosene_redis_ch
       - VAULT_ENABLED=true
+      - VAULT_URL=http://kerosene-vault:8090
       - VAULT_ONION_FILE=/vault-onion/hostname
-      - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
       - VAULT_BOOTSTRAP_STARTUP_TIMEOUT_MS=180000
       - SHARD_IDENTITY_PATH=/opt/kerosene/identity
       - TOR_HEALTH_VANGUARDS_STATE_FILE=/var/run/tor/vanguards/vanguards.state
@@ -321,12 +321,12 @@ services:
       - net_db_ch
       - net_mpc
       - net_tor
+      - net_vault
     depends_on:
       db-ch: { condition: service_healthy }
       redis-ch: { condition: service_healthy }
       mpc-sidecar-ch: { condition: service_healthy }
       kerosene-vault-arm: { condition: service_completed_successfully }
-      kerosene-tor-vault: { condition: service_healthy }
       kerosene-tor-ch: { condition: service_healthy }
       kerosene-vanguards-ch: { condition: service_healthy }
       shard-identity-init-ch: { condition: service_completed_successfully }
@@ -445,8 +445,8 @@ services:
       - MPC_SIDECAR_TLS_CA=/certs/rootCA.crt
       - SPRING_DATA_REDIS_HOST=kerosene_redis_sg
       - VAULT_ENABLED=true
+      - VAULT_URL=http://kerosene-vault:8090
       - VAULT_ONION_FILE=/vault-onion/hostname
-      - VAULT_PROXY_PATH=/var/run/tor/socks/tor.sock
       - VAULT_BOOTSTRAP_STARTUP_TIMEOUT_MS=180000
       - SHARD_IDENTITY_PATH=/opt/kerosene/identity
       - TOR_HEALTH_VANGUARDS_STATE_FILE=/var/run/tor/vanguards/vanguards.state
@@ -456,12 +456,12 @@ services:
       - net_db_sg
       - net_mpc
       - net_tor
+      - net_vault
     depends_on:
       db-sg: { condition: service_healthy }
       redis-sg: { condition: service_healthy }
       mpc-sidecar-sg: { condition: service_healthy }
       kerosene-vault-arm: { condition: service_completed_successfully }
-      kerosene-tor-vault: { condition: service_healthy }
       kerosene-tor-sg: { condition: service_healthy }
       kerosene-vanguards-sg: { condition: service_healthy }
       shard-identity-init-sg: { condition: service_completed_successfully }
@@ -612,7 +612,7 @@ networks:
   net_vault:
     ipam:
       config:
-        - subnet: 172.24.0.0/24
+        - subnet: 10.240.0.0/24
   net_mpc:
   net_tor:
   tor_egress: {}
