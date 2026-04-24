@@ -50,6 +50,45 @@ services:
     depends_on:
       kerosene-vault: { condition: service_started }
 
+  lnd-neutrino:
+    image: ${LIGHTNING_LND_IMAGE:-lightninglabs/lnd:v0.20.1-beta}
+    container_name: lnd-neutrino
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - BITCOIN_NETWORK=${BITCOIN_NETWORK:-testnet}
+      - LND_GRPC_PORT=${LIGHTNING_LND_PORT:-10009}
+      - LND_REST_PORT=${LIGHTNING_LND_REST_PORT:-8080}
+      - LND_ALIAS=${LIGHTNING_LND_ALIAS:-kerosene-neutrino}
+      - LND_COLOR=${LIGHTNING_LND_COLOR:-#D1495B}
+      - LND_NEUTRINO_CONNECT=${LIGHTNING_LND_NEUTRINO_CONNECT:-}
+      - LND_NEUTRINO_ADDPEERS=${LIGHTNING_LND_NEUTRINO_ADDPEERS:-}
+      - LND_EXTERNAL_IP=${LIGHTNING_LND_EXTERNAL_IP:-}
+    volumes:
+      - lnd_data:/root/.lnd
+      - ../kerosene-infrastructure/scripts/lnd-entrypoint.sh:/lnd-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/lnd-entrypoint.sh"]
+    networks: [net_tor, tor_egress]
+
+  lnd-bootstrap:
+    image: curlimages/curl:8.10.1
+    container_name: lnd-bootstrap
+    restart: "no"
+    env_file: .env
+    environment:
+      - BITCOIN_NETWORK=${BITCOIN_NETWORK:-testnet}
+      - LND_HOST=lnd-neutrino
+      - LND_REST_PORT=${LIGHTNING_LND_REST_PORT:-8080}
+      - LND_WALLET_PASSWORD=${LND_WALLET_PASSWORD}
+      - LND_BOOTSTRAP_TIMEOUT_SECONDS=${LIGHTNING_LND_BOOTSTRAP_TIMEOUT_SECONDS:-180}
+    volumes:
+      - lnd_data:/lnd
+      - ../kerosene-infrastructure/scripts/lnd-bootstrap.sh:/lnd-bootstrap.sh:ro
+    entrypoint: ["sh", "/lnd-bootstrap.sh"]
+    networks: [net_tor]
+    depends_on:
+      lnd-neutrino: { condition: service_started }
+
   # ══════════════════════════════════════════════════════════════════
   # Distributed Infrastructure: SWEDEN (Primary Node)
   # ══════════════════════════════════════════════════════════════════
@@ -163,6 +202,7 @@ services:
       - vanguards_state_is:/var/run/tor/vanguards:ro
       - tor_keys_vault:/vault-onion:ro
       - shard_identity_is:/opt/kerosene/identity
+      - lnd_data:/lnd:ro
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
@@ -183,15 +223,17 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
-      - net_db_is
-      - net_mpc
-      - net_tor
-      - net_vault
+      net_db_is:
+      net_mpc:
+      net_tor:
+        ipv4_address: 10.241.0.10
+      net_vault:
     depends_on:
       db-is: { condition: service_healthy }
       redis-is: { condition: service_healthy }
       mpc-sidecar-is: { condition: service_healthy }
       kerosene-vault-arm: { condition: service_completed_successfully }
+      lnd-bootstrap: { condition: service_completed_successfully }
       kerosene-tor-is: { condition: service_healthy }
       kerosene-vanguards-is: { condition: service_healthy }
       shard-identity-init-is: { condition: service_completed_successfully }
@@ -298,6 +340,7 @@ services:
       - vanguards_state_ch:/var/run/tor/vanguards:ro
       - tor_keys_vault:/vault-onion:ro
       - shard_identity_ch:/opt/kerosene/identity
+      - lnd_data:/lnd:ro
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
@@ -318,15 +361,17 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
-      - net_db_ch
-      - net_mpc
-      - net_tor
-      - net_vault
+      net_db_ch:
+      net_mpc:
+      net_tor:
+        ipv4_address: 10.241.0.11
+      net_vault:
     depends_on:
       db-ch: { condition: service_healthy }
       redis-ch: { condition: service_healthy }
       mpc-sidecar-ch: { condition: service_healthy }
       kerosene-vault-arm: { condition: service_completed_successfully }
+      lnd-bootstrap: { condition: service_completed_successfully }
       kerosene-tor-ch: { condition: service_healthy }
       kerosene-vanguards-ch: { condition: service_healthy }
       shard-identity-init-ch: { condition: service_completed_successfully }
@@ -433,6 +478,7 @@ services:
       - vanguards_state_sg:/var/run/tor/vanguards:ro
       - tor_keys_vault:/vault-onion:ro
       - shard_identity_sg:/opt/kerosene/identity
+      - lnd_data:/lnd:ro
     env_file: .env
     environment:
       - SPRING_PROFILES_ACTIVE=docker
@@ -453,15 +499,17 @@ services:
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Kerosene}
     networks:
-      - net_db_sg
-      - net_mpc
-      - net_tor
-      - net_vault
+      net_db_sg:
+      net_mpc:
+      net_tor:
+        ipv4_address: 10.241.0.12
+      net_vault:
     depends_on:
       db-sg: { condition: service_healthy }
       redis-sg: { condition: service_healthy }
       mpc-sidecar-sg: { condition: service_healthy }
       kerosene-vault-arm: { condition: service_completed_successfully }
+      lnd-bootstrap: { condition: service_completed_successfully }
       kerosene-tor-sg: { condition: service_healthy }
       kerosene-vanguards-sg: { condition: service_healthy }
       shard-identity-init-sg: { condition: service_completed_successfully }
@@ -615,6 +663,9 @@ networks:
         - subnet: 10.240.0.0/24
   net_mpc:
   net_tor:
+    ipam:
+      config:
+        - subnet: 10.241.0.0/24
   tor_egress: {}
 
 volumes:
@@ -643,3 +694,4 @@ volumes:
   shard_identity_is:
   shard_identity_ch:
   shard_identity_sg:
+  lnd_data:

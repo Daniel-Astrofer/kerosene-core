@@ -12,8 +12,11 @@ public class ValidateUpdateWalletRequestHandler extends AbstractWalletRequestHan
     protected void doHandle(UpdateWalletContext context) {
         context.setNormalizedNewName(WalletNamingPolicy.normalizeName(context.getRequest().newName()));
         context.setNormalizedXpub(WalletNamingPolicy.normalizeOptionalXpub(context.getRequest().newXpub()));
+        context.setNormalizedWalletMode(WalletNamingPolicy.normalizeWalletMode(context.getRequest().newWalletMode()));
 
-        if (context.getNormalizedNewName() == null && !context.isXpubChangeRequested()) {
+        if (context.getNormalizedNewName() == null
+                && !context.isXpubChangeRequested()
+                && !context.isWalletModeChangeRequested()) {
             throw new IllegalArgumentException("At least one wallet field must be updated.");
         }
     }

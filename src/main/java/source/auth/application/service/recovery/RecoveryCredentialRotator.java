@@ -128,6 +128,8 @@ public class RecoveryCredentialRotator {
         credential.setDeviceName(request.getDeviceName());
         credential.setPublicKeyCose(publicKeyBytes);
         credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
+        credential.setRelyingPartyId(passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON()));
+        credential.setOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
 
         Base64.Decoder decoder = Base64.getDecoder();
         try {

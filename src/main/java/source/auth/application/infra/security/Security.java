@@ -46,6 +46,8 @@ public class Security {
 
                                 .authorizeHttpRequests(auth -> auth
 
+                                                .requestMatchers("/").permitAll()
+                                                .requestMatchers("/healthz").permitAll()
                                                 .requestMatchers("/auth/signup").permitAll()
                                                 .requestMatchers("/auth/signup/totp/verify").permitAll()
                                                 .requestMatchers("/auth/login").permitAll()
@@ -57,8 +59,12 @@ public class Security {
                                                 .requestMatchers("/auth/recovery/emergency/start").permitAll()
                                                 .requestMatchers("/auth/recovery/emergency/finish").permitAll()
                                                 .requestMatchers("/auth/pow/challenge").permitAll()
-                                                .requestMatchers("/voucher/**").permitAll()
+                                                .requestMatchers("/integrations/btcpay/webhook/**").permitAll()
                                                 .requestMatchers(
+                                                                "/actuator/health",
+                                                                "/actuator/health/**",
+                                                                "/sovereignty/ping",
+                                                                "/sovereignty/status",
                                                                 "/v3/api-docs",
                                                                 "/v3/api-docs/**",
                                                                 "/swagger-ui",

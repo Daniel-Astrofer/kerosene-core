@@ -8,6 +8,7 @@ import source.wallet.application.service.WalletResponseAssembler;
 import source.wallet.dto.WalletResponseDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
+import source.wallet.service.WalletCardLifecycleService;
 import source.wallet.service.WalletCardProfile;
 
 import java.util.List;
@@ -18,21 +19,27 @@ public class WalletQueryInteractor implements QueryWalletUseCase {
     private final WalletReader walletReader;
     private final WalletCardProfilePort walletCardProfilePort;
     private final WalletResponseAssembler walletResponseAssembler;
+    private final WalletCardLifecycleService walletCardLifecycleService;
 
     public WalletQueryInteractor(
             WalletReader walletReader,
             WalletCardProfilePort walletCardProfilePort,
-            WalletResponseAssembler walletResponseAssembler) {
+            WalletResponseAssembler walletResponseAssembler,
+            WalletCardLifecycleService walletCardLifecycleService) {
         this.walletReader = walletReader;
         this.walletCardProfilePort = walletCardProfilePort;
         this.walletResponseAssembler = walletResponseAssembler;
+        this.walletCardLifecycleService = walletCardLifecycleService;
     }
 
     @Override
     public List<WalletResponseDTO> getAllWallets(Long userId) {
         WalletCardProfile cardProfile = walletCardProfilePort.resolveProfile(userId);
         return walletReader.findByUserId(userId).stream()
-                .map(wallet -> walletResponseAssembler.toResponse(wallet, cardProfile))
+                .map(wallet -> walletResponseAssembler.toResponse(
+                        wallet,
+                        cardProfile,
+                        walletCardLifecycleService.resolve(wallet)))
                 .toList();
     }
 
@@ -42,6 +49,9 @@ public class WalletQueryInteractor implements QueryWalletUseCase {
         if (wallet == null) {
             throw new WalletExceptions.WalletNoExists("wallet not found or does not belong to you");
         }
-        return walletResponseAssembler.toResponse(wallet, walletCardProfilePort.resolveProfile(userId));
+        return walletResponseAssembler.toResponse(
+                wallet,
+                walletCardProfilePort.resolveProfile(userId),
+                walletCardLifecycleService.resolve(wallet));
     }
 }

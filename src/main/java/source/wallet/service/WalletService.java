@@ -87,17 +87,6 @@ public class WalletService implements WalletContract {
         return walletPersistenceSupport.incrementLastDerivedIndex(walletId);
     }
 
-    public int incrementLastDerivedIndex(Long walletId) {
-        WalletEntity wallet = walletRepository.findByIdForUpdate(walletId)
-                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
-
-        Integer currentIndex = wallet.getLastDerivedIndex();
-        int nextIndex = currentIndex == null ? 0 : currentIndex + 1;
-        wallet.setLastDerivedIndex(nextIndex);
-        walletRepository.save(wallet);
-        return nextIndex;
-    }
-
     public boolean deleteWallet(Long id, WalletRequestDTO wallet) {
         deleteWalletUseCase.deleteWallet(wallet, id);
         return true;

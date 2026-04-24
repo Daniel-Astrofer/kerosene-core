@@ -7,28 +7,27 @@ import source.ledger.service.LedgerService;
 import source.transactions.application.paymentlink.PaymentLinkCreditPort;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.exception.PaymentLinkExceptions;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletCardProfileService;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
 
 @Component
 public class PaymentLinkWalletCreditAdapter implements PaymentLinkCreditPort {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentLinkWalletCreditAdapter.class);
 
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
     private final LedgerService ledgerService;
     private final WalletCardProfileService walletCardProfileService;
 
     public PaymentLinkWalletCreditAdapter(
-            WalletService walletService,
+            WalletLookupPort walletLookupPort,
             LedgerService ledgerService,
             WalletCardProfileService walletCardProfileService) {
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.ledgerService = ledgerService;
         this.walletCardProfileService = walletCardProfileService;
     }
@@ -40,13 +39,12 @@ public class PaymentLinkWalletCreditAdapter implements PaymentLinkCreditPort {
                     "Payment link is not associated with a persisted user.");
         }
 
-        List<WalletEntity> wallets = walletService.findByUserId(paymentLink.getUserId());
-        if (wallets == null || wallets.isEmpty()) {
+        WalletEntity wallet = walletLookupPort.findPrimaryWallet(paymentLink.getUserId());
+        if (wallet == null) {
             throw new PaymentLinkExceptions.PaymentLinkCreditFailed(
                     "Usuario " + paymentLink.getUserId() + " nao tem wallet para receber o pagamento.");
         }
 
-        WalletEntity wallet = wallets.get(0);
         BigDecimal depositFee = walletCardProfileService.calculateDepositFee(paymentLink.getUserId(), paymentLink.getAmountBtc());
         BigDecimal netAmount = paymentLink.getAmountBtc()
                 .subtract(depositFee)

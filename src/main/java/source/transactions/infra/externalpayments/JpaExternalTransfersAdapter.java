@@ -11,11 +11,12 @@ import java.util.UUID;
 
 @Component
 public class JpaExternalTransfersAdapter implements ExternalTransfersPort {
-    private static final List<String> MONITORED_INBOUND_STATUSES = List.of("PENDING", "CANCELLED");
+    private static final List<String> MONITORED_INBOUND_STATUSES = List.of("PENDING", "DETECTED", "CONFIRMED");
     private static final List<String> MONITORED_INBOUND_TYPES = List.of(
             "ADDRESS_ISSUE",
             "ONRAMP_PURCHASE",
             "INBOUND_INVOICE");
+    private static final List<String> MONITORED_ONCHAIN_STATUSES = List.of("PENDING", "DETECTED", "CONFIRMED");
 
     private final ExternalTransferRepository externalTransferRepository;
 
@@ -34,8 +35,23 @@ public class JpaExternalTransfersAdapter implements ExternalTransfersPort {
     }
 
     @Override
+    public Optional<ExternalTransferEntity> findById(UUID transferId) {
+        return externalTransferRepository.findById(transferId);
+    }
+
+    @Override
     public Optional<ExternalTransferEntity> findByIdAndUserId(UUID transferId, Long userId) {
         return externalTransferRepository.findByIdAndUserId(transferId, userId);
+    }
+
+    @Override
+    public Optional<ExternalTransferEntity> findByInvoiceId(String invoiceId) {
+        return externalTransferRepository.findByInvoiceId(invoiceId);
+    }
+
+    @Override
+    public Optional<ExternalTransferEntity> findByBlockchainTxid(String blockchainTxid) {
+        return externalTransferRepository.findTopByBlockchainTxidOrderByCreatedAtDesc(blockchainTxid);
     }
 
     @Override
@@ -44,6 +60,15 @@ public class JpaExternalTransfersAdapter implements ExternalTransfersPort {
                 .findTop200ByStatusInAndTransferTypeInOrderByCreatedAtAsc(
                         MONITORED_INBOUND_STATUSES,
                         MONITORED_INBOUND_TYPES);
+        return transfers.size() <= limit ? transfers : transfers.subList(0, limit);
+    }
+
+    @Override
+    public List<ExternalTransferEntity> findOnchainTransfersForMonitoring(int limit) {
+        List<ExternalTransferEntity> transfers = externalTransferRepository
+                .findTop200ByNetworkAndBlockchainTxidIsNotNullAndStatusInOrderByCreatedAtAsc(
+                        "ONCHAIN",
+                        MONITORED_ONCHAIN_STATUSES);
         return transfers.size() <= limit ? transfers : transfers.subList(0, limit);
     }
 }

@@ -4,23 +4,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import source.transactions.service.BitcoinNodeService;
 import source.transactions.exception.ExternalPaymentsExceptions;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
+@ConditionalOnMissingBean(BitcoinNodeService.class)
 public class ConfigurableCustodyGateway implements CustodyGateway {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ConfigurableCustodyGateway.class);
@@ -98,16 +97,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
 
     @Override
     public GeneratedLightningInvoice createLightningInvoice(LightningInvoiceCommand command) {
-        if (!isLive()) {
-            String seed = command.walletName() + ":" + command.amountSats() + ":" + command.memo();
-            String hash = sha256(seed);
-            return new GeneratedLightningInvoice(
-                    "lnbc" + Math.max(command.amountSats(), 1L) + "n1p" + hash.substring(0, 20),
-                    hash,
-                    command.walletName().toLowerCase() + "@kerosene.mock",
-                    "mock-ln-" + hash.substring(0, 12),
-                    LocalDateTime.now().plusSeconds(Math.max(command.expiresInSeconds(), 60)));
-        }
+        ensureLive("Lightning invoice issuance");
 
         JsonNode response = post(lightningInvoicePath, Map.of(
                 "userId", command.userId(),
@@ -127,9 +117,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
 
     @Override
     public IncomingLightningInvoiceStatus getLightningInvoiceStatus(LightningInvoiceStatusCommand command) {
-        if (!isLive()) {
-            return new IncomingLightningInvoiceStatus("PENDING", command.paymentHash() != null ? 0L : null, null, "mock");
-        }
+        ensureLive("Lightning invoice status lookup");
 
         JsonNode response = post(lightningInvoiceStatusPath, Map.of(
                 "userId", command.userId(),
@@ -148,9 +136,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
 
     @Override
     public boolean cancelLightningInvoice(LightningInvoiceCancellationCommand command) {
-        if (!isLive()) {
-            return true;
-        }
+        ensureLive("Lightning invoice cancellation");
 
         JsonNode response = post(lightningInvoiceCancelPath, Map.of(
                 "userId", command.userId(),
@@ -169,16 +155,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
 
     @Override
     public PaymentResult sendOnchain(OnchainPaymentCommand command) {
-        if (!isLive()) {
-            String txid = sha256(command.destinationAddress() + ":" + command.amountSats() + ":" + command.description());
-            return new PaymentResult(
-                    "mock-onchain-" + txid.substring(0, 12),
-                    txid,
-                    null,
-                    "PENDING",
-                    0L,
-                    "mock");
-        }
+        ensureLive("On-chain payment");
 
         JsonNode response = post(onchainSendPath, Map.of(
                 "userId", command.userId(),
@@ -200,17 +177,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
 
     @Override
     public PaymentResult payLightning(LightningPaymentCommand command) {
-        if (!isLive()) {
-            String paymentHash = sha256(command.paymentRequest() + ":" + command.amountSats());
-            long fee = Math.min(Math.max(command.maxFeeSats(), 1L), 30L);
-            return new PaymentResult(
-                    "mock-lightning-" + paymentHash.substring(0, 12),
-                    null,
-                    paymentHash,
-                    "SETTLED",
-                    fee,
-                    "mock");
-        }
+        ensureLive("Lightning payment");
 
         JsonNode response = post(lightningPayPath, Map.of(
                 "userId", command.userId(),
@@ -235,6 +202,13 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
         if (!isLive()) {
             throw new ExternalPaymentsExceptions.CustodyProviderUnavailable(
                     "Live custody integration is not configured for on-chain address issuance.");
+        }
+    }
+
+    private void ensureLive(String operation) {
+        if (!isLive()) {
+            throw new ExternalPaymentsExceptions.CustodyProviderUnavailable(
+                    operation + " requires a configured live custody provider.");
         }
     }
 
@@ -341,12 +315,4 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
         return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
     }
 
-    private String sha256(String payload) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable for custody mock responses", e);
-        }
-    }
 }

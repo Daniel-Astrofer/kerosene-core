@@ -7,11 +7,10 @@ import org.springframework.stereotype.Service;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.model.entity.UserDataBase;
 import source.ledger.service.LedgerService;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 @Service
 public class DevBalanceInjector {
@@ -26,16 +25,16 @@ public class DevBalanceInjector {
         ERROR
     }
 
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
     private final LedgerService ledgerService;
     private final UserRepository userRepository;
     private final boolean enabled;
 
-    public DevBalanceInjector(WalletService walletService,
+    public DevBalanceInjector(WalletLookupPort walletLookupPort,
                                LedgerService ledgerService,
                                UserRepository userRepository,
                                @Value("${app.dev.inject-test-balance:false}") boolean enabled) {
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.ledgerService = ledgerService;
         this.userRepository = userRepository;
         this.enabled = enabled;
@@ -63,14 +62,12 @@ public class DevBalanceInjector {
         }
 
         try {
-            List<WalletEntity> wallets = walletService.findByUserId(user.getId());
-            if (wallets.isEmpty()) {
+            WalletEntity wallet = walletLookupPort.findPrimaryWallet(user.getId());
+            if (wallet == null) {
                 log.warn("[DEV] User {} has no wallets to inject balance.", user.getUsername());
                 return ClaimOutcome.NO_WALLET;
             }
 
-            // Grant to the first wallet
-            WalletEntity wallet = wallets.get(0);
             BigDecimal amount = new BigDecimal("100.00000000");
 
             ledgerService.updateBalance(wallet.getId(), amount, "DEV_INITIAL_GRANT");

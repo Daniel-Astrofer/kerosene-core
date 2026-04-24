@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import source.auth.AuthExceptions;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.service.cripto.contracts.Hasher;
+import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
@@ -35,6 +36,9 @@ class TransactionalAuthenticationServiceTest {
     private PasskeyService passkeyService;
 
     @Mock
+    private PasskeyInventoryService passkeyInventoryService;
+
+    @Mock
     private PasskeyCredentialRepository passkeyCredentialRepository;
 
     @Mock
@@ -55,6 +59,7 @@ class TransactionalAuthenticationServiceTest {
     void setUp() {
         service = new TransactionalAuthenticationService(
                 passkeyService,
+                passkeyInventoryService,
                 passkeyCredentialRepository,
                 totpVerifier,
                 hasher,
@@ -127,6 +132,7 @@ class TransactionalAuthenticationServiceTest {
                 eq("auth-data"),
                 eq("client-data")))
                 .thenReturn(true);
+        when(passkeyService.extractSignatureCount("auth-data")).thenReturn(1L);
 
         assertDoesNotThrow(() -> service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
                 user,
@@ -135,6 +141,7 @@ class TransactionalAuthenticationServiceTest {
                 null)));
 
         verify(passkeyService).consumeChallengeFromRedis("alice");
+        verify(passkeyCredentialRepository).save(credential);
     }
 
     private UserDataBase user(AccountSecurityType securityType) {

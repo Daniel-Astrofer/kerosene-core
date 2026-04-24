@@ -2,8 +2,11 @@ package source.config.websocket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+
+import java.util.Arrays;
 
 @Component
 public class WebSocketEndpointRegistrar {
@@ -11,13 +14,15 @@ public class WebSocketEndpointRegistrar {
     private static final Logger log = LoggerFactory.getLogger(WebSocketEndpointRegistrar.class);
 
     private final StompProtocolHandshakeHandler handshakeHandler;
-    private final QueryParamTokenHandshakeInterceptor tokenHandshakeInterceptor;
+    private final String[] allowedOrigins;
 
     public WebSocketEndpointRegistrar(
             StompProtocolHandshakeHandler handshakeHandler,
-            QueryParamTokenHandshakeInterceptor tokenHandshakeInterceptor) {
+            @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}") String allowedOriginsConfig) {
         this.handshakeHandler = handshakeHandler;
-        this.tokenHandshakeInterceptor = tokenHandshakeInterceptor;
+        this.allowedOrigins = Arrays.stream(allowedOriginsConfig.split(","))
+                .map(String::trim)
+                .toArray(String[]::new);
     }
 
     public void register(StompEndpointRegistry registry) {
@@ -26,14 +31,13 @@ public class WebSocketEndpointRegistrar {
         registerEndpoint(registry, "/ws/payment-request", true);
         registerEndpoint(registry, "/ws/raw-payment-request", false);
 
-        log.info("[WEBSOCKET] Endpoints registered (SockJS enabled + Token Query Param supported)");
+        log.info("[WEBSOCKET] Endpoints registered (SockJS enabled + Strict Origins)");
     }
 
     private void registerEndpoint(StompEndpointRegistry registry, String path, boolean sockJsEnabled) {
         var endpointRegistration = registry.addEndpoint(path)
-                .setAllowedOriginPatterns("*")
-                .setHandshakeHandler(handshakeHandler)
-                .addInterceptors(tokenHandshakeInterceptor);
+                .setAllowedOrigins(allowedOrigins)
+                .setHandshakeHandler(handshakeHandler);
 
         if (sockJsEnabled) {
             endpointRegistration.withSockJS();

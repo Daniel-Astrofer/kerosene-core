@@ -1,6 +1,7 @@
 package source.transactions.application.paymentlink;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.exception.PaymentLinkExceptions;
 
@@ -28,6 +29,7 @@ public class PaymentLinkConfirmer {
         this.paymentLinkHistoryPort = paymentLinkHistoryPort;
     }
 
+    @Transactional
     public PaymentLinkDTO confirmPayment(String linkId, String txid, String fromAddress) {
         PaymentLinkDTO paymentLink = paymentLinkStore.findById(linkId)
                 .orElseThrow(() -> new PaymentLinkExceptions.PaymentLinkNotFound("Payment link nao encontrado"));
@@ -66,6 +68,10 @@ public class PaymentLinkConfirmer {
 
         try {
             paymentLinkCreditPort.creditUserWallet(paymentLink);
+            if (PaymentLinkConfirmationMode.AUTO_COMPLETE.equals(paymentLink.getConfirmationMode())) {
+                paymentLink.setStatus(PaymentLinkStatus.COMPLETED);
+                paymentLink.setCompletedAt(LocalDateTime.now());
+            }
             paymentLinkStore.save(paymentLink);
             paymentLinkHistoryPort.markConfirmed(paymentLink, fromAddress);
             return paymentLink;

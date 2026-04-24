@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package mpc;
+
+option java_package = "source.mpc.grpc";
+option java_multiple_files = true;
+option go_package = "mpc-sidecar/proto";
+
+service MpcService {
+  // Generates a new distributed key share across the nodes.
+  rpc Keygen (KeygenRequest) returns (KeygenResponse);
+
+  // Signs a message hash using the distributed key shares (Threshold Signature).
+  rpc Sign (SignRequest) returns (SignResponse);
+}
+
+message KeygenRequest {
+  string user_id = 1;         // User identification for this share
+  int32 threshold = 2;       // e.g., 2
+  int32 total_parties = 3;   // e.g., 3
+}
+
+message KeygenResponse {
+  string public_key = 1;     // The resulting public key
+  bytes share_id = 2;        // Metadata or ID of the local share
+  bool success = 3;
+  string error_message = 4;
+}
+
+message SignRequest {
+  string user_id = 1;
+  bytes message_hash = 2;    // The 32-byte hash to be signed (SIGHASH)
+  string public_key = 3;     // To identify which key to use
+}
+
+message SignResponse {
+  bytes signature = 1;       // Compact signature (R, S, V)
+  bool success = 2;
+  string error_message = 3;
+}

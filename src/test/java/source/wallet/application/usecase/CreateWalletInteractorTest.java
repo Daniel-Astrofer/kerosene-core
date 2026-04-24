@@ -26,6 +26,8 @@ import source.wallet.dto.WalletResponseDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletCardProfile;
+import source.wallet.service.WalletCardLifecycleService;
+import source.wallet.service.WalletCardSnapshot;
 import source.wallet.service.WalletCardType;
 
 import java.math.BigDecimal;
@@ -56,6 +58,8 @@ class CreateWalletInteractorTest {
     private WalletLedgerPort walletLedgerPort;
     @Mock
     private WalletCardProfilePort walletCardProfilePort;
+    @Mock
+    private WalletCardLifecycleService walletCardLifecycleService;
 
     private CreateWalletInteractor createWalletInteractor;
 
@@ -70,7 +74,8 @@ class CreateWalletInteractorTest {
                 new CreateWalletLedgerHandler(walletLedgerPort),
                 walletCardProfilePort,
                 walletCredentialsPort,
-                new WalletResponseAssembler());
+                new WalletResponseAssembler(),
+                walletCardLifecycleService);
     }
 
     @Test
@@ -82,12 +87,25 @@ class CreateWalletInteractorTest {
                 new BigDecimal("0.0090"),
                 new BigDecimal("0.0090"),
                 BigDecimal.ZERO.setScale(8));
+        WalletCardSnapshot cardSnapshot = new WalletCardSnapshot(
+                "TESTWALLET",
+                "5300 0000 **** 4242",
+                "4242",
+                1,
+                "ACTIVE",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
 
         when(walletUserPort.requireUser(1L)).thenReturn(user);
         when(walletReader.existsByUserIdAndName(1L, "TESTWALLET")).thenReturn(false);
         when(walletCredentialsPort.generateTotpSecret()).thenReturn("BASE32SECRET");
         when(walletCredentialsPort.buildWalletTotpUri("TESTWALLET", "BASE32SECRET")).thenReturn("otpauth://wallet");
         when(walletCardProfilePort.resolveProfile(1L)).thenReturn(profile);
+        when(walletCardLifecycleService.resolve(any(WalletEntity.class))).thenReturn(cardSnapshot);
         when(walletPersistenceSupport.persistNew(any(WalletEntity.class))).thenAnswer(invocation -> {
             WalletEntity wallet = invocation.getArgument(0);
             wallet.setId(77L);
@@ -105,15 +123,15 @@ class CreateWalletInteractorTest {
                 });
 
         WalletResponseDTO response = createWalletInteractor.createWallet(
-                new WalletRequestDTO("test-passphrase-bip39", "TestWallet", "xpub661Example"),
+                new WalletRequestDTO("management-secret", "TestWallet", "xpub661Example", "SELF_CUSTODY"),
                 1L);
 
         assertEquals(77L, response.id());
         assertEquals("TESTWALLET", response.name());
         assertEquals("otpauth://wallet", response.totpUri());
         assertEquals("bc1qderivedaddress", response.depositAddress());
+        assertEquals("SELF_CUSTODY", response.walletMode());
         assertTrue(response.xpubConfigured());
-        verify(walletCredentialsPort).validateBip39Passphrase("test-passphrase-bip39");
         verify(walletLedgerPort).createLedger(any(WalletEntity.class), eq("Initial ledger for new wallet"));
     }
 
@@ -125,7 +143,7 @@ class CreateWalletInteractorTest {
         assertThrows(
                 WalletExceptions.WalletNameAlreadyExists.class,
                 () -> createWalletInteractor.createWallet(
-                        new WalletRequestDTO("test-passphrase-bip39", "TestWallet", null),
+                        new WalletRequestDTO("test-passphrase-bip39", "TestWallet", null, "KEROSENE"),
                         1L));
     }
 }

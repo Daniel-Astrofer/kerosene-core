@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import source.auth.AuthExceptions;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -71,7 +72,7 @@ public class MpcSidecarClient {
      */
     public String keygen(String userId, int threshold, int totalParties) {
         log.info("[MPC Client] Requesting Keygen for user {}", userId);
-        throw new IllegalStateException(
+        throw new AuthExceptions.AuthValidationException(
                 "MPC keygen requires the generated mTLS gRPC stub. Refusing to return a placeholder public key.");
     }
 
@@ -80,7 +81,7 @@ public class MpcSidecarClient {
      */
     public byte[] sign(String userId, byte[] messageHash, String publicKey) {
         log.info("[MPC Client] Requesting Sign for hash of length {}", messageHash.length);
-        throw new IllegalStateException(
+        throw new AuthExceptions.AuthValidationException(
                 "MPC signing requires the generated mTLS gRPC stub. Refusing to return a placeholder signature.");
     }
 

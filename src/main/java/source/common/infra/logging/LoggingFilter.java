@@ -135,7 +135,6 @@ public class LoggingFilter extends OncePerRequestFilter {
             return false;
         }
         return uri.startsWith("/auth/")
-                || uri.equals("/auth")
-                || uri.startsWith("/voucher/");
+                || uri.equals("/auth");
     }
 }

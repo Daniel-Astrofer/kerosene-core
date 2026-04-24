@@ -43,7 +43,8 @@ class PaymentLinkCreatorTest {
                 paymentLinkWalletPort,
                 addressAllocationPort,
                 "bc1qfallback",
-                60);
+                60L,
+                60L);
     }
 
     @Test
@@ -60,7 +61,7 @@ class PaymentLinkCreatorTest {
                         "KEROSENE_LOCAL",
                         false));
 
-        PaymentLinkDTO paymentLink = paymentLinkCreator.createForUser(7L, new BigDecimal("0.01500000"), "invoice");
+        PaymentLinkDTO paymentLink = paymentLinkCreator.createForUser(7L, new source.transactions.dto.CreatePaymentLinkRequest(new BigDecimal("0.01500000"), "invoice", null, null, null, null, null, null));
 
         assertNotNull(paymentLink.getId());
         assertEquals("bc1quserlink", paymentLink.getDepositAddress());

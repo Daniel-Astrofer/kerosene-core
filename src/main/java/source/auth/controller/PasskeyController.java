@@ -11,13 +11,17 @@ import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
+import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.dto.PasskeyActionRequiredDTO;
+import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.dto.SignupState;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
+import source.common.exception.ErrorCodes;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -32,6 +36,7 @@ public class PasskeyController {
     private final UserRepository userRepository;
     private final JwtServicer jwtServicer;
     private final SignupStateStore signupStateStore;
+    private final PasskeyInventoryService passkeyInventoryService;
     private final DevBalanceInjector balanceInjector;
     private final FinalizeSignupAccount finalizeSignupAccount;
 
@@ -40,6 +45,7 @@ public class PasskeyController {
                                   UserRepository userRepository,
                                   JwtServicer jwtServicer,
                                   SignupStateStore signupStateStore,
+                                  PasskeyInventoryService passkeyInventoryService,
                                   DevBalanceInjector balanceInjector,
                                   FinalizeSignupAccount finalizeSignupAccount) {
         this.passkeyService = passkeyService;
@@ -47,6 +53,7 @@ public class PasskeyController {
         this.userRepository = userRepository;
         this.jwtServicer = jwtServicer;
         this.signupStateStore = signupStateStore;
+        this.passkeyInventoryService = passkeyInventoryService;
         this.balanceInjector = balanceInjector;
         this.finalizeSignupAccount = finalizeSignupAccount;
     }
@@ -58,6 +65,25 @@ public class PasskeyController {
     public ResponseEntity<ApiResponse<String>> getChallenge(@RequestParam String username) {
         String challenge = passkeyService.generateChallenge(username);
         return ResponseEntity.ok(ApiResponse.success("Passkey challenge generated", challenge));
+    }
+
+    @GetMapping("/devices")
+    public ResponseEntity<ApiResponse<PasskeyInventoryDTO>> getRegisteredDevices() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getName().equals("anonymousUser")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Must be logged in to inspect passkeys", "UNAUTHORIZED"));
+        }
+
+        UserDataBase user = userRepository.findById(Long.parseLong(auth.getName())).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("User not found", "USER_NOT_FOUND"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(
+                "Registered passkeys retrieved successfully.",
+                passkeyInventoryService.inventoryFor(user)));
     }
 
     /**
@@ -127,6 +153,7 @@ public class PasskeyController {
             }
 
             credential.setDeviceName(request.getDeviceName());
+            applyPasskeyContextMetadata(credential, request.getClientDataJSON());
             credential.setUser(user);
             credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
 
@@ -143,7 +170,7 @@ public class PasskeyController {
      * Step 2 (Option B): Verify signature and login via Passkey.
      */
     @PostMapping("/verify")
-    public ResponseEntity<ApiResponse<String>> verifyAndLogin(@RequestBody PasskeyVerifyRequest request) {
+    public ResponseEntity<ApiResponse<Object>> verifyAndLogin(@RequestBody PasskeyVerifyRequest request) {
         try {
             UserDataBase user = userRepository.findByUsername(request.getUsername());
             if (user == null) {
@@ -166,11 +193,24 @@ public class PasskeyController {
             Optional<PasskeyCredential> credOpt = passkeyCredentialRepository.findByCredentialIdAndUserId(credentialIdBytes, user.getId());
             if (credOpt.isEmpty()) {
                 log.error("Possible Identity Squatting! User {} tried to use an unknown or unauthorized credentialId.", request.getUsername());
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponse.error("Invalid credential association.", "AUTH_FAILED"));
+                return passkeyLinkRequired(
+                        user,
+                        HttpStatus.UNAUTHORIZED,
+                        ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                        "A passkey enviada nao esta vinculada a esta conta.",
+                        "Entre com senha + TOTP e vincule uma nova passkey para este dispositivo.");
             }
 
             PasskeyCredential cred = credOpt.get();
+            if (passkeyInventoryService.isKnownIncompatibleForCurrentLogin(cred)) {
+                return passkeyLinkRequired(
+                        user,
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.AUTH_PASSKEY_LINK_REQUIRED,
+                        "Esta passkey foi vinculada a outro login/origem e nao pode autenticar aqui.",
+                        "Entre com senha + TOTP e vincule uma nova passkey compativel com este dispositivo.");
+            }
+
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(request.getUsername());
             if (consumedChallenge == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -190,9 +230,12 @@ public class PasskeyController {
                 if (newSignatureCount <= cred.getSignatureCount()) {
                     log.error("Passkey signature counter replay detected for user {}. stored={} received={}",
                             request.getUsername(), cred.getSignatureCount(), newSignatureCount);
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                            .body(ApiResponse.error("Passkey authenticator counter did not advance.",
-                                    "SIGN_COUNT_REPLAY"));
+                    return passkeyLinkRequired(
+                            user,
+                            HttpStatus.UNAUTHORIZED,
+                            ErrorCodes.AUTH_PASSKEY_REPLAY,
+                            "O contador do autenticador nao avancou; esta passkey foi rejeitada.",
+                            "Vincule outra passkey ou repita o login com TOTP.");
                 }
                 cred.setSignatureCount(newSignatureCount);
                 passkeyCredentialRepository.save(cred);
@@ -207,8 +250,12 @@ public class PasskeyController {
                 String token = jwtServicer.generateToken(user.getId());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));
             } else {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponse.error("Invalid signature or challenge", "AUTH_FAILED"));
+                return passkeyLinkRequired(
+                        user,
+                        HttpStatus.UNAUTHORIZED,
+                        ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED,
+                        "A assinatura da passkey ou o challenge foram rejeitados.",
+                        "Se esta passkey nao estiver disponivel neste dispositivo, entre com TOTP e vincule outra.");
             }
 
         } catch (Exception e) {
@@ -279,6 +326,8 @@ public class PasskeyController {
         state.setPasskeyCredentialId(request.getCredentialId());
         state.setPasskeyUserHandle(request.getUserHandle());
         state.setPasskeyPublicKeyCose(request.getPublicKeyCose());
+        state.setPasskeyRelyingPartyId(passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON()));
+        state.setPasskeyOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
         state.setPasskeyRegistered(true);
 
         signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
@@ -288,6 +337,21 @@ public class PasskeyController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Passkey linked and account created.",
                 token));
+    }
+
+    private ResponseEntity<ApiResponse<Object>> passkeyLinkRequired(
+            UserDataBase user,
+            HttpStatus status,
+            String errorCode,
+            String message,
+            String reason) {
+        PasskeyActionRequiredDTO data = passkeyInventoryService.buildLinkNewPasskeyGuidance(user, reason);
+        return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
+    }
+
+    private void applyPasskeyContextMetadata(PasskeyCredential credential, String clientDataJSON) {
+        credential.setRelyingPartyId(passkeyService.resolveRelyingPartyIdFromClientData(clientDataJSON));
+        credential.setOriginHost(passkeyService.extractOriginHostFromClientData(clientDataJSON));
     }
 
     public static class PasskeyRegistrationRequest {

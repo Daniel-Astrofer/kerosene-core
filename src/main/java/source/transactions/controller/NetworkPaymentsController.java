@@ -15,6 +15,7 @@ import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.dto.LightningInvoiceRequestDTO;
 import source.transactions.dto.LightningInvoiceResponseDTO;
 import source.transactions.dto.LightningPaymentRequestDTO;
+import source.transactions.dto.OnchainAddressAllocationDTO;
 import source.transactions.dto.OnchainAddressRequestDTO;
 import source.transactions.dto.OnchainSendRequestDTO;
 import source.transactions.dto.WalletNetworkAddressDTO;
@@ -34,10 +35,10 @@ public class NetworkPaymentsController {
     }
 
     @PostMapping("/onchain/address")
-    public ResponseEntity<ApiResponse<WalletNetworkAddressDTO>> issueOnchainAddress(
+    public ResponseEntity<ApiResponse<OnchainAddressAllocationDTO>> issueOnchainAddress(
             @RequestBody OnchainAddressRequestDTO request,
             Authentication authentication) {
-        WalletNetworkAddressDTO response = externalPaymentsService.issueOnchainAddress(
+        OnchainAddressAllocationDTO response = externalPaymentsService.issueOnchainAddress(
                 authenticatedUserId(authentication),
                 request);
         return ResponseEntity.status(HttpStatus.CREATED)

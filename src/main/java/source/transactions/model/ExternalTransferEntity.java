@@ -17,7 +17,10 @@ import java.util.UUID;
 @Table(name = "network_transfers", schema = "financial", indexes = {
         @Index(name = "idx_network_transfers_user_created", columnList = "user_id, created_at"),
         @Index(name = "idx_network_transfers_wallet", columnList = "wallet_id"),
-        @Index(name = "idx_network_transfers_status", columnList = "status")
+        @Index(name = "idx_network_transfers_status", columnList = "status"),
+        @Index(name = "idx_network_transfers_txid", columnList = "blockchain_txid"),
+        @Index(name = "idx_network_transfers_invoice_id", columnList = "invoice_id"),
+        @Index(name = "idx_network_transfers_payment_hash", columnList = "payment_hash")
 })
 public class ExternalTransferEntity {
 
@@ -53,6 +56,15 @@ public class ExternalTransferEntity {
     @Column(name = "external_reference", length = 255)
     private String externalReference;
 
+    @Column(name = "invoice_id", length = 128)
+    private String invoiceId;
+
+    @Column(name = "blockchain_txid", length = 128)
+    private String blockchainTxid;
+
+    @Column(name = "payment_hash", length = 128)
+    private String paymentHash;
+
     @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "invoice_data", columnDefinition = "TEXT")
     private String invoiceData;
@@ -74,6 +86,18 @@ public class ExternalTransferEntity {
 
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
+
+    @Column(name = "detected_at")
+    private LocalDateTime detectedAt;
+
+    @Column(name = "settled_at")
+    private LocalDateTime settledAt;
+
+    @Column(name = "confirmations", nullable = false)
+    private Integer confirmations = 0;
+
+    @Column(name = "provider_payload", columnDefinition = "TEXT")
+    private String providerPayload;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -163,6 +187,30 @@ public class ExternalTransferEntity {
         this.externalReference = externalReference;
     }
 
+    public String getInvoiceId() {
+        return invoiceId;
+    }
+
+    public void setInvoiceId(String invoiceId) {
+        this.invoiceId = invoiceId;
+    }
+
+    public String getBlockchainTxid() {
+        return blockchainTxid;
+    }
+
+    public void setBlockchainTxid(String blockchainTxid) {
+        this.blockchainTxid = blockchainTxid;
+    }
+
+    public String getPaymentHash() {
+        return paymentHash;
+    }
+
+    public void setPaymentHash(String paymentHash) {
+        this.paymentHash = paymentHash;
+    }
+
     public String getInvoiceData() {
         return invoiceData;
     }
@@ -221,6 +269,38 @@ public class ExternalTransferEntity {
 
     public void setExpiresAt(LocalDateTime expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public LocalDateTime getDetectedAt() {
+        return detectedAt;
+    }
+
+    public void setDetectedAt(LocalDateTime detectedAt) {
+        this.detectedAt = detectedAt;
+    }
+
+    public LocalDateTime getSettledAt() {
+        return settledAt;
+    }
+
+    public void setSettledAt(LocalDateTime settledAt) {
+        this.settledAt = settledAt;
+    }
+
+    public Integer getConfirmations() {
+        return confirmations;
+    }
+
+    public void setConfirmations(Integer confirmations) {
+        this.confirmations = confirmations != null ? confirmations : 0;
+    }
+
+    public String getProviderPayload() {
+        return providerPayload;
+    }
+
+    public void setProviderPayload(String providerPayload) {
+        this.providerPayload = providerPayload;
     }
 
     public void setCreatedAt(LocalDateTime createdAt) {

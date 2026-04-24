@@ -8,5 +8,6 @@ public record AccountSecurityStatusDTO(
         boolean unprotected,
         String warningMessage,
         boolean accountActivated,
-        boolean inboundEnabled) {
+        boolean inboundEnabled,
+        PasskeyInventoryDTO passkeys) {
 }

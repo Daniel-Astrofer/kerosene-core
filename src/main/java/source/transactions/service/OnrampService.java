@@ -8,8 +8,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 import source.transactions.application.externalpayments.ExternalPaymentsMath;
 import source.transactions.application.externalpayments.ExternalTransferFactory;
 import source.transactions.application.externalpayments.ExternalTransfersPort;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -30,12 +30,13 @@ public class OnrampService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OnrampService.class);
 
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
     private final StringRedisTemplate redisTemplate;
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalTransferFactory externalTransferFactory;
     private final ExternalPaymentsMath externalPaymentsMath;
     private final CustodialAddressAllocator custodialAddressAllocator;
+    private final BlockchainAddressWatchService blockchainAddressWatchService;
 
     @Value("${onramp.moonpay.url:https://buy.moonpay.com}")
     private String moonpayBaseUrl;
@@ -59,18 +60,20 @@ public class OnrampService {
     private String bipaBaseUrl;
 
     public OnrampService(
-            WalletService walletService,
+            WalletLookupPort walletLookupPort,
             StringRedisTemplate redisTemplate,
             ExternalTransfersPort externalTransfersPort,
             ExternalTransferFactory externalTransferFactory,
             ExternalPaymentsMath externalPaymentsMath,
-            CustodialAddressAllocator custodialAddressAllocator) {
-        this.walletService = walletService;
+            CustodialAddressAllocator custodialAddressAllocator,
+            BlockchainAddressWatchService blockchainAddressWatchService) {
+        this.walletLookupPort = walletLookupPort;
         this.redisTemplate = redisTemplate;
         this.externalTransfersPort = externalTransfersPort;
         this.externalTransferFactory = externalTransferFactory;
         this.externalPaymentsMath = externalPaymentsMath;
         this.custodialAddressAllocator = custodialAddressAllocator;
+        this.blockchainAddressWatchService = blockchainAddressWatchService;
     }
 
     public Map<String, String> generateOnrampUrls(Long userId) {
@@ -94,12 +97,16 @@ public class OnrampService {
                 allocation.address(),
                 allocation.externalReference(),
                 null,
+                null,
+                null,
+                null,
                 normalizedAmount,
                 null,
                 null,
                 normalizedAmount,
                 null,
                 "Onramp checkout created for wallet " + wallet.getName()));
+        blockchainAddressWatchService.register(transfer, allocation.address(), "onramp:" + wallet.getName());
 
         Map<String, String> urls = new LinkedHashMap<>();
         urls.put("moonpay", buildMoonpayUrl(allocation.address(), normalizedAmount, transfer.getId()));
@@ -126,18 +133,18 @@ public class OnrampService {
 
     private WalletEntity resolveWallet(Long userId, String walletName) {
         if (walletName != null && !walletName.isBlank()) {
-            WalletEntity wallet = walletService.findByNameAndUserId(walletName, userId);
+            WalletEntity wallet = walletLookupPort.findByNameAndUserId(walletName, userId);
             if (wallet == null) {
                 throw new IllegalStateException("Requested wallet was not found for onramp checkout.");
             }
             return wallet;
         }
 
-        List<WalletEntity> wallets = walletService.findByUserId(userId);
-        if (wallets == null || wallets.isEmpty()) {
+        WalletEntity primaryWallet = walletLookupPort.findPrimaryWallet(userId);
+        if (primaryWallet == null) {
             throw new IllegalStateException("User has no wallet address to receive funds.");
         }
-        return wallets.get(0);
+        return primaryWallet;
     }
 
     private AddressAllocation allocateTrackedOnchainAddress(Long userId, WalletEntity wallet) {

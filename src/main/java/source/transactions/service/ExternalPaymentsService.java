@@ -11,6 +11,7 @@ import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.dto.LightningInvoiceRequestDTO;
 import source.transactions.dto.LightningInvoiceResponseDTO;
 import source.transactions.dto.LightningPaymentRequestDTO;
+import source.transactions.dto.OnchainAddressAllocationDTO;
 import source.transactions.dto.OnchainAddressRequestDTO;
 import source.transactions.dto.OnchainSendRequestDTO;
 import source.transactions.dto.WalletNetworkAddressDTO;
@@ -43,7 +44,7 @@ public class ExternalPaymentsService {
         this.externalPaymentsQueryService = externalPaymentsQueryService;
     }
 
-    public WalletNetworkAddressDTO issueOnchainAddress(Long userId, OnchainAddressRequestDTO request) {
+    public OnchainAddressAllocationDTO issueOnchainAddress(Long userId, OnchainAddressRequestDTO request) {
         return issueOnchainAddressUseCase.issue(userId, request);
     }
 

@@ -178,6 +178,41 @@ public class PasskeyService {
                 | ((long) authDataBytes[36] & 0xff);
     }
 
+    public String resolveCurrentRequestHost() {
+        return currentRequestHost();
+    }
+
+    public String resolveCurrentRelyingPartyId() {
+        String requestHost = currentRequestHost();
+        if (hostMatchesConfiguredRpId(requestHost)) {
+            return relyingPartyId;
+        }
+        if (requestHost != null && isDynamicHostAllowed(requestHost)) {
+            return requestHost;
+        }
+        return relyingPartyId;
+    }
+
+    public String extractOriginHostFromClientData(String clientDataJsonB64Url) {
+        try {
+            byte[] clientDataBytes = Base64.getUrlDecoder().decode(clientDataJsonB64Url);
+            JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
+            return extractOriginHost(clientDataNode.path("origin").asText(null));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public String resolveRelyingPartyIdFromClientData(String clientDataJsonB64Url) {
+        try {
+            byte[] clientDataBytes = Base64.getUrlDecoder().decode(clientDataJsonB64Url);
+            JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
+            return resolveExpectedRelyingPartyId(clientDataNode.path("origin").asText(null));
+        } catch (Exception e) {
+            return resolveCurrentRelyingPartyId();
+        }
+    }
+
     private java.security.PublicKey loadRawEd25519PublicKey(byte[] rawKey) throws Exception {
         if (rawKey.length != 32) {
             throw new IllegalArgumentException("Ed25519 public key must be exactly 32 bytes.");

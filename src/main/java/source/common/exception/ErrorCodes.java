@@ -22,6 +22,14 @@ public final class ErrorCodes {
     public static final String AUTH_TOTP_TIMEOUT = "AUTH_011";
     public static final String AUTH_PASSKEY_CHALLENGE = "AUTH_012";
     public static final String AUTH_SESSION_EXPIRED = "AUTH_013";
+    public static final String AUTH_PASSKEY_LINK_REQUIRED = "AUTH_014";
+    public static final String AUTH_PASSKEY_ASSERTION_FAILED = "AUTH_015";
+    public static final String AUTH_PASSKEY_REPLAY = "AUTH_016";
+    public static final String AUTH_PASSKEY_CREDENTIAL_NOT_FOUND = "AUTH_017";
+    public static final String AUTH_APP_PIN_NOT_CONFIGURED = "AUTH_018";
+    public static final String AUTH_APP_PIN_INVALID = "AUTH_019";
+    public static final String AUTH_APP_PIN_LOCKED = "AUTH_020";
+    public static final String AUTH_APP_PIN_DEVICE_REQUIRED = "AUTH_021";
     public static final String AUTH_GENERIC = "AUTH_099";
 
     // Ledger Errors

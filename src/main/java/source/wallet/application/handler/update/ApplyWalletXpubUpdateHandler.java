@@ -3,34 +3,41 @@ package source.wallet.application.handler.update;
 import org.springframework.stereotype.Component;
 import source.wallet.application.chain.AbstractWalletRequestHandler;
 import source.wallet.application.context.UpdateWalletContext;
-import source.wallet.application.port.out.WalletAddressDerivationPort;
 import source.wallet.model.WalletEntity;
+import source.wallet.model.WalletMode;
 
 @Component
 public class ApplyWalletXpubUpdateHandler extends AbstractWalletRequestHandler<UpdateWalletContext> {
 
-    private final WalletAddressDerivationPort walletAddressDerivationPort;
-
-    public ApplyWalletXpubUpdateHandler(WalletAddressDerivationPort walletAddressDerivationPort) {
-        this.walletAddressDerivationPort = walletAddressDerivationPort;
-    }
-
     @Override
     protected void doHandle(UpdateWalletContext context) {
-        if (!context.isXpubChangeRequested()) {
+        if (!context.isXpubChangeRequested() && !context.isWalletModeChangeRequested()) {
             return;
         }
 
         WalletEntity wallet = context.getWallet();
-        if (context.getNormalizedXpub() == null) {
-            wallet.setXpub(null);
-            wallet.setDepositAddress(null);
+        WalletMode targetMode = context.isWalletModeChangeRequested()
+                ? context.getNormalizedWalletMode()
+                : wallet.getWalletMode();
+
+        if (targetMode == WalletMode.SELF_CUSTODY) {
+            String xpub = context.isXpubChangeRequested() ? context.getNormalizedXpub() : wallet.getXpub();
+            if (xpub == null || xpub.isBlank()) {
+                throw new IllegalArgumentException("Self-custody wallets require a valid XPUB.");
+            }
+
+            wallet.setWalletMode(WalletMode.SELF_CUSTODY);
+            wallet.setXpub(xpub);
             wallet.setLastDerivedIndex(-1);
+            wallet.setDepositAddress(null);
+            wallet.setExternalWalletReference(null);
             return;
         }
 
-        wallet.setXpub(context.getNormalizedXpub());
-        wallet.setLastDerivedIndex(0);
-        wallet.setDepositAddress(walletAddressDerivationPort.deriveAddressFromXpub(context.getNormalizedXpub(), 0));
+        wallet.setWalletMode(WalletMode.KEROSENE);
+        wallet.setXpub(null);
+        wallet.setDepositAddress(null);
+        wallet.setExternalWalletReference(null);
+        wallet.setLastDerivedIndex(-1);
     }
 }

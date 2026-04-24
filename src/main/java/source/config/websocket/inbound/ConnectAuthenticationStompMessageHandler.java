@@ -34,7 +34,7 @@ public class ConnectAuthenticationStompMessageHandler extends AbstractStompMessa
 
         String token = tokenResolver.resolve(context.accessor())
                 .orElseThrow(() -> {
-                    log.warn("[STOMP-AUTH] CONNECT rejected: no token in headers or query params. Session: {}",
+                    log.warn("[STOMP-AUTH] CONNECT rejected: missing Authorization native header. Session: {}",
                             context.accessor().getSessionId());
                     return new MessageDeliveryException("Unauthorized: JWT token is required to connect.");
                 });

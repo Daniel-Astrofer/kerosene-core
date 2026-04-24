@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import source.common.service.AddressDerivationService;
 import source.ledger.sync.QuorumSyncService;
-import source.transactions.infra.CustodyGateway;
+import source.transactions.exception.ExternalPaymentsExceptions;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
@@ -25,7 +25,8 @@ public class CustodialAddressAllocator {
     private final WalletRepository walletRepository;
     private final AddressDerivationService addressDerivationService;
     private final QuorumSyncService quorumSyncService;
-    private final CustodyGateway custodyGateway;
+    private final CustodialDerivationCursorService custodialDerivationCursorService;
+    private final BitcoinNodeService bitcoinNodeService;
     private final String platformMasterXpub;
     private final String localAddressProviderName;
 
@@ -33,14 +34,16 @@ public class CustodialAddressAllocator {
             WalletRepository walletRepository,
             AddressDerivationService addressDerivationService,
             QuorumSyncService quorumSyncService,
-            CustodyGateway custodyGateway,
+            CustodialDerivationCursorService custodialDerivationCursorService,
+            BitcoinNodeService bitcoinNodeService,
             @Value("${bitcoin.platform.master-xpub:}") String platformMasterXpub,
             @Value("${bitcoin.hot-wallet.xpub:}") String hotWalletXpub,
             @Value("${transactions.local-address-provider-name:KEROSENE_LOCAL}") String localAddressProviderName) {
         this.walletRepository = walletRepository;
         this.addressDerivationService = addressDerivationService;
         this.quorumSyncService = quorumSyncService;
-        this.custodyGateway = custodyGateway;
+        this.custodialDerivationCursorService = custodialDerivationCursorService;
+        this.bitcoinNodeService = bitcoinNodeService;
         this.platformMasterXpub = firstNonBlank(platformMasterXpub, hotWalletXpub);
         this.localAddressProviderName = localAddressProviderName;
     }
@@ -50,74 +53,51 @@ public class CustodialAddressAllocator {
         WalletEntity lockedWallet = walletRepository.findByIdForUpdate(wallet.getId())
                 .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
 
-        ensureCustodialWalletBranch(lockedWallet);
-
-        if (!forceFresh && hasCurrentAddress(lockedWallet)) {
-            return new Allocation(
-                    lockedWallet.getDepositAddress(),
-                    firstNonBlank(lockedWallet.getExternalWalletReference(), "CURRENT_ADDRESS"),
-                    resolveProviderName(),
-                    true);
-        }
-
-        String address;
+        String sourceXpub;
+        int derivationIndex;
         String externalReference;
-        String provider = resolveProviderName();
+        String provider = resolveProviderName(lockedWallet);
 
-        if (custodyGateway.isLive()) {
-            CustodyGateway.GeneratedOnchainAddress issued = custodyGateway.createOnchainAddress(
-                    new CustodyGateway.OnchainAddressCommand(
-                            userId,
-                            lockedWallet.getId(),
-                            lockedWallet.getName(),
-                            label));
-            address = issued.address();
-            externalReference = firstNonBlank(
-                    issued.walletReference(),
-                    issued.providerReference(),
-                    "CUSTODY_ADDRESS");
-        } else if (hasWalletXpub(lockedWallet)) {
-            int nextIndex = nextDerivedIndex(lockedWallet);
-            address = addressDerivationService.deriveAddressFromXpub(lockedWallet.getXpub(), nextIndex);
-            externalReference = "XPUB_INDEX_" + nextIndex;
-            provider = localAddressProviderName;
-        } else {
-            address = lockedWallet.getDepositAddress();
-            if (address == null || address.isBlank()) {
-                address = addressDerivationService.deriveAddress(lockedWallet.getId(), lockedWallet.getPassphraseHash());
+        if (lockedWallet.isSelfCustodyMode()) {
+            if (!hasWalletXpub(lockedWallet)) {
+                throw new ExternalPaymentsExceptions.CustodyProviderUnavailable(
+                        "Self-custody wallets require a registered XPUB before issuing a deposit address.");
             }
-            externalReference = "STATIC_DERIVATION";
-            provider = localAddressProviderName;
+            sourceXpub = lockedWallet.getXpub();
+            derivationIndex = nextWalletDerivedIndex(lockedWallet);
+            externalReference = "SELF_CUSTODY_BIP84_EXTERNAL_" + derivationIndex;
+        } else if (platformMasterXpub != null && !platformMasterXpub.isBlank()) {
+            sourceXpub = platformMasterXpub;
+            derivationIndex = custodialDerivationCursorService.nextIndex(CustodialDerivationCursorService.KEROSENE_BIP84_EXTERNAL);
+            externalReference = "KEROSENE_QUORUM_BIP84_EXTERNAL_" + derivationIndex;
+        } else {
+            throw new ExternalPaymentsExceptions.CustodyProviderUnavailable(
+                    "KEROSENE on-chain address issuance requires bitcoin.platform.master-xpub or a live custody provider.");
         }
 
-        assertQuorum(lockedWallet, label, address, externalReference);
+        AddressDerivationService.DerivedAddress derivedAddress = addressDerivationService
+                .deriveAddressDetailsFromXpub(sourceXpub, derivationIndex);
+        bitcoinNodeService.importWatchOnlyPublicKey(derivedAddress.publicKey(), derivedAddress.address());
 
-        lockedWallet.setDepositAddress(address);
+        if (lockedWallet.isKeroseneCustodyMode()) {
+            assertQuorum(lockedWallet, label, derivedAddress.address(), externalReference);
+        }
+
+        lockedWallet.setDepositAddress(derivedAddress.address());
         lockedWallet.setExternalWalletReference(externalReference);
+        if (lockedWallet.isSelfCustodyMode()) {
+            lockedWallet.setLastDerivedIndex(derivationIndex);
+        }
         walletRepository.save(lockedWallet);
 
-        return new Allocation(address, externalReference, provider, false);
+        log.info("[CustodyAddress] Issued fresh on-chain address {} at index {} for wallet {}.",
+                derivedAddress.address(),
+                derivationIndex,
+                lockedWallet.getId());
+        return new Allocation(derivedAddress.address(), externalReference, provider, false);
     }
 
-    private void ensureCustodialWalletBranch(WalletEntity wallet) {
-        if (hasWalletXpub(wallet)) {
-            return;
-        }
-
-        if (platformMasterXpub == null || platformMasterXpub.isBlank()) {
-            return;
-        }
-
-        int branchIndex = Math.toIntExact(wallet.getId());
-        String walletScopedXpub = addressDerivationService.deriveChildXpub(platformMasterXpub, branchIndex);
-        wallet.setXpub(walletScopedXpub);
-        if (wallet.getLastDerivedIndex() == null || wallet.getLastDerivedIndex() < -1) {
-            wallet.setLastDerivedIndex(-1);
-        }
-        log.info("[CustodyAddress] Derived wallet-scoped xpub from Kerosene master wallet for wallet {}.", wallet.getId());
-    }
-
-    private int nextDerivedIndex(WalletEntity wallet) {
+    private int nextWalletDerivedIndex(WalletEntity wallet) {
         Integer currentIndex = wallet.getLastDerivedIndex();
         int nextIndex = currentIndex == null ? 0 : currentIndex + 1;
         wallet.setLastDerivedIndex(nextIndex);
@@ -128,12 +108,11 @@ public class CustodialAddressAllocator {
         return wallet.getXpub() != null && !wallet.getXpub().isBlank();
     }
 
-    private boolean hasCurrentAddress(WalletEntity wallet) {
-        return wallet.getDepositAddress() != null && !wallet.getDepositAddress().isBlank();
-    }
-
-    private String resolveProviderName() {
-        return firstNonBlank(custodyGateway.providerName(), localAddressProviderName);
+    private String resolveProviderName(WalletEntity wallet) {
+        if (wallet != null && wallet.isSelfCustodyMode()) {
+            return "SELF_CUSTODY_XPUB";
+        }
+        return firstNonBlank(bitcoinNodeService.providerName(), localAddressProviderName);
     }
 
     private String firstNonBlank(String... values) {

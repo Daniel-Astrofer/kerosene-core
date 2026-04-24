@@ -1,12 +1,20 @@
 package source.transactions.application.externalpayments;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Locale;
 
 @Component
 public class ExternalPaymentsMath {
+
+    private final String bitcoinNetwork;
+
+    public ExternalPaymentsMath(@Value("${bitcoin.network:testnet}") String bitcoinNetwork) {
+        this.bitcoinNetwork = normalizeBitcoinNetwork(bitcoinNetwork);
+    }
 
     public void validatePositiveAmount(BigDecimal amount, String message) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -15,7 +23,24 @@ public class ExternalPaymentsMath {
     }
 
     public boolean isValidBitcoinAddress(String address) {
-        return address != null && address.matches("^(1|3|bc1)[a-zA-Z0-9]{25,62}$");
+        if (address == null) {
+            return false;
+        }
+
+        String normalized = address.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+
+        return switch (bitcoinNetwork) {
+            case "mainnet" -> normalized.matches("^(1|3|bc1)[a-z0-9]{25,90}$");
+            case "regtest" -> normalized.matches("^(m|n|2|bcrt1)[a-z0-9]{20,90}$");
+            default -> normalized.matches("^(m|n|2|tb1)[a-z0-9]{20,90}$");
+        };
+    }
+
+    public String configuredBitcoinNetwork() {
+        return bitcoinNetwork;
     }
 
     public long btcToSats(BigDecimal btc) {
@@ -50,5 +75,17 @@ public class ExternalPaymentsMath {
             }
         }
         return null;
+    }
+
+    private String normalizeBitcoinNetwork(String value) {
+        if (value == null || value.isBlank()) {
+            return "testnet";
+        }
+
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "mainnet", "bitcoin", "btc" -> "mainnet";
+            case "regtest", "regressiontest" -> "regtest";
+            default -> "testnet";
+        };
     }
 }

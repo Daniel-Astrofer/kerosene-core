@@ -43,6 +43,9 @@ public class OnrampServiceTest {
     @Mock
     private CustodialAddressAllocator custodialAddressAllocator;
 
+    @Mock
+    private BlockchainAddressWatchService blockchainAddressWatchService;
+
     @BeforeEach
     void setUp() {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
@@ -50,9 +53,10 @@ public class OnrampServiceTest {
                 walletService,
                 redisTemplate,
                 externalTransfersPort,
-                new ExternalTransferFactory(new ExternalPaymentsMath()),
-                new ExternalPaymentsMath(),
-                custodialAddressAllocator);
+                new ExternalTransferFactory(new ExternalPaymentsMath("testnet")),
+                new ExternalPaymentsMath("testnet"),
+                custodialAddressAllocator,
+                blockchainAddressWatchService);
 
         ReflectionTestUtils.setField(onrampService, "moonpayBaseUrl", "https://buy.moonpay.com");
         ReflectionTestUtils.setField(onrampService, "banxaBaseUrl", "https://checkout.banxa.com");

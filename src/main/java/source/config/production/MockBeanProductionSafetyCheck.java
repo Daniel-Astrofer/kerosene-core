@@ -5,8 +5,7 @@ import org.springframework.util.ClassUtils;
 
 public class MockBeanProductionSafetyCheck extends AbstractProductionSafetyCheck {
 
-    private static final Set<String> ALLOWED_PRODUCTION_MOCK_CLASSES = Set.of(
-            "source.transactions.service.MockDepositCreditService");
+    private static final Set<String> ALLOWED_PRODUCTION_MOCK_CLASSES = Set.of();
 
     public MockBeanProductionSafetyCheck(ProductionSafetyCheck next) {
         super(next);

@@ -7,6 +7,8 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
     private static final List<String> PROHIBITED_TRUE_FLAGS = List.of(
             "bitcoin.mock-mode",
             "custody.mock-mode",
+            "bitcoin.rpc.enabled",
+            "btcpay.enabled",
             "app.dev.inject-test-balance",
             "quorum.allow-local-simulation");
 
@@ -24,6 +26,7 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
 
         requireTrue(context, "vault.enabled", false);
         requireTrue(context, "mpc.sidecar.tls.enabled", true);
+        requireTrue(context, "lightning.lnd.enabled", false);
     }
 
     private void requireTrue(ProductionSafetyContext context, String propertyName, boolean defaultValue) {

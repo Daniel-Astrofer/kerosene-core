@@ -2,38 +2,31 @@ package source.transactions.infra.externalpayments;
 
 import org.springframework.stereotype.Component;
 import source.transactions.application.externalpayments.ExternalPaymentsCustodyPort;
-import source.transactions.infra.CustodyGateway;
+import source.transactions.service.QuorumPsbtSigningService;
 
 @Component
 public class ExternalPaymentsCustodyAdapter implements ExternalPaymentsCustodyPort {
 
-    private final CustodyGateway custodyGateway;
+    private final QuorumPsbtSigningService quorumPsbtSigningService;
 
-    public ExternalPaymentsCustodyAdapter(CustodyGateway custodyGateway) {
-        this.custodyGateway = custodyGateway;
+    public ExternalPaymentsCustodyAdapter(QuorumPsbtSigningService quorumPsbtSigningService) {
+        this.quorumPsbtSigningService = quorumPsbtSigningService;
     }
 
     @Override
     public String providerName() {
-        return custodyGateway.providerName();
+        return "BITCOIN_CORE_QUORUM";
     }
 
     @Override
     public PaymentResult sendOnchain(OnchainPaymentCommand command) {
-        CustodyGateway.PaymentResult result = custodyGateway.sendOnchain(new CustodyGateway.OnchainPaymentCommand(
-                command.userId(),
-                command.walletId(),
-                command.walletName(),
-                command.destinationAddress(),
-                command.amountSats(),
-                command.description(),
-                command.authorizationProof()));
+        QuorumPsbtSigningService.OnchainExecution result = quorumPsbtSigningService.execute(command);
         return new PaymentResult(
-                result.providerReference(),
                 result.txid(),
-                result.paymentHash(),
-                result.status(),
+                result.txid(),
+                null,
+                "MEMPOOL",
                 result.feeSats(),
-                result.rawPayload());
+                result.combinedPsbt());
     }
 }

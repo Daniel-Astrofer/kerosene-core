@@ -15,8 +15,8 @@ import source.mining.repository.MiningAllocationRepository;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -31,7 +31,7 @@ public class MiningAllocationUseCase {
     private static final Logger log = LoggerFactory.getLogger(MiningAllocationUseCase.class);
 
     private final MiningAllocationRepository allocationRepository;
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
     private final TransactionalAuthenticationPort transactionalAuthenticationPort;
     private final RigCatalog rigCatalog;
     private final MiningSettlementService settlementService;
@@ -40,14 +40,14 @@ public class MiningAllocationUseCase {
 
     public MiningAllocationUseCase(
             MiningAllocationRepository allocationRepository,
-            WalletService walletService,
+            WalletLookupPort walletLookupPort,
             TransactionalAuthenticationPort transactionalAuthenticationPort,
             RigCatalog rigCatalog,
             MiningSettlementService settlementService,
             MiningHistoryPort historyPort,
             NotificationService notificationService) {
         this.allocationRepository = allocationRepository;
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.transactionalAuthenticationPort = transactionalAuthenticationPort;
         this.rigCatalog = rigCatalog;
         this.settlementService = settlementService;
@@ -160,7 +160,7 @@ public class MiningAllocationUseCase {
     }
 
     private WalletEntity resolveWallet(Long userId, String walletName) {
-        WalletEntity wallet = walletService.findByNameAndUserId(walletName, userId);
+        WalletEntity wallet = walletLookupPort.findByNameAndUserId(walletName, userId);
         if (wallet == null) {
             throw new source.wallet.exceptions.WalletExceptions.WalletNoExists("wallet not found");
         }

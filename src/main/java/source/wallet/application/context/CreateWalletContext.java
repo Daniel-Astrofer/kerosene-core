@@ -3,6 +3,7 @@ package source.wallet.application.context;
 import source.auth.model.entity.UserDataBase;
 import source.wallet.dto.WalletRequestDTO;
 import source.wallet.model.WalletEntity;
+import source.wallet.model.WalletMode;
 
 public class CreateWalletContext {
 
@@ -11,6 +12,7 @@ public class CreateWalletContext {
     private UserDataBase user;
     private String normalizedName;
     private String normalizedXpub;
+    private WalletMode normalizedWalletMode = WalletMode.KEROSENE;
     private String totpSecret;
     private WalletEntity wallet;
 
@@ -49,6 +51,14 @@ public class CreateWalletContext {
 
     public void setNormalizedXpub(String normalizedXpub) {
         this.normalizedXpub = normalizedXpub;
+    }
+
+    public WalletMode getNormalizedWalletMode() {
+        return normalizedWalletMode;
+    }
+
+    public void setNormalizedWalletMode(WalletMode normalizedWalletMode) {
+        this.normalizedWalletMode = normalizedWalletMode != null ? normalizedWalletMode : WalletMode.KEROSENE;
     }
 
     public String getTotpSecret() {

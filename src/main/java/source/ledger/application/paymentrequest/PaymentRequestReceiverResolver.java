@@ -3,30 +3,30 @@ package source.ledger.application.paymentrequest;
 import org.springframework.stereotype.Service;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.exceptions.LedgerExceptions;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletContract;
 
 @Service
 public class PaymentRequestReceiverResolver {
 
-    private final WalletContract walletService;
+    private final WalletLookupPort walletLookupPort;
     private final PaymentRequestDestinationHashService destinationHashService;
 
     public PaymentRequestReceiverResolver(
-            WalletContract walletService,
+            WalletLookupPort walletLookupPort,
             PaymentRequestDestinationHashService destinationHashService) {
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.destinationHashService = destinationHashService;
     }
 
     public WalletEntity resolveLockedReceiverWallet(InternalPaymentRequestDTO request) {
         WalletEntity wallet = null;
         if (request.getReceiverWalletId() != null) {
-            wallet = walletService.findById(request.getReceiverWalletId());
+            wallet = walletLookupPort.findById(request.getReceiverWalletId());
         }
 
         if (wallet == null && request.getReceiverWalletName() != null && request.getRequesterUserId() != null) {
-            wallet = walletService.findByNameAndUserId(request.getReceiverWalletName(), request.getRequesterUserId());
+            wallet = walletLookupPort.findByNameAndUserId(request.getReceiverWalletName(), request.getRequesterUserId());
         }
 
         if (wallet == null) {

@@ -1,14 +1,6 @@
 package source.config.production;
 
-import java.util.List;
-
 public class TextPropertyProductionSafetyCheck extends AbstractProductionSafetyCheck {
-
-    private static final List<String> REQUIRED_NON_BLANK_PROPERTIES = List.of(
-            "custody.base-url",
-            "custody.api-key",
-            "lightning.provider.base-url",
-            "lightning.provider.api-key");
 
     public TextPropertyProductionSafetyCheck(ProductionSafetyCheck next) {
         super(next);
@@ -26,10 +18,19 @@ public class TextPropertyProductionSafetyCheck extends AbstractProductionSafetyC
             context.addViolation("quorum.shard.urls must define remote shard peers");
         }
 
-        for (String propertyName : REQUIRED_NON_BLANK_PROPERTIES) {
+        for (String propertyName : java.util.List.of(
+                "lightning.lnd.host",
+                "lightning.lnd.tls.cert-path",
+                "bitcoin.platform.master-xpub")) {
             if (context.environment().getProperty(propertyName, "").isBlank()) {
                 context.addViolation(propertyName + " must be configured");
             }
+        }
+
+        String macaroon = context.environment().getProperty("lightning.lnd.macaroon", "");
+        String macaroonPath = context.environment().getProperty("lightning.lnd.macaroon-path", "");
+        if (macaroon.isBlank() && macaroonPath.isBlank()) {
+            context.addViolation("lightning.lnd.macaroon or lightning.lnd.macaroon-path must be configured");
         }
     }
 }

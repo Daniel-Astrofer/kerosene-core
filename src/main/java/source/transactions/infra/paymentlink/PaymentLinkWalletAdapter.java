@@ -2,20 +2,20 @@ package source.transactions.infra.paymentlink;
 
 import org.springframework.stereotype.Component;
 import source.transactions.application.paymentlink.PaymentLinkWalletPort;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
 
 @Component
 public class PaymentLinkWalletAdapter implements PaymentLinkWalletPort {
 
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
 
-    public PaymentLinkWalletAdapter(WalletService walletService) {
-        this.walletService = walletService;
+    public PaymentLinkWalletAdapter(WalletLookupPort walletLookupPort) {
+        this.walletLookupPort = walletLookupPort;
     }
 
     @Override
     public WalletEntity findPrimaryWallet(Long userId) {
-        return walletService.findPrimaryWallet(userId);
+        return walletLookupPort.findPrimaryWallet(userId);
     }
 }

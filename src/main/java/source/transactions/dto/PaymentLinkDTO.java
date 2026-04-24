@@ -2,6 +2,8 @@ package source.transactions.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class PaymentLinkDTO {
 
@@ -14,12 +16,19 @@ public class PaymentLinkDTO {
     private BigDecimal netAmountBtc;
     private String description;
     private String depositAddress;
+    private String visibility;
+    private String confirmationMode;
+    private Boolean amountLocked;
+    private String referenceLabel;
+    private Map<String, String> metadata = new LinkedHashMap<>();
     private String status; // "pending", "paid", "expired", "completed"
     private String txid;
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
     private LocalDateTime paidAt;
     private LocalDateTime completedAt;
+    private LocalDateTime cancelledAt;
+    private String cancelReason;
 
     public PaymentLinkDTO() {
     }
@@ -104,6 +113,46 @@ public class PaymentLinkDTO {
         this.depositAddress = depositAddress;
     }
 
+    public String getVisibility() {
+        return visibility;
+    }
+
+    public void setVisibility(String visibility) {
+        this.visibility = visibility;
+    }
+
+    public String getConfirmationMode() {
+        return confirmationMode;
+    }
+
+    public void setConfirmationMode(String confirmationMode) {
+        this.confirmationMode = confirmationMode;
+    }
+
+    public Boolean getAmountLocked() {
+        return amountLocked;
+    }
+
+    public void setAmountLocked(Boolean amountLocked) {
+        this.amountLocked = amountLocked;
+    }
+
+    public String getReferenceLabel() {
+        return referenceLabel;
+    }
+
+    public void setReferenceLabel(String referenceLabel) {
+        this.referenceLabel = referenceLabel;
+    }
+
+    public Map<String, String> getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(Map<String, String> metadata) {
+        this.metadata = metadata != null ? metadata : new LinkedHashMap<>();
+    }
+
     public String getStatus() {
         return status;
     }
@@ -150,5 +199,21 @@ public class PaymentLinkDTO {
 
     public void setCompletedAt(LocalDateTime completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
+    public void setCancelReason(String cancelReason) {
+        this.cancelReason = cancelReason;
     }
 }

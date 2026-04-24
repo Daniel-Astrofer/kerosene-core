@@ -40,6 +40,10 @@ public class CreateLightningInvoiceUseCase {
     @Transactional
     public LightningInvoiceResponseDTO create(Long userId, LightningInvoiceRequestDTO request) {
         WalletEntity wallet = walletPort.requireWallet(userId, request.walletName());
+        if (wallet.isSelfCustodyMode()) {
+            throw new IllegalStateException(
+                    "Self-custody wallets cannot issue custodial Lightning invoices.");
+        }
         externalPaymentsMath.validatePositiveAmount(request.amount(), "Lightning invoice amount must be positive.");
 
         long amountSats = externalPaymentsMath.btcToSats(request.amount());
@@ -75,7 +79,10 @@ public class CreateLightningInvoiceUseCase {
                 "PENDING",
                 provider,
                 invoice.lightningAddress(),
-                externalPaymentsMath.firstNonBlank(invoice.paymentHash(), invoice.providerReference()),
+                invoice.providerReference(),
+                invoice.providerReference(),
+                null,
+                invoice.paymentHash(),
                 invoice.paymentRequest(),
                 request.amount(),
                 null,
@@ -97,6 +104,9 @@ public class CreateLightningInvoiceUseCase {
     }
 
     private String resolveProviderName() {
-        return custodyGateway.providerName() != null ? custodyGateway.providerName() : localAddressProviderName;
+        if (custodyGateway.isLive() && custodyGateway.providerName() != null) {
+            return custodyGateway.providerName();
+        }
+        return localAddressProviderName;
     }
 }

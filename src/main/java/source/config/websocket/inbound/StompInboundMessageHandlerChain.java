@@ -10,8 +10,7 @@ public class StompInboundMessageHandlerChain implements StompMessageHandler {
     private final StompMessageHandler chain;
 
     public StompInboundMessageHandlerChain(JwtServicer jwtServicer) {
-        StompTokenResolver tokenResolver = new NativeHeaderStompTokenResolver(
-                new SessionAttributeStompTokenResolver(null));
+        StompTokenResolver tokenResolver = new NativeHeaderStompTokenResolver(null);
 
         this.chain = new ConnectAuthenticationStompMessageHandler(
                 jwtServicer,

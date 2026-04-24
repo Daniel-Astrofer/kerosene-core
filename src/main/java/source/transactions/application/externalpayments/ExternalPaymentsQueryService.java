@@ -36,7 +36,11 @@ public class ExternalPaymentsQueryService {
 
     public WalletNetworkAddressDTO getWalletNetworkProfile(Long userId, String walletName) {
         WalletEntity wallet = walletPort.requireWallet(userId, walletName);
-        return externalTransferFactory.toWalletNetworkAddress(wallet, resolveProviderName());
+        return externalTransferFactory.toWalletNetworkAddress(
+                wallet,
+                resolveProviderName(wallet),
+                wallet.isKeroseneCustodyMode() && custodyGateway.isLive(),
+                lightningUnavailableReason(wallet));
     }
 
     public List<ExternalTransferResponseDTO> listTransfers(Long userId) {
@@ -52,7 +56,23 @@ public class ExternalPaymentsQueryService {
         return externalTransferFactory.toResponseDTO(transfer);
     }
 
-    private String resolveProviderName() {
-        return custodyGateway.providerName() != null ? custodyGateway.providerName() : localAddressProviderName;
+    private String resolveProviderName(WalletEntity wallet) {
+        if (wallet != null && wallet.isSelfCustodyMode()) {
+            return "SELF_CUSTODY_XPUB";
+        }
+        if (custodyGateway.isLive() && custodyGateway.providerName() != null) {
+            return custodyGateway.providerName();
+        }
+        return localAddressProviderName;
+    }
+
+    private String lightningUnavailableReason(WalletEntity wallet) {
+        if (wallet != null && wallet.isSelfCustodyMode()) {
+            return "Lightning invoices are only available for KEROSENE custodial wallets.";
+        }
+        if (custodyGateway.isLive()) {
+            return null;
+        }
+        return "Lightning indisponível porque o backend não conseguiu estabelecer a sessão gRPC com o LND.";
     }
 }

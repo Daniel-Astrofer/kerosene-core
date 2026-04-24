@@ -1,5 +1,7 @@
 package source.auth;
 
+import org.springframework.http.HttpStatus;
+
 /**
  * Centralized exception classes for authentication and authorization
  * operations.
@@ -13,6 +15,31 @@ public class AuthExceptions {
     public static class AuthValidationException extends RuntimeException {
         public AuthValidationException(String message) {
             super(message);
+        }
+    }
+
+    public static class StructuredAuthException extends AuthValidationException {
+        private final HttpStatus status;
+        private final String errorCode;
+        private final Object data;
+
+        public StructuredAuthException(String message, HttpStatus status, String errorCode, Object data) {
+            super(message);
+            this.status = status;
+            this.errorCode = errorCode;
+            this.data = data;
+        }
+
+        public HttpStatus getStatus() {
+            return status;
+        }
+
+        public String getErrorCode() {
+            return errorCode;
+        }
+
+        public Object getData() {
+            return data;
         }
     }
 

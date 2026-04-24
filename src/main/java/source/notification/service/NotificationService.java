@@ -1,24 +1,26 @@
 package source.notification.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.model.UserNotificationPayload;
-
-import java.util.Map;
+import source.notification.model.entity.NotificationEntity;
+import source.notification.repository.NotificationRepository;
 
 @Service
 public class NotificationService {
 
-    private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
+    private final NotificationPersistenceService notificationPersistenceService;
+    private final NotificationRepository repository;
 
-    private final SimpMessagingTemplate messagingTemplate;
-
-    public NotificationService(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
+    public NotificationService(
+            NotificationPersistenceService notificationPersistenceService,
+            NotificationRepository repository) {
+        this.notificationPersistenceService = notificationPersistenceService;
+        this.repository = repository;
     }
 
     public void notifyUser(Long userId, String title, String body) {
@@ -57,26 +59,20 @@ public class NotificationService {
                         metadata));
     }
 
-    /**
-     * Sends a structured notification payload via WebSocket to a specific user queue.
-     * The client should be subscribed to `/user/queue/notifications`.
-     */
     public void notifyUser(Long userId, UserNotificationPayload payload) {
-        try {
-            // Sends to the specific user. Spring routes it to:
-            // /user/{userId}/queue/notifications
-            messagingTemplate.convertAndSendToUser(
-                    String.valueOf(userId),
-                    "/queue/notifications",
-                    payload.toMap());
+        notificationPersistenceService.persist(userId, payload);
+    }
 
-            logger.info(
-                    "Pushed WebSocket notification to user: {} with kind='{}' title='{}'",
-                    userId,
-                    payload.kind(),
-                    payload.title());
-        } catch (Exception e) {
-            logger.error("Failed to push WebSocket notification to user {}: {}", userId, e.getMessage());
-        }
+    @Transactional(readOnly = true)
+    public List<NotificationEntity> getUserNotifications(Long userId) {
+        return repository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    @Transactional
+    public void markAsRead(Long userId, Long notificationId) {
+        repository.findByIdAndUserId(notificationId, userId).ifPresent(notification -> {
+            notification.setRead(true);
+            repository.save(notification);
+        });
     }
 }

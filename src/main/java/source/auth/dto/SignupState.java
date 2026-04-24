@@ -38,6 +38,8 @@ public class SignupState implements Serializable {
     private String passkeyCredentialId;
     private String passkeyUserHandle;
     private String passkeyDeviceName;
+    private String passkeyRelyingPartyId;
+    private String passkeyOriginHost;
     private String passkeyCredentialJson;
 
     /**
@@ -170,6 +172,22 @@ public class SignupState implements Serializable {
         this.passkeyDeviceName = passkeyDeviceName;
     }
 
+    public String getPasskeyRelyingPartyId() {
+        return passkeyRelyingPartyId;
+    }
+
+    public void setPasskeyRelyingPartyId(String passkeyRelyingPartyId) {
+        this.passkeyRelyingPartyId = passkeyRelyingPartyId;
+    }
+
+    public String getPasskeyOriginHost() {
+        return passkeyOriginHost;
+    }
+
+    public void setPasskeyOriginHost(String passkeyOriginHost) {
+        this.passkeyOriginHost = passkeyOriginHost;
+    }
+
     public String getPasskeyCredentialJson() {
         if (passkeyCredentialJson != null && !passkeyCredentialJson.isBlank()) {
             return passkeyCredentialJson;
@@ -180,7 +198,9 @@ public class SignupState implements Serializable {
         return "{\"credentialId\":\"" + nullToEmpty(passkeyCredentialId)
                 + "\",\"publicKeyCose\":\"" + nullToEmpty(passkeyPublicKeyCose)
                 + "\",\"userHandle\":\"" + nullToEmpty(passkeyUserHandle)
-                + "\",\"deviceName\":\"" + nullToEmpty(passkeyDeviceName) + "\"}";
+                + "\",\"deviceName\":\"" + nullToEmpty(passkeyDeviceName)
+                + "\",\"relyingPartyId\":\"" + nullToEmpty(passkeyRelyingPartyId)
+                + "\",\"originHost\":\"" + nullToEmpty(passkeyOriginHost) + "\"}";
     }
 
     public void setPasskeyCredentialJson(String passkeyCredentialJson) {

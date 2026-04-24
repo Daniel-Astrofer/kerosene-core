@@ -1,6 +1,7 @@
 package source.transactions.infra;
 
 import org.springframework.stereotype.Component;
+import source.auth.AuthExceptions;
 import source.auth.application.service.identityaccess.PlatformTransactionSignerPort;
 import source.auth.model.entity.UserDataBase;
 
@@ -20,7 +21,7 @@ public class MpcPlatformTransactionSignerAdapter implements PlatformTransactionS
 
     @Override
     public String sign(UserDataBase user) {
-        throw new UnsupportedOperationException(
+        throw new AuthExceptions.AuthValidationException(
                 "Platform MPC signing is not available in this build. Refusing outbound co-sign requests.");
     }
 }

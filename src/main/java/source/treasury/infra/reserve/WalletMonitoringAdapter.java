@@ -19,6 +19,7 @@ public class WalletMonitoringAdapter implements WalletMonitoringPort {
     @Override
     public List<MonitoredWallet> findAll() {
         return walletRepository.findAll().stream()
+                .filter(wallet -> wallet.isSelfCustodyMode())
                 .map(wallet -> new MonitoredWallet(
                         wallet.getId(),
                         wallet.getXpub(),

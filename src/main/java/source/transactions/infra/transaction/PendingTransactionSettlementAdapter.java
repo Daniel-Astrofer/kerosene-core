@@ -12,9 +12,9 @@ import source.notification.service.NotificationService;
 import source.transactions.application.transaction.monitoring.PendingTransactionSettlementPort;
 import source.transactions.model.PendingTransaction;
 import source.transactions.service.ProcessedTransactionService;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletCardProfileService;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,7 +26,7 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
 
     private static final Logger log = LoggerFactory.getLogger(PendingTransactionSettlementAdapter.class);
 
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
     private final LedgerService ledgerService;
     private final NotificationService notificationService;
     private final LedgerTransactionHistoryRepository historyRepository;
@@ -34,13 +34,13 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
     private final ProcessedTransactionService processedTransactionService;
 
     public PendingTransactionSettlementAdapter(
-            WalletService walletService,
+            WalletLookupPort walletLookupPort,
             LedgerService ledgerService,
             NotificationService notificationService,
             LedgerTransactionHistoryRepository historyRepository,
             WalletCardProfileService walletCardProfileService,
             ProcessedTransactionService processedTransactionService) {
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.ledgerService = ledgerService;
         this.notificationService = notificationService;
         this.historyRepository = historyRepository;
@@ -63,7 +63,7 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
 
     private void applySenderEffects(PendingTransaction transaction, int confirmations) {
         try {
-            WalletEntity senderWallet = walletService.findByPassphraseHash(transaction.getFromAddress());
+            WalletEntity senderWallet = walletLookupPort.findByPassphraseHash(transaction.getFromAddress());
             if (senderWallet == null) {
                 return;
             }
@@ -116,7 +116,7 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
 
     private void applyReceiverEffects(PendingTransaction transaction, int confirmations) {
         try {
-            WalletEntity receiverWallet = walletService.findByPassphraseHash(transaction.getToAddress());
+            WalletEntity receiverWallet = walletLookupPort.findByPassphraseHash(transaction.getToAddress());
             if (receiverWallet == null) {
                 return;
             }

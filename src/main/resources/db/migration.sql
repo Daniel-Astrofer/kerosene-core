@@ -53,6 +53,8 @@ ALTER TABLE auth.passkey_credentials DROP COLUMN IF EXISTS public_key;
 
 -- Ensure device_name exists (idempotent)
 ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS device_name VARCHAR(255);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS relying_party_id VARCHAR(255);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS origin_host VARCHAR(255);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 005: Dev balance claim guard
@@ -78,7 +80,14 @@ ALTER TABLE financial.wallets
     ADD COLUMN IF NOT EXISTS xpub TEXT;
 
 ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS wallet_mode VARCHAR(32) NOT NULL DEFAULT 'KEROSENE';
+
+ALTER TABLE financial.wallets
     ADD COLUMN IF NOT EXISTS last_derived_index INTEGER NOT NULL DEFAULT -1;
+
+UPDATE financial.wallets
+    SET wallet_mode = 'KEROSENE'
+    WHERE wallet_mode IS NULL;
 
 UPDATE financial.wallets
     SET last_derived_index = -1
@@ -86,6 +95,12 @@ UPDATE financial.wallets
 
 ALTER TABLE financial.wallets
     ALTER COLUMN last_derived_index SET DEFAULT -1;
+
+ALTER TABLE financial.wallets
+    ALTER COLUMN wallet_mode SET DEFAULT 'KEROSENE';
+
+ALTER TABLE financial.wallets
+    ALTER COLUMN wallet_mode SET NOT NULL;
 
 ALTER TABLE financial.wallets
     ALTER COLUMN last_derived_index SET NOT NULL;
@@ -98,6 +113,27 @@ ALTER TABLE financial.wallets
 
 ALTER TABLE financial.wallets
     ADD COLUMN IF NOT EXISTS external_wallet_reference VARCHAR(255);
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS card_number_suffix VARCHAR(4);
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS card_issued_at TIMESTAMP;
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS card_expires_at TIMESTAMP;
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS card_last_rotated_at TIMESTAMP;
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS card_sequence INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS previous_card_number_suffix VARCHAR(4);
+
+ALTER TABLE financial.wallets
+    ADD COLUMN IF NOT EXISTS previous_card_expires_at TIMESTAMP;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_lightning_address
     ON financial.wallets(lightning_address)
@@ -338,6 +374,12 @@ CREATE TABLE IF NOT EXISTS financial.processed_transactions (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_processed_transactions_txid
     ON financial.processed_transactions(txid);
 
+CREATE TABLE IF NOT EXISTS financial.custodial_derivation_cursors (
+    cursor_key VARCHAR(64) PRIMARY KEY,
+    last_issued_index INTEGER NOT NULL DEFAULT -1,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 012: Auth account password hash + activation audit timestamp
 -- Separates account authentication from internal wallet recovery material.
@@ -376,6 +418,26 @@ CREATE TABLE IF NOT EXISTS public.user_backup_codes (
 
 CREATE INDEX IF NOT EXISTS idx_user_backup_codes_user_id
     ON public.user_backup_codes(user_id);
+
+CREATE TABLE IF NOT EXISTS auth.user_app_pin_settings (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    device_hash VARCHAR(128) NOT NULL,
+    pin_hash VARCHAR(255),
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP,
+    last_verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, device_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_app_pin_user_id
+    ON auth.user_app_pin_settings(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_app_pin_device_hash
+    ON auth.user_app_pin_settings(device_hash);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 014: Deposit history table for inbound on-chain tracking
@@ -444,3 +506,113 @@ ALTER TABLE financial.wallets
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_lightning_address
     ON financial.wallets(lightning_address)
     WHERE lightning_address IS NOT NULL;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 017: Notifications table
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    kind VARCHAR(64),
+    severity VARCHAR(64),
+    title VARCHAR(255),
+    body TEXT,
+    deeplink TEXT,
+    entity_type VARCHAR(64),
+    entity_id VARCHAR(64),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+    ON public.notifications(user_id, created_at DESC);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 018: Real network transfer reconciliation metadata
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS invoice_id VARCHAR(128);
+
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS blockchain_txid VARCHAR(128);
+
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS payment_hash VARCHAR(128);
+
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS detected_at TIMESTAMP;
+
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS settled_at TIMESTAMP;
+
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS confirmations INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE financial.network_transfers
+    ADD COLUMN IF NOT EXISTS provider_payload TEXT;
+
+UPDATE financial.network_transfers
+    SET confirmations = 0
+    WHERE confirmations IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_txid
+    ON financial.network_transfers(blockchain_txid);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_invoice_id
+    ON financial.network_transfers(invoice_id);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfers_payment_hash
+    ON financial.network_transfers(payment_hash);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 019: Persistent blockchain address watches for ZMQ reconciliation
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.blockchain_address_watch (
+    id UUID PRIMARY KEY,
+    transfer_id UUID NOT NULL UNIQUE REFERENCES financial.network_transfers(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    wallet_id BIGINT NOT NULL REFERENCES financial.wallets(id) ON DELETE CASCADE,
+    address VARCHAR(128) NOT NULL,
+    label VARCHAR(255),
+    status VARCHAR(32) NOT NULL DEFAULT 'WATCHING',
+    observed_txid VARCHAR(128),
+    observed_amount_sats BIGINT,
+    confirmations INTEGER NOT NULL DEFAULT 0,
+    detected_at TIMESTAMP,
+    settled_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_blockchain_watch_address_status
+    ON financial.blockchain_address_watch(address, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_blockchain_watch_transfer
+    ON financial.blockchain_address_watch(transfer_id);
+
+CREATE INDEX IF NOT EXISTS idx_blockchain_watch_txid
+    ON financial.blockchain_address_watch(observed_txid);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 020: Auditable network transfer events
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.network_transfer_events (
+    id UUID PRIMARY KEY,
+    transfer_id UUID REFERENCES financial.network_transfers(id) ON DELETE SET NULL,
+    user_id BIGINT REFERENCES auth.users_credentials(id) ON DELETE SET NULL,
+    event_type VARCHAR(64) NOT NULL,
+    severity VARCHAR(16) NOT NULL,
+    reference VARCHAR(255),
+    payload TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfer_events_transfer_created
+    ON financial.network_transfer_events(transfer_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfer_events_reference
+    ON financial.network_transfer_events(reference);
+
+CREATE INDEX IF NOT EXISTS idx_network_transfer_events_type
+    ON financial.network_transfer_events(event_type);

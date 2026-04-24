@@ -1,7 +1,9 @@
 package source.common.service;
 
+import org.bitcoinj.core.Base58;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.SegwitAddress;
+import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.crypto.HDKeyDerivation;
 import org.bitcoinj.params.MainNetParams;
@@ -11,15 +13,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 /**
- * Service to derive unique Bitcoin addresses for wallets.
- * In a production environment, this would use BIP44/84 HD Wallets.
- * For this implementation, we use a deterministic derivation from a salt and wallet ID.
+ * Address derivation utilities for the Bitcoin flows.
+ * Supports legacy deterministic fallback derivation plus BIP84 XPUB-based
+ * address derivation for custodial and self-custody deposit flows.
  */
 @Service
 public class AddressDerivationService {
@@ -76,8 +78,16 @@ public class AddressDerivationService {
     }
 
     public String deriveAddressFromXpub(String xpub, int index, boolean isChange) {
+        return deriveAddressDetailsFromXpub(xpub, index, isChange).address();
+    }
+
+    public DerivedAddress deriveAddressDetailsFromXpub(String xpub, int index) {
+        return deriveAddressDetailsFromXpub(xpub, index, false);
+    }
+
+    public DerivedAddress deriveAddressDetailsFromXpub(String xpub, int index, boolean isChange) {
         try {
-            DeterministicKey masterKey = DeterministicKey.deserializeB58(xpub, netParams);
+            DeterministicKey masterKey = DeterministicKey.deserializeB58(normalizeExtendedPublicKey(xpub), netParams);
 
             // Derive child: m / <isChange> / <index>
             DeterministicKey childKey = HDKeyDerivation.deriveChildKey(
@@ -85,7 +95,7 @@ public class AddressDerivationService {
                     index);
 
             SegwitAddress address = SegwitAddress.fromHash(netParams, childKey.getPubKeyHash());
-            return address.toString();
+            return new DerivedAddress(address.toString(), childKey.getPubKey(), index, isChange);
         } catch (Exception e) {
             log.error("[Derivation] Failed to derive address from xpub {}: {}", xpub, e.getMessage());
             throw new RuntimeException("XPub derivation failed", e);
@@ -119,7 +129,7 @@ public class AddressDerivationService {
         }
 
         try {
-            DeterministicKey parentKey = DeterministicKey.deserializeB58(parentXpub, netParams);
+            DeterministicKey parentKey = DeterministicKey.deserializeB58(normalizeExtendedPublicKey(parentXpub), netParams);
             DeterministicKey childKey = HDKeyDerivation.deriveChildKey(parentKey, childIndex);
             return childKey.serializePubB58(netParams);
         } catch (Exception e) {
@@ -128,7 +138,58 @@ public class AddressDerivationService {
         }
     }
 
+    private String normalizeExtendedPublicKey(String rawXpub) {
+        if (rawXpub == null || rawXpub.isBlank()) {
+            throw new IllegalArgumentException("XPUB is required.");
+        }
+
+        String xpub = rawXpub.trim();
+        if (xpub.startsWith("xpub") || xpub.startsWith("tpub")) {
+            return xpub;
+        }
+
+        byte[] decoded = Base58.decodeChecked(xpub);
+        if (decoded.length < 4) {
+            return xpub;
+        }
+
+        int replacementVersion;
+        if (startsWith(decoded, 0x04, 0xb2, 0x47, 0x46) || startsWith(decoded, 0x04, 0x9d, 0x7c, 0xb2)) {
+            replacementVersion = 0x0488B21E;
+        } else if (startsWith(decoded, 0x04, 0x5f, 0x1c, 0xf6) || startsWith(decoded, 0x04, 0x4a, 0x52, 0x62)) {
+            replacementVersion = 0x043587CF;
+        } else {
+            return xpub;
+        }
+
+        byte[] payload = Arrays.copyOf(decoded, decoded.length);
+        payload[0] = (byte) ((replacementVersion >> 24) & 0xff);
+        payload[1] = (byte) ((replacementVersion >> 16) & 0xff);
+        payload[2] = (byte) ((replacementVersion >> 8) & 0xff);
+        payload[3] = (byte) (replacementVersion & 0xff);
+
+        byte[] checksum = Arrays.copyOf(Sha256Hash.hashTwice(payload), 4);
+        byte[] encoded = Arrays.copyOf(payload, payload.length + 4);
+        System.arraycopy(checksum, 0, encoded, payload.length, 4);
+        return Base58.encode(encoded);
+    }
+
+    private boolean startsWith(byte[] value, int b0, int b1, int b2, int b3) {
+        return value.length >= 4
+                && (value[0] & 0xff) == b0
+                && (value[1] & 0xff) == b1
+                && (value[2] & 0xff) == b2
+                && (value[3] & 0xff) == b3;
+    }
+
     private boolean isMainnet() {
         return netParams instanceof MainNetParams;
+    }
+
+    public record DerivedAddress(
+            String address,
+            byte[] publicKey,
+            int index,
+            boolean change) {
     }
 }

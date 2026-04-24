@@ -58,7 +58,7 @@ class TransactionParticipantResolverTest {
         WalletEntity wallet = wallet(101L, receiver, "RECEIVER", "tb1qreceiver000000000000000000000000000000000");
 
         when(userService.findByUsername("receiver-user")).thenReturn(receiver);
-        when(walletService.findByUserId(20L)).thenReturn(List.of(wallet));
+        when(walletService.findPrimaryWallet(20L)).thenReturn(wallet);
 
         WalletEntity resolved = resolver.resolveReceiverWallet("receiver-user");
 

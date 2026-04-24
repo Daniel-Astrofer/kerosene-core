@@ -22,9 +22,9 @@ import source.notification.model.UserNotificationPayload;
 import source.security.VaultKeyProvider;
 import source.common.util.CryptoUtils;
 import source.wallet.application.port.in.CreateWalletUseCase;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.dto.WalletRequestDTO;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletContract;
 import source.ledger.service.LedgerContract;
 import source.ledger.exceptions.LedgerExceptions;
 
@@ -49,7 +49,7 @@ public class FinalizeSignupAccount {
     private final CosignerSecretService cosignerSecretService;
     private final VaultKeyProvider vaultKeyProvider;
     private final CreateWalletUseCase walletUseCase;
-    private final WalletContract walletContract;
+    private final WalletLookupPort walletLookupPort;
     private final LedgerContract ledgerContract;
 
     public FinalizeSignupAccount(
@@ -60,7 +60,7 @@ public class FinalizeSignupAccount {
             CosignerSecretService cosignerSecretService,
             VaultKeyProvider vaultKeyProvider,
             CreateWalletUseCase walletUseCase,
-            WalletContract walletContract,
+            WalletLookupPort walletLookupPort,
             LedgerContract ledgerContract) {
         this.stateStore = stateStore;
         this.userService = userService;
@@ -69,7 +69,7 @@ public class FinalizeSignupAccount {
         this.cosignerSecretService = cosignerSecretService;
         this.vaultKeyProvider = vaultKeyProvider;
         this.walletUseCase = walletUseCase;
-        this.walletContract = walletContract;
+        this.walletLookupPort = walletLookupPort;
         this.ledgerContract = ledgerContract;
     }
 
@@ -134,8 +134,8 @@ public class FinalizeSignupAccount {
         user.setPasswordHash(new String(state.getPassphrase()));
         user.setTOTPSecret(state.isTotpVerified() ? state.getTotpSecret() : null);
         user.setBackupCodes(state.isTotpVerified() ? state.getBackupCodes() : Collections.emptyList());
-        user.setIsActive(false);
-        user.setActivatedAt(null);
+        user.setIsActive(true);
+        user.setActivatedAt(java.time.LocalDateTime.now());
         user.setAccountSecurity(state.getAccountSecurity() != null
                 ? state.getAccountSecurity()
                 : AccountSecurityType.STANDARD);
@@ -170,11 +170,13 @@ public class FinalizeSignupAccount {
         credential.setPublicKeyCose(CryptoUtils.decodeBase64(publicKeyMaterial(state)));
         credential.setCredentialId(CryptoUtils.decodeBase64(state.getPasskeyCredentialId()));
         credential.setUserHandle(CryptoUtils.decodeBase64(state.getPasskeyUserHandle()));
+        credential.setRelyingPartyId(state.getPasskeyRelyingPartyId());
+        credential.setOriginHost(state.getPasskeyOriginHost());
         passkeyGateway.save(credential);
     }
 
     public void ensureUserFinancialsReady(UserDataBase user, SignupState optionalState) {
-        List<WalletEntity> wallets = walletContract.findByUserId(user.getId());
+        List<WalletEntity> wallets = walletLookupPort.findByUserId(user.getId());
         if (wallets.isEmpty() && optionalState != null) {
             String passphrase = optionalState.getPassphrase() != null ? new String(optionalState.getPassphrase()) : "PASSKEY_SECURED";
             WalletRequestDTO request = new WalletRequestDTO(passphrase, "ACCOUNT 01", null);

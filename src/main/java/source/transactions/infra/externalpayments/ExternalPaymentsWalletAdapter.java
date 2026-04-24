@@ -3,30 +3,34 @@ package source.transactions.infra.externalpayments;
 import org.springframework.stereotype.Component;
 import source.common.service.AddressDerivationService;
 import source.transactions.application.externalpayments.ExternalPaymentsWalletPort;
+import source.wallet.application.port.in.WalletAddressIndexPort;
+import source.wallet.application.port.in.WalletLookupPort;
+import source.wallet.application.service.WalletPersistenceSupport;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
-import source.wallet.repository.WalletRepository;
-import source.wallet.service.WalletService;
 
 @Component
 public class ExternalPaymentsWalletAdapter implements ExternalPaymentsWalletPort {
 
-    private final WalletService walletService;
-    private final WalletRepository walletRepository;
+    private final WalletLookupPort walletLookupPort;
+    private final WalletAddressIndexPort walletAddressIndexPort;
+    private final WalletPersistenceSupport walletPersistenceSupport;
     private final AddressDerivationService addressDerivationService;
 
     public ExternalPaymentsWalletAdapter(
-            WalletService walletService,
-            WalletRepository walletRepository,
+            WalletLookupPort walletLookupPort,
+            WalletAddressIndexPort walletAddressIndexPort,
+            WalletPersistenceSupport walletPersistenceSupport,
             AddressDerivationService addressDerivationService) {
-        this.walletService = walletService;
-        this.walletRepository = walletRepository;
+        this.walletLookupPort = walletLookupPort;
+        this.walletAddressIndexPort = walletAddressIndexPort;
+        this.walletPersistenceSupport = walletPersistenceSupport;
         this.addressDerivationService = addressDerivationService;
     }
 
     @Override
     public WalletEntity requireWallet(Long userId, String walletName) {
-        WalletEntity wallet = walletService.findByNameAndUserId(walletName, userId);
+        WalletEntity wallet = walletLookupPort.findByNameAndUserId(walletName, userId);
         if (wallet == null) {
             throw new WalletExceptions.WalletNoExists("wallet not found");
         }
@@ -35,12 +39,12 @@ public class ExternalPaymentsWalletAdapter implements ExternalPaymentsWalletPort
 
     @Override
     public WalletEntity save(WalletEntity wallet) {
-        return walletRepository.save(wallet);
+        return walletPersistenceSupport.persist(wallet);
     }
 
     @Override
     public int incrementLastDerivedIndex(Long walletId) {
-        return walletService.incrementLastDerivedIndex(walletId);
+        return walletAddressIndexPort.incrementLastDerivedIndex(walletId);
     }
 
     @Override

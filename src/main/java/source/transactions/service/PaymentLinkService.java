@@ -5,10 +5,12 @@ import org.springframework.stereotype.Service;
 import source.transactions.application.paymentlink.PaymentLinkCompleter;
 import source.transactions.application.paymentlink.PaymentLinkConfirmer;
 import source.transactions.application.paymentlink.PaymentLinkCreator;
+import source.transactions.application.paymentlink.PaymentLinkCanceller;
 import source.transactions.application.paymentlink.PaymentLinkDescription;
 import source.transactions.application.paymentlink.PaymentLinkReader;
 import source.transactions.application.paymentlink.PaymentLinkStatus;
 import source.transactions.application.paymentlink.PaymentLinkStore;
+import source.transactions.dto.CreatePaymentLinkRequest;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.exception.PaymentLinkExceptions;
 
@@ -24,22 +26,25 @@ public class PaymentLinkService {
     private final PaymentLinkReader paymentLinkReader;
     private final PaymentLinkConfirmer paymentLinkConfirmer;
     private final PaymentLinkCompleter paymentLinkCompleter;
+    private final PaymentLinkCanceller paymentLinkCanceller;
     private final PaymentLinkStore paymentLinkStore;
     public PaymentLinkService(
             PaymentLinkCreator paymentLinkCreator,
             PaymentLinkReader paymentLinkReader,
             PaymentLinkConfirmer paymentLinkConfirmer,
             PaymentLinkCompleter paymentLinkCompleter,
+            PaymentLinkCanceller paymentLinkCanceller,
             PaymentLinkStore paymentLinkStore) {
         this.paymentLinkCreator = paymentLinkCreator;
         this.paymentLinkReader = paymentLinkReader;
         this.paymentLinkConfirmer = paymentLinkConfirmer;
         this.paymentLinkCompleter = paymentLinkCompleter;
+        this.paymentLinkCanceller = paymentLinkCanceller;
         this.paymentLinkStore = paymentLinkStore;
     }
 
-    public PaymentLinkDTO createPaymentLink(Long userId, BigDecimal amountBtc, String description) {
-        return paymentLinkCreator.createForUser(userId, amountBtc, description);
+    public PaymentLinkDTO createPaymentLink(Long userId, CreatePaymentLinkRequest request) {
+        return paymentLinkCreator.createForUser(userId, request);
     }
 
     public PaymentLinkDTO createAccountActivationPaymentLink(Long userId, BigDecimal amountBtc) {
@@ -76,6 +81,10 @@ public class PaymentLinkService {
 
     public PaymentLinkDTO completePayment(String linkId) {
         return paymentLinkCompleter.completePayment(linkId);
+    }
+
+    public PaymentLinkDTO cancelPayment(String linkId, String reason) {
+        return paymentLinkCanceller.cancel(linkId, reason);
     }
 
     public List<PaymentLinkDTO> getUserPaymentLinks(Long userId) {

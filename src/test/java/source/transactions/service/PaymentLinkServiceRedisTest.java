@@ -68,7 +68,7 @@ public class PaymentLinkServiceRedisTest {
         String description = "Depósito de teste";
         stubPrimaryWalletAllocation(userId, 501L, "bc1quserlink1");
 
-        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
+        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, new source.transactions.dto.CreatePaymentLinkRequest(amountBtc, description, null, null, null, null, null, null));
 
         assertNotNull(createdLink);
         assertEquals("pending", createdLink.getStatus());
@@ -93,7 +93,7 @@ public class PaymentLinkServiceRedisTest {
         String description = "Teste Redis";
         stubPrimaryWalletAllocation(userId, 502L, "bc1quserlink2");
 
-        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
+        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, new source.transactions.dto.CreatePaymentLinkRequest(amountBtc, description, null, null, null, null, null, null));
         String linkId = createdLink.getId();
 
         // Recuperar do Redis
@@ -120,7 +120,7 @@ public class PaymentLinkServiceRedisTest {
         when(walletCardProfileService.calculateDepositFee(userId, amount)).thenReturn(new BigDecimal("0.00900000"));
         stubPrimaryWalletAllocation(userId, 999L, "bc1qcreditwallet");
 
-        PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, amount, description);
+        PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, new source.transactions.dto.CreatePaymentLinkRequest(amount, description, null, null, null, null, null, null));
         String txid = "tx_mock_123";
         String fromAddress = "addr_from";
 
@@ -145,7 +145,7 @@ public class PaymentLinkServiceRedisTest {
         when(walletCardProfileService.calculateDepositFee(userId, amount)).thenReturn(BigDecimal.ZERO.setScale(8));
         stubPrimaryWalletAllocation(userId, 321L, "bc1qlistsync");
 
-        PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, amount, "List sync test");
+        PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, new source.transactions.dto.CreatePaymentLinkRequest(amount, "List sync test", null, null, null, null, null, null));
         paymentLinkService.confirmPayment(link.getId(), "tx_sync_1", "sender");
 
         List<PaymentLinkDTO> paymentLinks = paymentLinkService.getUserPaymentLinks(userId);
@@ -184,7 +184,7 @@ public class PaymentLinkServiceRedisTest {
         String description = "Teste TTL";
         stubPrimaryWalletAllocation(userId, 503L, "bc1qttlwallet");
 
-        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
+        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, new source.transactions.dto.CreatePaymentLinkRequest(amountBtc, description, null, null, null, null, null, null));
         String linkId = createdLink.getId();
         String redisKey = "payment_link:" + linkId;
 
@@ -205,7 +205,7 @@ public class PaymentLinkServiceRedisTest {
         String description = "Teste remoção";
         stubPrimaryWalletAllocation(userId, 504L, "bc1qremovewallet");
 
-        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, amountBtc, description);
+        PaymentLinkDTO createdLink = paymentLinkService.createPaymentLink(userId, new source.transactions.dto.CreatePaymentLinkRequest(amountBtc, description, null, null, null, null, null, null));
         String linkId = createdLink.getId();
         String redisKey = "payment_link:" + linkId;
 

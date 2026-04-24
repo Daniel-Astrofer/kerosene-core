@@ -121,6 +121,15 @@ public class GlobalExceptionHandler {
                                 "ERR_AUTH_TOTP_TIMEOUT");
         }
 
+        @ExceptionHandler(AuthExceptions.StructuredAuthException.class)
+        public ResponseEntity<ApiResponse<Object>> handleStructuredAuthException(AuthExceptions.StructuredAuthException ex) {
+                return buildErrorResponse(
+                                ex.getStatus(),
+                                ex.getMessage(),
+                                ex.getErrorCode(),
+                                ex.getData());
+        }
+
         @ExceptionHandler(AuthExceptions.AuthValidationException.class)
         public ResponseEntity<ApiResponse<Void>> handleGenericAuthException(AuthExceptions.AuthValidationException ex) {
                 return buildErrorResponse(
@@ -435,6 +444,11 @@ public class GlobalExceptionHandler {
         private ResponseEntity<ApiResponse<Void>> buildErrorResponse(HttpStatus status, String message,
                         String errorCode) {
                 return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode));
+        }
+
+        private <T> ResponseEntity<ApiResponse<T>> buildErrorResponse(HttpStatus status, String message,
+                        String errorCode, T data) {
+                return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
         }
 
         private String sanitizeMessage(String rawMessage, String fallbackMessage) {

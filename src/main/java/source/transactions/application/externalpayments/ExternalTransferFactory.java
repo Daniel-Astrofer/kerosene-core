@@ -12,9 +12,11 @@ import java.math.BigDecimal;
 public class ExternalTransferFactory {
 
     private final ExternalPaymentsMath externalPaymentsMath;
+    private final String bitcoinNetwork;
 
     public ExternalTransferFactory(ExternalPaymentsMath externalPaymentsMath) {
         this.externalPaymentsMath = externalPaymentsMath;
+        this.bitcoinNetwork = externalPaymentsMath.configuredBitcoinNetwork();
     }
 
     public ExternalTransferEntity newTransfer(
@@ -25,6 +27,9 @@ public class ExternalTransferFactory {
             String provider,
             String destination,
             String externalReference,
+            String invoiceId,
+            String blockchainTxid,
+            String paymentHash,
             String invoiceData,
             BigDecimal amountBtc,
             BigDecimal networkFeeBtc,
@@ -42,6 +47,9 @@ public class ExternalTransferFactory {
         transfer.setProvider(provider);
         transfer.setDestination(destination);
         transfer.setExternalReference(externalReference);
+        transfer.setInvoiceId(invoiceId);
+        transfer.setBlockchainTxid(blockchainTxid);
+        transfer.setPaymentHash(paymentHash);
         transfer.setInvoiceData(invoiceData);
         transfer.setAmountBtc(externalPaymentsMath.nullableNormalizeBtc(amountBtc));
         transfer.setNetworkFeeBtc(externalPaymentsMath.nullableNormalizeBtc(networkFeeBtc));
@@ -52,13 +60,21 @@ public class ExternalTransferFactory {
         return transfer;
     }
 
-    public WalletNetworkAddressDTO toWalletNetworkAddress(WalletEntity wallet, String provider) {
+    public WalletNetworkAddressDTO toWalletNetworkAddress(
+            WalletEntity wallet,
+            String provider,
+            boolean lightningEnabled,
+            String lightningUnavailableReason) {
         return new WalletNetworkAddressDTO(
                 wallet.getName(),
                 wallet.getDepositAddress(),
                 wallet.getLightningAddress(),
+                bitcoinNetwork,
                 provider,
-                wallet.getExternalWalletReference());
+                wallet.getExternalWalletReference(),
+                wallet.getWalletMode().name(),
+                lightningEnabled,
+                lightningUnavailableReason);
     }
 
     public ExternalTransferResponseDTO toResponseDTO(ExternalTransferEntity entity) {
@@ -70,12 +86,19 @@ public class ExternalTransferFactory {
                 entity.getProvider(),
                 entity.getWalletNameSnapshot(),
                 entity.getDestination(),
+                entity.getInvoiceId(),
+                entity.getBlockchainTxid(),
+                entity.getPaymentHash(),
+                entity.getInvoiceData(),
                 entity.getAmountBtc(),
                 entity.getNetworkFeeBtc(),
                 entity.getPlatformFeeBtc(),
                 entity.getTotalDebitedBtc(),
                 entity.getExternalReference(),
+                entity.getConfirmations(),
                 entity.getExpiresAt(),
+                entity.getDetectedAt(),
+                entity.getSettledAt(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getContext());

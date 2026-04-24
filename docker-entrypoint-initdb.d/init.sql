@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS auth.passkey_credentials (
     user_handle BYTEA NOT NULL,
     public_key_cose BYTEA NOT NULL,
     device_name VARCHAR(255),
+    relying_party_id VARCHAR(255),
+    origin_host VARCHAR(255),
     signature_count BIGINT NOT NULL DEFAULT 0,
     user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE
 );
@@ -53,6 +55,23 @@ CREATE TABLE IF NOT EXISTS auth.passkey_credentials (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_passkey_user_id ON auth.passkey_credentials(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON auth.users_credentials(username);
+
+CREATE TABLE IF NOT EXISTS auth.user_app_pin_settings (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    device_hash VARCHAR(128) NOT NULL,
+    pin_hash VARCHAR(255),
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP,
+    last_verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, device_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_app_pin_user_id ON auth.user_app_pin_settings(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_app_pin_device_hash ON auth.user_app_pin_settings(device_hash);
 
 -- =============================================
 -- FINANCIAL SCHEMA
@@ -66,6 +85,19 @@ CREATE TABLE IF NOT EXISTS financial.wallets (
     address VARCHAR(255) NOT NULL, -- Actually used as passphraseHash
     name VARCHAR(255) NOT NULL,
     totp_secret VARCHAR(255) NOT NULL,
+    deposit_address VARCHAR(100),
+    lightning_address VARCHAR(255),
+    external_wallet_reference VARCHAR(255),
+    card_number_suffix VARCHAR(4),
+    card_issued_at TIMESTAMP,
+    card_expires_at TIMESTAMP,
+    card_last_rotated_at TIMESTAMP,
+    card_sequence INTEGER NOT NULL DEFAULT 1,
+    previous_card_number_suffix VARCHAR(4),
+    previous_card_expires_at TIMESTAMP,
+    xpub TEXT,
+    wallet_mode VARCHAR(32) NOT NULL DEFAULT 'KEROSENE',
+    last_derived_index INTEGER NOT NULL DEFAULT -1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE,

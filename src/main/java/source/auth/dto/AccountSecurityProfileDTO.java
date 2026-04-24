@@ -13,9 +13,15 @@ public record AccountSecurityProfileDTO(
         Integer multisigThreshold,
         boolean passkeyAvailable,
         boolean passkeyEnabledForTransactions,
-        List<String> requiredFactors) {
+        AppPinStatusDTO appPin,
+        List<String> requiredFactors,
+        PasskeyInventoryDTO passkeys) {
 
-    public static AccountSecurityProfileDTO fromUser(UserDataBase user, boolean passkeyAvailable) {
+    public static AccountSecurityProfileDTO fromUser(
+            UserDataBase user,
+            boolean passkeyAvailable,
+            PasskeyInventoryDTO passkeys,
+            AppPinStatusDTO appPin) {
         return new AccountSecurityProfileDTO(
                 user.getAccountSecurity(),
                 user.getShamirTotalShares(),
@@ -23,7 +29,9 @@ public record AccountSecurityProfileDTO(
                 user.getMultisigThreshold() != null ? user.getMultisigThreshold() : 2,
                 passkeyAvailable,
                 Boolean.TRUE.equals(user.getPasskeyEnabledForTransactions()),
-                requiredFactorsFor(user, passkeyAvailable));
+                appPin,
+                requiredFactorsFor(user, passkeyAvailable),
+                passkeys);
     }
 
     private static List<String> requiredFactorsFor(UserDataBase user, boolean passkeyAvailable) {

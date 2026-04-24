@@ -1,30 +1,25 @@
 package source.transactions.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.service.account.AccountActivationService;
-import source.notification.model.NotificationKind;
-import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
-import source.transactions.application.externalpayments.ExternalPaymentsLedgerPort;
 import source.transactions.application.externalpayments.ExternalPaymentsMath;
-import source.transactions.application.externalpayments.ExternalPaymentsNotificationPort;
 import source.transactions.application.externalpayments.ExternalTransfersPort;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.CustodyGateway;
+import source.transactions.model.BlockchainAddressWatchEntity;
 import source.transactions.model.ExternalTransferEntity;
 import source.security.VaultKeyProvider;
-import source.wallet.service.WalletCardProfileService;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class InboundTransferMonitorService {
@@ -32,36 +27,31 @@ public class InboundTransferMonitorService {
     private static final Logger log = LoggerFactory.getLogger(InboundTransferMonitorService.class);
 
     private final ExternalTransfersPort externalTransfersPort;
-    private final ExternalPaymentsLedgerPort ledgerPort;
-    private final ExternalPaymentsNotificationPort notificationPort;
     private final ExternalPaymentsMath externalPaymentsMath;
-    private final WalletCardProfileService walletCardProfileService;
-    private final AccountActivationService accountActivationService;
     private final BlockchainClient blockchainClient;
     private final CustodyGateway custodyGateway;
     private final VaultKeyProvider vaultKeyProvider;
+    private final BlockchainAddressWatchService blockchainAddressWatchService;
+    private final NetworkTransferLifecycleService networkTransferLifecycleService;
     private final int batchSize;
+    private final AtomicBoolean lightningProviderUnavailableLogged = new AtomicBoolean(false);
 
     public InboundTransferMonitorService(
             ExternalTransfersPort externalTransfersPort,
-            ExternalPaymentsLedgerPort ledgerPort,
-            ExternalPaymentsNotificationPort notificationPort,
             ExternalPaymentsMath externalPaymentsMath,
-            WalletCardProfileService walletCardProfileService,
-            AccountActivationService accountActivationService,
             BlockchainClient blockchainClient,
             CustodyGateway custodyGateway,
             VaultKeyProvider vaultKeyProvider,
+            BlockchainAddressWatchService blockchainAddressWatchService,
+            NetworkTransferLifecycleService networkTransferLifecycleService,
             @Value("${transactions.inbound-monitor.batch-size:200}") int batchSize) {
         this.externalTransfersPort = externalTransfersPort;
-        this.ledgerPort = ledgerPort;
-        this.notificationPort = notificationPort;
         this.externalPaymentsMath = externalPaymentsMath;
-        this.walletCardProfileService = walletCardProfileService;
-        this.accountActivationService = accountActivationService;
         this.blockchainClient = blockchainClient;
         this.custodyGateway = custodyGateway;
         this.vaultKeyProvider = vaultKeyProvider;
+        this.blockchainAddressWatchService = blockchainAddressWatchService;
+        this.networkTransferLifecycleService = networkTransferLifecycleService;
         this.batchSize = batchSize;
     }
 
@@ -100,37 +90,198 @@ public class InboundTransferMonitorService {
     }
 
     private void inspectOnchainTransfer(ExternalTransferEntity transfer) {
-        String address = transfer.getDestination();
-        if (address == null || address.isBlank()) {
+        BlockchainAddressWatchEntity watch = transfer.getId() != null
+                ? blockchainAddressWatchService.findByTransferId(transfer.getId()).orElse(null)
+                : null;
+        String watchedAddress = firstNonBlank(
+                watch != null ? watch.getAddress() : null,
+                transfer.getDestination());
+        String txid = firstNonBlank(
+                transfer.getBlockchainTxid(),
+                watch != null ? watch.getObservedTxid() : null);
+        OnchainAddressObservation observation = null;
+
+        if ((txid == null || txid.isBlank()) && watchedAddress != null && !watchedAddress.isBlank()) {
+            observation = detectAddressObservation(watchedAddress);
+            if (observation == null) {
+                return;
+            }
+            txid = observation.txid();
+        }
+
+        JsonNode transaction = blockchainClient.getRawTransaction(txid, true);
+        int confirmations = observation != null
+                ? observation.confirmations()
+                : confirmationsFromTransaction(transaction);
+
+        long amountSats = watch != null && watch.getObservedAmountSats() != null
+                ? watch.getObservedAmountSats()
+                : 0L;
+        if (amountSats <= 0L && observation != null) {
+            amountSats = observation.amountSats();
+        }
+        if (amountSats <= 0L && watchedAddress != null && !watchedAddress.isBlank()) {
+            amountSats = extractReceivedAmountSats(transaction, watchedAddress);
+        }
+        if (amountSats <= 0L && transfer.getAmountBtc() != null && transfer.getAmountBtc().signum() > 0) {
+            amountSats = externalPaymentsMath.btcToSats(transfer.getAmountBtc());
+        }
+        if (amountSats <= 0L) {
             return;
         }
 
-        long confirmedSats = blockchainClient.getConfirmedBalanceForAddress(address);
-        if (confirmedSats <= 0L) {
-            return;
-        }
-
-        BigDecimal grossAmount = transfer.getAmountBtc() != null && transfer.getAmountBtc().signum() > 0
-                ? transfer.getAmountBtc()
-                : externalPaymentsMath.satsToBtc(confirmedSats);
-
-        completeInboundTransfer(
+        ExternalTransferEntity updated = networkTransferLifecycleService.reconcileOnchainSettlement(
                 transfer,
-                grossAmount,
-                null,
-                "EXTERNAL_ONCHAIN_DEPOSIT",
-                transfer.getContext() != null && transfer.getContext().contains("Onramp")
-                        ? "Deposito onramp confirmado na rede Bitcoin."
-                        : "Deposito on-chain confirmado na rede Bitcoin.");
+                amountSats,
+                txid,
+                confirmations,
+                "INBOUND_MONITOR");
+        if (watch != null) {
+            blockchainAddressWatchService.markDetected(watch, txid, amountSats, confirmations);
+            if ("COMPLETED".equalsIgnoreCase(updated.getStatus())) {
+                blockchainAddressWatchService.markCompleted(watch, confirmations);
+            }
+        }
+    }
+
+    private OnchainAddressObservation detectAddressObservation(String address) {
+        JsonNode transactions = blockchainClient.getAddressTransactions(address);
+        if (transactions == null || !transactions.isArray()) {
+            return null;
+        }
+
+        OnchainAddressObservation best = null;
+        for (JsonNode transaction : transactions) {
+            String txid = asText(transaction, "txid");
+            if (txid == null || txid.isBlank()) {
+                continue;
+            }
+
+            JsonNode detailedTransaction = transaction;
+            long amountSats = extractReceivedAmountSats(detailedTransaction, address);
+            int confirmations = confirmationsFromTransaction(detailedTransaction);
+            if (amountSats <= 0L || !detailedTransaction.path("confirmations").isNumber()) {
+                JsonNode loaded = blockchainClient.getRawTransaction(txid, true);
+                if (loaded != null && !loaded.isNull() && !loaded.isMissingNode()) {
+                    detailedTransaction = loaded;
+                    amountSats = amountSats > 0L ? amountSats : extractReceivedAmountSats(detailedTransaction, address);
+                    confirmations = confirmationsFromTransaction(detailedTransaction);
+                }
+            }
+
+            if (amountSats <= 0L) {
+                continue;
+            }
+
+            OnchainAddressObservation candidate = new OnchainAddressObservation(txid, amountSats, confirmations);
+            if (best == null || candidate.confirmations() > best.confirmations()) {
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private long extractReceivedAmountSats(JsonNode transaction, String address) {
+        if (transaction == null || transaction.isNull() || transaction.isMissingNode()) {
+            return 0L;
+        }
+        JsonNode outputs = transaction.path("vout");
+        if (!outputs.isArray()) {
+            return 0L;
+        }
+
+        long total = 0L;
+        for (JsonNode output : outputs) {
+            if (addressMatches(output, address)) {
+                total += outputValueSats(output);
+            }
+        }
+        return total;
+    }
+
+    private boolean addressMatches(JsonNode output, String address) {
+        if (output == null || address == null || address.isBlank()) {
+            return false;
+        }
+
+        String direct = asText(output, "scriptpubkey_address");
+        if (address.equals(direct)) {
+            return true;
+        }
+
+        JsonNode scriptPubKey = output.path("scriptPubKey");
+        if (!scriptPubKey.isMissingNode() && !scriptPubKey.isNull()) {
+            if (address.equals(asText(scriptPubKey, "address"))) {
+                return true;
+            }
+            JsonNode addresses = scriptPubKey.path("addresses");
+            if (addresses.isArray()) {
+                for (JsonNode candidate : addresses) {
+                    if (address.equals(candidate.asText())) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private long outputValueSats(JsonNode output) {
+        JsonNode value = output.path("value");
+        if (value.isIntegralNumber()) {
+            return Math.max(0L, value.asLong());
+        }
+        if (value.isNumber()) {
+            return btcToSats(value.decimalValue());
+        }
+        JsonNode satoshis = output.path("satoshis");
+        if (satoshis.isIntegralNumber()) {
+            return Math.max(0L, satoshis.asLong());
+        }
+        return 0L;
+    }
+
+    private int confirmationsFromTransaction(JsonNode transaction) {
+        if (transaction == null || transaction.isNull() || transaction.isMissingNode()) {
+            return 0;
+        }
+        JsonNode confirmations = transaction.path("confirmations");
+        if (confirmations.isNumber()) {
+            return Math.max(0, confirmations.asInt());
+        }
+        JsonNode status = transaction.path("status");
+        if (status.path("confirmed").asBoolean(false)) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private long btcToSats(BigDecimal btc) {
+        if (btc == null || btc.signum() <= 0) {
+            return 0L;
+        }
+        return btc.multiply(new BigDecimal("100000000"))
+                .setScale(0, RoundingMode.DOWN)
+                .longValue();
+    }
+
+    private String asText(JsonNode node, String fieldName) {
+        JsonNode value = node.path(fieldName);
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            return null;
+        }
+        String text = value.asText();
+        return text != null && !text.isBlank() ? text : null;
     }
 
     private void inspectLightningInvoice(ExternalTransferEntity transfer) {
-        if (transfer.getExpiresAt() != null
-                && transfer.getExpiresAt().isBefore(LocalDateTime.now())
-                && !"CANCELLED".equalsIgnoreCase(transfer.getStatus())) {
-            transfer.setStatus("EXPIRED");
-            transfer.setContext(appendContext(transfer.getContext(), "Lightning invoice expired before settlement."));
-            externalTransfersPort.save(transfer);
+        if (!custodyGateway.isLive()) {
+            if (lightningProviderUnavailableLogged.compareAndSet(false, true)) {
+                log.warn("[InboundMonitor] Skipping Lightning invoice polling because no live custody provider is configured. "
+                        + "Pending Lightning transfers will only advance via a real provider callback/webhook after BTCPay/LND is enabled.");
+            }
             return;
         }
 
@@ -139,118 +290,27 @@ public class InboundTransferMonitorService {
                         transfer.getUserId(),
                         transfer.getWalletId(),
                         transfer.getWalletNameSnapshot(),
-                        transfer.getExternalReference(),
-                        transfer.getExternalReference(),
+                        transfer.getPaymentHash(),
+                        transfer.getInvoiceId() != null ? transfer.getInvoiceId() : transfer.getExternalReference(),
                         transfer.getInvoiceData()));
 
         String normalizedStatus = normalize(status.status());
-        if (isSettledStatus(normalizedStatus)) {
-            BigDecimal grossAmount = status.receivedSats() != null && status.receivedSats() > 0
-                    ? externalPaymentsMath.satsToBtc(status.receivedSats())
-                    : transfer.getAmountBtc();
-            if (grossAmount == null || grossAmount.signum() <= 0) {
-                log.warn("[InboundMonitor] Lightning transfer {} settled without amount. Skipping credit.", transfer.getId());
-                return;
-            }
-
-            completeInboundTransfer(
-                    transfer,
-                    grossAmount,
-                    transfer.getExternalReference(),
-                    "EXTERNAL_LIGHTNING_DEPOSIT",
-                    "Deposito Lightning liquidado com sucesso.");
-            return;
+        long receivedSats = status.receivedSats() != null
+                ? status.receivedSats()
+                : 0L;
+        if (receivedSats <= 0L
+                && isSettledStatus(normalizedStatus)
+                && transfer.getAmountBtc() != null
+                && transfer.getAmountBtc().signum() > 0) {
+            receivedSats = externalPaymentsMath.btcToSats(transfer.getAmountBtc());
         }
-
-        if (isCancelledStatus(normalizedStatus) && !"CANCELLED".equalsIgnoreCase(transfer.getStatus())) {
-            transfer.setStatus("CANCELLED");
-            transfer.setContext(appendContext(transfer.getContext(), "Lightning invoice cancelled by provider."));
-            externalTransfersPort.save(transfer);
-            return;
-        }
-
-        if (isExpiredStatus(normalizedStatus) && !"EXPIRED".equalsIgnoreCase(transfer.getStatus())) {
-            transfer.setStatus("EXPIRED");
-            transfer.setContext(appendContext(transfer.getContext(), "Lightning invoice expired on provider."));
-            externalTransfersPort.save(transfer);
-        }
-    }
-
-    private void completeInboundTransfer(
-            ExternalTransferEntity transfer,
-            BigDecimal grossAmount,
-            String blockchainReference,
-            String historyType,
-            String notificationBody) {
-        if (grossAmount == null || grossAmount.signum() <= 0) {
-            return;
-        }
-
-        BigDecimal normalizedGross = externalPaymentsMath.normalizeBtc(grossAmount);
-        BigDecimal depositFee = walletCardProfileService.calculateDepositFee(
-                transfer.getUserId(),
-                normalizedGross);
-        BigDecimal netCredit = externalPaymentsMath.normalizeBtc(normalizedGross.subtract(depositFee));
-        if (netCredit.signum() <= 0) {
-            log.warn("[InboundMonitor] Transfer {} net credit is non-positive after fee. Skipping.", transfer.getId());
-            return;
-        }
-
-        ledgerPort.updateBalance(
-                transfer.getWalletId(),
-                netCredit,
-                "INBOUND_TRANSFER:" + transfer.getId());
-        ledgerPort.recordHistory(new ExternalPaymentsLedgerPort.HistoryRecord(
-                transfer.getUserId(),
-                transfer.getProvider(),
-                transfer.getWalletNameSnapshot(),
-                historyType,
-                netCredit,
-                BigDecimal.ZERO,
-                "COMPLETED",
-                blockchainReference,
-                buildCompletionContext(transfer, normalizedGross, depositFee, netCredit),
-                LocalDateTime.now()));
-
-        transfer.setAmountBtc(normalizedGross);
-        transfer.setPlatformFeeBtc(depositFee);
-        transfer.setTotalDebitedBtc(normalizedGross);
-        transfer.setStatus("COMPLETED");
-        transfer.setContext(appendContext(
-                transfer.getContext(),
-                "Inbound transfer settled and credited. gross=" + normalizedGross.toPlainString()
-                        + " BTC | fee=" + depositFee.toPlainString()
-                        + " BTC | net=" + netCredit.toPlainString() + " BTC"));
-        externalTransfersPort.save(transfer);
-        accountActivationService.activateUser(transfer.getUserId());
-
-        notificationPort.notifyUser(
-                transfer.getUserId(),
-                UserNotificationPayload.create(
-                        NotificationKind.DEPOSIT_CONFIRMED,
-                        NotificationSeverity.SUCCESS,
-                        "Deposito confirmado",
-                        notificationBody + " Liquido creditado: " + netCredit.toPlainString() + " BTC.",
-                        "/deposits",
-                        "external_transfer",
-                        transfer.getId() != null ? transfer.getId().toString() : null,
-                        Map.of(
-                                "grossAmountBtc", normalizedGross.toPlainString(),
-                                "netAmountBtc", netCredit.toPlainString(),
-                                "network", normalize(transfer.getTransferType()))));
-    }
-
-    private String buildCompletionContext(
-            ExternalTransferEntity transfer,
-            BigDecimal grossAmount,
-            BigDecimal depositFee,
-            BigDecimal netCredit) {
-        String prefix = normalize(transfer.getTransferType()).equals("INBOUND_INVOICE")
-                ? "Lightning Deposit"
-                : "On-Chain Deposit";
-        return prefix + " | gross=" + grossAmount.toPlainString()
-                + " BTC | fee=" + depositFee.toPlainString()
-                + " BTC | net=" + netCredit.toPlainString() + " BTC";
+        networkTransferLifecycleService.reconcileLightningInvoice(
+                transfer,
+                normalizedStatus,
+                receivedSats,
+                transfer.getPaymentHash(),
+                status.rawPayload(),
+                "INBOUND_MONITOR");
     }
 
     private boolean isSettledStatus(String status) {
@@ -260,30 +320,22 @@ public class InboundTransferMonitorService {
                 || "CONFIRMED".equals(status);
     }
 
-    private boolean isCancelledStatus(String status) {
-        return "CANCELLED".equals(status)
-                || "CANCELED".equals(status);
-    }
-
-    private boolean isExpiredStatus(String status) {
-        return "EXPIRED".equals(status)
-                || "VOID".equals(status);
-    }
-
     private String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
-    private String appendContext(String currentContext, String suffix) {
-        if (suffix == null || suffix.isBlank()) {
-            return currentContext;
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
         }
-        if (currentContext == null || currentContext.isBlank()) {
-            return suffix;
-        }
-        if (currentContext.contains(suffix)) {
-            return currentContext;
-        }
-        return currentContext + " | " + suffix;
+        return null;
+    }
+
+    private record OnchainAddressObservation(
+            String txid,
+            long amountSats,
+            int confirmations) {
     }
 }

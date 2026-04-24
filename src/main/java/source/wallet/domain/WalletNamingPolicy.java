@@ -25,4 +25,8 @@ public final class WalletNamingPolicy {
         String trimmed = xpub.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
+
+    public static source.wallet.model.WalletMode normalizeWalletMode(String walletMode) {
+        return source.wallet.model.WalletMode.fromNullable(walletMode);
+    }
 }

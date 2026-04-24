@@ -29,7 +29,6 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
     private final TreasuryConfigPort treasuryConfigPort;
     private final int walletXpubGapLimit;
     private final int treasuryAuditScanRange;
-    private final boolean bitcoinMockMode;
 
     public CaptureReserveSnapshotInteractor(
             BlockchainReservePort blockchainReservePort,
@@ -37,20 +36,18 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
             WalletMonitoringPort walletMonitoringPort,
             TreasuryConfigPort treasuryConfigPort,
             @Value("${financial.audit.wallet-xpub-gap-limit:20}") int walletXpubGapLimit,
-            @Value("${financial.audit.treasury-xpub-scan-range:128}") int treasuryAuditScanRange,
-            @Value("${bitcoin.mock-mode:false}") boolean bitcoinMockMode) {
+            @Value("${financial.audit.treasury-xpub-scan-range:128}") int treasuryAuditScanRange) {
         this.blockchainReservePort = blockchainReservePort;
         this.lightningReservePort = lightningReservePort;
         this.walletMonitoringPort = walletMonitoringPort;
         this.treasuryConfigPort = treasuryConfigPort;
         this.walletXpubGapLimit = walletXpubGapLimit;
         this.treasuryAuditScanRange = treasuryAuditScanRange;
-        this.bitcoinMockMode = bitcoinMockMode;
     }
 
     @Override
     public ReserveSnapshot captureSnapshot() {
-        long hotWalletSats = bitcoinMockMode ? 0L : safeGet(blockchainReservePort::getHotWalletBalance, "hot wallet");
+        long hotWalletSats = safeGet(blockchainReservePort::getHotWalletBalance, "hot wallet");
         long lightningNodeSats = safeGet(lightningReservePort::getLightningNodeBalance, "lightning node");
 
         Set<String> seenXpubs = new HashSet<>();
@@ -84,7 +81,9 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
                         "treasury audit xpub"))
                 .orElse(0L);
 
-        long totalOnchainSats = hotWalletSats + walletMonitoredSats + treasuryXpubSats;
+        // Self-custody XPUB balances are audited separately but must not inflate
+        // the platform treasury reserve.
+        long totalOnchainSats = hotWalletSats + treasuryXpubSats;
         long totalAssetsSats = totalOnchainSats + lightningNodeSats;
 
         return new ReserveSnapshot(

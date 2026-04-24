@@ -16,6 +16,7 @@ import source.wallet.application.port.out.WalletCredentialsPort;
 import source.wallet.application.service.WalletResponseAssembler;
 import source.wallet.dto.WalletRequestDTO;
 import source.wallet.dto.WalletResponseDTO;
+import source.wallet.service.WalletCardLifecycleService;
 
 @Service
 @Transactional
@@ -25,6 +26,7 @@ public class CreateWalletInteractor implements CreateWalletUseCase {
     private final WalletCardProfilePort walletCardProfilePort;
     private final WalletCredentialsPort walletCredentialsPort;
     private final WalletResponseAssembler walletResponseAssembler;
+    private final WalletCardLifecycleService walletCardLifecycleService;
 
     public CreateWalletInteractor(
             LoadWalletUserHandler loadWalletUserHandler,
@@ -35,7 +37,8 @@ public class CreateWalletInteractor implements CreateWalletUseCase {
             CreateWalletLedgerHandler createWalletLedgerHandler,
             WalletCardProfilePort walletCardProfilePort,
             WalletCredentialsPort walletCredentialsPort,
-            WalletResponseAssembler walletResponseAssembler) {
+            WalletResponseAssembler walletResponseAssembler,
+            WalletCardLifecycleService walletCardLifecycleService) {
         loadWalletUserHandler
                 .linkWith(validateCreateWalletRequestHandler)
                 .linkWith(instantiateWalletHandler)
@@ -47,6 +50,7 @@ public class CreateWalletInteractor implements CreateWalletUseCase {
         this.walletCardProfilePort = walletCardProfilePort;
         this.walletCredentialsPort = walletCredentialsPort;
         this.walletResponseAssembler = walletResponseAssembler;
+        this.walletCardLifecycleService = walletCardLifecycleService;
     }
 
     @Override
@@ -57,6 +61,7 @@ public class CreateWalletInteractor implements CreateWalletUseCase {
         return walletResponseAssembler.toResponse(
                 context.getWallet(),
                 walletCardProfilePort.resolveProfile(userId),
+                walletCardLifecycleService.resolve(context.getWallet()),
                 walletCredentialsPort.buildWalletTotpUri(context.getWallet().getName(), context.getTotpSecret()));
     }
 }

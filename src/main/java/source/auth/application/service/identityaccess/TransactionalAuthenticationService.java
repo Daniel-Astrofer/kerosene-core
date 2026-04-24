@@ -4,17 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import source.auth.AuthExceptions;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.service.cripto.contracts.Hasher;
+import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
+import source.common.exception.ErrorCodes;
 import source.common.util.CryptoUtils;
 
 import java.util.Base64;
@@ -25,6 +28,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
     private static final Logger log = LoggerFactory.getLogger(TransactionalAuthenticationService.class);
 
     private final PasskeyService passkeyService;
+    private final PasskeyInventoryService passkeyInventoryService;
     private final PasskeyCredentialRepository passkeyCredentialRepository;
     private final TOTPVerifier totpVerifier;
     private final Hasher hasher;
@@ -34,6 +38,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
 
     public TransactionalAuthenticationService(
             PasskeyService passkeyService,
+            PasskeyInventoryService passkeyInventoryService,
             PasskeyCredentialRepository passkeyCredentialRepository,
             TOTPVerifier totpVerifier,
             @Qualifier("Argon2Hasher") Hasher hasher,
@@ -41,6 +46,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             PlatformTransactionSignerPort platformTransactionSigner,
             ObjectMapper objectMapper) {
         this.passkeyService = passkeyService;
+        this.passkeyInventoryService = passkeyInventoryService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.totpVerifier = totpVerifier;
         this.hasher = hasher;
@@ -193,14 +199,27 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                     .orElseThrow(() -> {
                         log.error("Passkey NOT FOUND for user {}: credentialId={} (decodes to hex: {})",
                                 user.getUsername(), credentialId, bytesToHex(credentialIdBytes));
-                        return new AuthExceptions.AuthValidationException(
-                            "Passkey credential not found for this user.");
+                        return new AuthExceptions.StructuredAuthException(
+                                "A passkey informada nao esta vinculada a este usuario.",
+                                HttpStatus.CONFLICT,
+                                ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                                passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                        user,
+                                        "A passkey enviada nao pertence a esta conta. Vincule uma nova passkey."));
                     });
 
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(user.getUsername());
             if (consumedChallenge == null) {
                 log.warn("Passkey challenge expired or not found for user {}", user.getUsername());
-                throw new AuthExceptions.AuthValidationException("Passkey challenge expired. Please retry.");
+                String renewedChallenge = passkeyService.generateChallenge(user.getUsername());
+                throw new AuthExceptions.StructuredAuthException(
+                        "PASSKEY_CHALLENGE_REQUIRED:" + renewedChallenge,
+                        HttpStatus.PRECONDITION_REQUIRED,
+                        ErrorCodes.AUTH_PASSKEY_CHALLENGE,
+                        passkeyInventoryService.buildChallengeRequired(
+                                user,
+                                renewedChallenge,
+                                "O challenge da passkey expirou. Assine um novo challenge para continuar."));
             }
 
             boolean passkeyValid = passkeyService.verifySignature(
@@ -211,8 +230,32 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                     authData,
                     clientDataJSON);
             if (!passkeyValid) {
-                throw new AuthExceptions.AuthValidationException("Invalid passkey signature.");
+                String renewedChallenge = passkeyService.generateChallenge(user.getUsername());
+                throw new AuthExceptions.StructuredAuthException(
+                        "PASSKEY_CHALLENGE_REQUIRED:" + renewedChallenge,
+                        HttpStatus.PRECONDITION_REQUIRED,
+                        ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED,
+                        passkeyInventoryService.buildChallengeRequired(
+                                user,
+                                renewedChallenge,
+                                "A assertiva da passkey foi rejeitada. Gere uma nova assinatura ou vincule outra passkey."));
             }
+
+            long newSignatureCount = passkeyService.extractSignatureCount(authData);
+            if (newSignatureCount <= credential.getSignatureCount()) {
+                log.error("Passkey signature counter replay detected for user {}. stored={} received={}",
+                        user.getUsername(), credential.getSignatureCount(), newSignatureCount);
+                throw new AuthExceptions.StructuredAuthException(
+                        "O contador do autenticador nao avancou; a passkey foi rejeitada por seguranca.",
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.AUTH_PASSKEY_REPLAY,
+                        passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                user,
+                                "Esta passkey retornou um contador invalido. Vincule outra passkey ou refaca o login."));
+            }
+
+            credential.setSignatureCount(newSignatureCount);
+            passkeyCredentialRepository.save(credential);
 
             log.info("Transaction passkey factor verified for {}", user.getUsername());
             return true;
@@ -220,7 +263,13 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             throw exception;
         } catch (Exception exception) {
             log.error("Passkey verification failed during transactional authorization", exception);
-            throw new AuthExceptions.AuthValidationException("Passkey validation failed: " + exception.getMessage());
+            throw new AuthExceptions.StructuredAuthException(
+                    "Falha ao validar a passkey desta operacao.",
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED,
+                    passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                            user,
+                            "Nao foi possivel validar a passkey enviada. Vincule outra passkey se o problema persistir."));
         }
     }
 
@@ -274,7 +323,14 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             return;
         }
         String challenge = passkeyService.generateChallenge(user.getUsername());
-        throw new AuthExceptions.AuthValidationException("PASSKEY_CHALLENGE_REQUIRED:" + challenge);
+        throw new AuthExceptions.StructuredAuthException(
+                "PASSKEY_CHALLENGE_REQUIRED:" + challenge,
+                HttpStatus.PRECONDITION_REQUIRED,
+                ErrorCodes.AUTH_PASSKEY_CHALLENGE,
+                passkeyInventoryService.buildChallengeRequired(
+                        user,
+                        challenge,
+                        "Uma passkey compativel com este login e obrigatoria para concluir a operacao."));
     }
 
     private String requiredText(JsonNode node, String fieldName) {

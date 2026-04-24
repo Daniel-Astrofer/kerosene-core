@@ -58,10 +58,16 @@ public class SendOnchainPaymentUseCase {
         externalPaymentsMath.validatePositiveAmount(request.amount(), "On-chain payment amount must be positive.");
         if (!externalPaymentsMath.isValidBitcoinAddress(request.toAddress())) {
             throw new ExternalPaymentsExceptions.InvalidNetworkAddress(
-                    "The destination Bitcoin address is invalid or unsupported.");
+                    "The destination Bitcoin address is invalid for the configured "
+                            + externalPaymentsMath.configuredBitcoinNetwork()
+                            + " network.");
         }
 
         WalletEntity wallet = walletPort.requireWallet(userId, request.fromWalletName());
+        if (wallet.isSelfCustodyMode()) {
+            throw new IllegalStateException(
+                    "Self-custody wallets are monitored only. On-chain spends must be signed outside the platform.");
+        }
         ExternalPaymentsAuthorizationPort.AuthorizationResult authorization = authorizationPort.authorizeOutboundTransfer(
                 userId,
                 wallet,
@@ -69,10 +75,10 @@ public class SendOnchainPaymentUseCase {
                 request.passkeyAssertionResponseJSON(),
                 request.confirmationPassphrase());
 
-        BigDecimal networkFee = feePolicy.estimateOnchainNetworkFee();
+        BigDecimal estimatedNetworkFee = feePolicy.estimateOnchainNetworkFee();
         BigDecimal platformFee = feePolicy.calculateWithdrawalFee(userId, request.amount());
         BigDecimal totalDebited = externalPaymentsMath.normalizeBtc(
-                request.amount().add(networkFee).add(platformFee));
+                request.amount().add(estimatedNetworkFee).add(platformFee));
 
         ledgerPort.ensureBalance(wallet.getId(), totalDebited);
 
@@ -86,18 +92,34 @@ public class SendOnchainPaymentUseCase {
                         wallet.getName(),
                         request.toAddress(),
                         externalPaymentsMath.btcToSats(request.amount()),
-                        request.description(),
-                        authorization.platformSignature()));
+                request.description(),
+                authorization.platformSignature()));
 
+        BigDecimal networkFee = payment.feeSats() > 0
+                ? externalPaymentsMath.satsToBtc(payment.feeSats())
+                : estimatedNetworkFee;
+        if (networkFee.compareTo(estimatedNetworkFee) < 0) {
+            BigDecimal feeRefund = externalPaymentsMath.normalizeBtc(estimatedNetworkFee.subtract(networkFee));
+            ledgerPort.updateBalance(wallet.getId(), feeRefund, "ONCHAIN_NETWORK_FEE_REFUND");
+            totalDebited = totalDebited.subtract(feeRefund);
+        } else if (networkFee.compareTo(estimatedNetworkFee) > 0) {
+            BigDecimal additionalFee = externalPaymentsMath.normalizeBtc(networkFee.subtract(estimatedNetworkFee));
+            ledgerPort.ensureBalance(wallet.getId(), additionalFee);
+            ledgerPort.updateBalance(wallet.getId(), additionalFee.negate(), "ONCHAIN_NETWORK_FEE_ADJUSTMENT");
+            totalDebited = totalDebited.add(additionalFee);
+        }
         String externalReference = externalPaymentsMath.firstNonBlank(payment.txid(), payment.providerReference());
         ExternalTransferEntity transfer = externalTransfersPort.save(externalTransferFactory.newTransfer(
                 wallet,
                 "ONCHAIN",
                 "OUTBOUND_PAYMENT",
-                externalPaymentsMath.firstNonBlank(payment.status(), "PENDING"),
+                externalPaymentsMath.firstNonBlank(payment.status(), "MEMPOOL"),
                 resolveProviderName(),
                 request.toAddress(),
                 externalReference,
+                null,
+                payment.txid(),
+                null,
                 null,
                 request.amount(),
                 networkFee,
@@ -105,6 +127,10 @@ public class SendOnchainPaymentUseCase {
                 totalDebited,
                 null,
                 request.description()));
+        transfer.setConfirmations(0);
+        transfer.setDetectedAt(LocalDateTime.now());
+        transfer.setProviderPayload(payment.rawPayload());
+        transfer = externalTransfersPort.save(transfer);
 
         ledgerPort.recordPlatformFee(transfer.getId(), userId, totalDebited, platformFee);
         ledgerPort.recordHistory(new ExternalPaymentsLedgerPort.HistoryRecord(
@@ -115,7 +141,7 @@ public class SendOnchainPaymentUseCase {
                 request.amount(),
                 networkFee,
                 transfer.getStatus(),
-                externalReference,
+                payment.txid(),
                 request.description(),
                 LocalDateTime.now()));
         notificationPort.notifyUser(

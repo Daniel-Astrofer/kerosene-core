@@ -140,7 +140,7 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
         if (!constantTimePaddingEnabled) {
             return;
         }
-        if (!(path.contains("/auth/") || path.contains("/voucher/") || path.contains("/ledger/"))) {
+        if (!(path.contains("/auth/") || path.contains("/ledger/"))) {
             return;
         }
 

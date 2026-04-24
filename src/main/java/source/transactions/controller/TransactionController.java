@@ -7,15 +7,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import source.auth.application.service.account.AccountActivationService;
 import source.transactions.dto.*;
-import source.transactions.service.MockDepositCreditService;
 import source.transactions.service.PaymentLinkService;
 import source.transactions.service.TransactionService;
 import source.transactions.service.ExternalPaymentsService;
 import source.common.dto.ApiResponse;
+import source.transactions.dto.OnchainAddressAllocationDTO;
 import source.transactions.dto.OnchainAddressRequestDTO;
-import source.transactions.dto.WalletNetworkAddressDTO;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -37,22 +36,19 @@ public class TransactionController {
 
         private final TransactionService service;
         private final PaymentLinkService paymentLinkService;
-        private final MockDepositCreditService mockDepositCreditService;
         private final ExternalPaymentsService externalPaymentsService;
-        private final WalletService walletService;
+        private final WalletLookupPort walletLookupPort;
         private final AccountActivationService accountActivationService;
 
         public TransactionController(TransactionService service,
                         PaymentLinkService paymentLinkService,
-                        MockDepositCreditService mockDepositCreditService,
                         ExternalPaymentsService externalPaymentsService,
-                        WalletService walletService,
+                        WalletLookupPort walletLookupPort,
                         AccountActivationService accountActivationService) {
                 this.service = service;
                 this.paymentLinkService = paymentLinkService;
-                this.mockDepositCreditService = mockDepositCreditService;
                 this.externalPaymentsService = externalPaymentsService;
-                this.walletService = walletService;
+                this.walletLookupPort = walletLookupPort;
                 this.accountActivationService = accountActivationService;
         }
 
@@ -67,21 +63,17 @@ public class TransactionController {
         @GetMapping("/deposit-address")
         public ResponseEntity<ApiResponse<String>> getDepositAddress(HttpServletRequest request, Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
-                mockDepositCreditService.creditOnDepositAddressRequest(userId);
-                WalletEntity wallet = walletService.findPrimaryWallet(userId);
+                WalletEntity wallet = walletLookupPort.findPrimaryWallet(userId);
                 if (wallet == null) {
                         throw new IllegalStateException("User has no wallet configured to receive on-chain deposits.");
                 }
 
-                WalletNetworkAddressDTO allocation = externalPaymentsService.issueOnchainAddress(
+                OnchainAddressAllocationDTO allocation = externalPaymentsService.issueOnchainAddress(
                                 userId,
                                 new OnchainAddressRequestDTO(wallet.getName(), true));
 
-                String message = mockDepositCreditService.isEnabled()
-                                ? "Dedicated custodial deposit address issued successfully. Mock local deposit credited with 100 BTC."
-                                : "Dedicated custodial deposit address issued successfully. Send only Bitcoin (BTC) to this address.";
                 return ResponseEntity.ok(ApiResponse.success(
-                                message,
+                                "Dedicated deposit address issued successfully. Send only Bitcoin (BTC) to this address.",
                                 allocation.onchainAddress()));
         }
 
@@ -170,8 +162,7 @@ public class TransactionController {
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 accountActivationService.assertInboundEnabled(userId);
-                PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, req.getAmount(),
-                                req.getDescription());
+                PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, req);
                 return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse
                                 .success("Your new payment link has been successfully generated and is ready to be shared.",
                                                 link));
@@ -236,6 +227,28 @@ public class TransactionController {
                 return ResponseEntity
                                 .ok(ApiResponse.success("The payment link has been successfully marked as completed.",
                                                 completed));
+        }
+
+        @PostMapping("/payment-link/{linkId}/cancel")
+        public ResponseEntity<ApiResponse<PaymentLinkDTO>> cancelPayment(
+                        @PathVariable String linkId,
+                        @RequestBody(required = false) CancelPaymentLinkRequest request,
+                        Authentication auth) {
+                Long userId = getAuthenticatedUserId(auth);
+                PaymentLinkDTO link = paymentLinkService.getPaymentLink(linkId);
+                if (link == null || !link.getUserId().equals(userId)) {
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                        .body(ApiResponse.error(
+                                                        "The specified payment link could not be found or you do not have permission to cancel it.",
+                                                        "ERR_PAYMENT_LINK_NOT_FOUND"));
+                }
+
+                PaymentLinkDTO cancelled = paymentLinkService.cancelPayment(
+                                linkId,
+                                request != null ? request.getReason() : null);
+                return ResponseEntity.ok(ApiResponse.success(
+                                "The payment link has been cancelled successfully.",
+                                cancelled));
         }
 
         /**

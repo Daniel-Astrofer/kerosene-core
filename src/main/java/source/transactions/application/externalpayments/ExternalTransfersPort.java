@@ -12,7 +12,15 @@ public interface ExternalTransfersPort {
 
     List<ExternalTransferEntity> listByUserId(Long userId);
 
+    Optional<ExternalTransferEntity> findById(UUID transferId);
+
     Optional<ExternalTransferEntity> findByIdAndUserId(UUID transferId, Long userId);
 
+    Optional<ExternalTransferEntity> findByInvoiceId(String invoiceId);
+
+    Optional<ExternalTransferEntity> findByBlockchainTxid(String blockchainTxid);
+
     List<ExternalTransferEntity> findInboundTransfersForMonitoring(int limit);
+
+    List<ExternalTransferEntity> findOnchainTransfersForMonitoring(int limit);
 }

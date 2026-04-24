@@ -87,6 +87,30 @@ class EsploraBitcoinClientTest {
     }
 
     @Test
+    void getConfirmedBalanceForAddressSkipsRequestsForAddressOnAnotherNetwork() {
+        String testnetAddress = new AddressDerivationService("testnet", "kerosene-test-salt")
+                .deriveAddress(42L, "passphrase-hash");
+
+        EsploraBitcoinClient client = newClient("", "", 128);
+
+        assertEquals(0L, client.getConfirmedBalanceForAddress(testnetAddress));
+        assertEquals(0, requests.size());
+    }
+
+    @Test
+    void getConfirmedBalanceForAddressBacksOffAfterRateLimit() {
+        String address = new AddressDerivationService("mainnet", "kerosene-test-salt")
+                .deriveAddress(42L, "passphrase-hash");
+        responses.put("GET /api/address/" + address, StubResponse.text(429, "Too Many Requests"));
+
+        EsploraBitcoinClient client = newClient("", "", 128);
+
+        assertEquals(0L, client.getConfirmedBalanceForAddress(address));
+        assertEquals(0L, client.getConfirmedBalanceForAddress(address));
+        assertEquals(1, requests.size());
+    }
+
+    @Test
     void getConfirmedBalanceForXpubSumsExternalAndChangeBranches() throws Exception {
         String xpub = createXpub();
         AddressDerivationService derivationService = new AddressDerivationService("mainnet", "kerosene-test-salt");

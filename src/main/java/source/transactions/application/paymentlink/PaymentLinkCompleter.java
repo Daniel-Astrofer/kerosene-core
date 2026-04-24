@@ -1,6 +1,7 @@
 package source.transactions.application.paymentlink;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.exception.PaymentLinkExceptions;
 
@@ -15,6 +16,7 @@ public class PaymentLinkCompleter {
         this.paymentLinkStore = paymentLinkStore;
     }
 
+    @Transactional
     public PaymentLinkDTO completePayment(String linkId) {
         PaymentLinkDTO paymentLink = paymentLinkStore.findById(linkId)
                 .orElseThrow(() -> new PaymentLinkExceptions.PaymentLinkNotFound("Payment link nao encontrado"));

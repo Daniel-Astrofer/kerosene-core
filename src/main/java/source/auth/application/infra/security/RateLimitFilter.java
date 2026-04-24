@@ -145,7 +145,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublicRateLimitedRoute(String uri) {
-        return uri != null && (uri.startsWith("/auth/") || "/auth".equals(uri) || uri.startsWith("/voucher/"));
+        return uri != null && (uri.startsWith("/auth/") || "/auth".equals(uri));
     }
 
     private String stableHash(String input) {

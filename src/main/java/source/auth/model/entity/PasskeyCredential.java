@@ -26,6 +26,12 @@ public class PasskeyCredential {
     @Column(name = "device_name")
     private String deviceName;
 
+    @Column(name = "relying_party_id")
+    private String relyingPartyId;
+
+    @Column(name = "origin_host")
+    private String originHost;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private UserDataBase user;
@@ -79,6 +85,22 @@ public class PasskeyCredential {
 
     public void setDeviceName(String deviceName) {
         this.deviceName = deviceName;
+    }
+
+    public String getRelyingPartyId() {
+        return relyingPartyId;
+    }
+
+    public void setRelyingPartyId(String relyingPartyId) {
+        this.relyingPartyId = relyingPartyId;
+    }
+
+    public String getOriginHost() {
+        return originHost;
+    }
+
+    public void setOriginHost(String originHost) {
+        this.originHost = originHost;
     }
 
     public UserDataBase getUser() {

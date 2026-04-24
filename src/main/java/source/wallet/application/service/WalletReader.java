@@ -1,6 +1,7 @@
 package source.wallet.application.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import source.wallet.application.port.out.WalletPersistencePort;
 import source.wallet.domain.WalletNamingPolicy;
 import source.wallet.model.WalletEntity;
@@ -9,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class WalletReader {
 
     private final WalletPersistencePort walletPersistencePort;

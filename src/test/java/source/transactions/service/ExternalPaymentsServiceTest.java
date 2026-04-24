@@ -88,7 +88,7 @@ class ExternalPaymentsServiceTest {
 
     @BeforeEach
     void setUp() {
-        ExternalPaymentsMath externalPaymentsMath = new ExternalPaymentsMath();
+        ExternalPaymentsMath externalPaymentsMath = new ExternalPaymentsMath("testnet");
         ExternalPaymentsFeePolicy externalPaymentsFeePolicy = new ExternalPaymentsFeePolicy(
                 mempoolClient,
                 walletCardProfileService,

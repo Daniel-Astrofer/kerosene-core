@@ -27,11 +27,35 @@ public class HttpClientConfig {
                 .build();
     }
 
+    @Bean("btcpayRestTemplate")
+    public RestTemplate btcpayRestTemplate(RestTemplateBuilder builder) {
+        return builder
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(15))
+                .build();
+    }
+
+    @Bean("bitcoindRestTemplate")
+    public RestTemplate bitcoindRestTemplate(RestTemplateBuilder builder) {
+        return builder
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(20))
+                .build();
+    }
+
     @Bean("lightningRestTemplate")
     public RestTemplate lightningRestTemplate(RestTemplateBuilder builder) {
         return builder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(10))
+                .build();
+    }
+
+    @Bean("lndRestTemplate")
+    public RestTemplate lndRestTemplate(RestTemplateBuilder builder) {
+        return builder
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(20))
                 .build();
     }
 

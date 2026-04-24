@@ -10,6 +10,7 @@ import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.dto.LightningPaymentRequestDTO;
 import source.transactions.infra.CustodyGateway;
 import source.transactions.model.ExternalTransferEntity;
+import source.treasury.service.TreasuryService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ public class PayLightningPaymentUseCase {
     private final ExternalPaymentsFeePolicy feePolicy;
     private final ExternalPaymentsMath externalPaymentsMath;
     private final ExternalTransferFactory externalTransferFactory;
+    private final TreasuryService treasuryService;
     private final String localAddressProviderName;
 
     public PayLightningPaymentUseCase(
@@ -40,6 +42,7 @@ public class PayLightningPaymentUseCase {
             ExternalPaymentsFeePolicy feePolicy,
             ExternalPaymentsMath externalPaymentsMath,
             ExternalTransferFactory externalTransferFactory,
+            TreasuryService treasuryService,
             @Value("${transactions.local-address-provider-name:KEROSENE_LOCAL}") String localAddressProviderName) {
         this.walletPort = walletPort;
         this.ledgerPort = ledgerPort;
@@ -50,6 +53,7 @@ public class PayLightningPaymentUseCase {
         this.feePolicy = feePolicy;
         this.externalPaymentsMath = externalPaymentsMath;
         this.externalTransferFactory = externalTransferFactory;
+        this.treasuryService = treasuryService;
         this.localAddressProviderName = localAddressProviderName;
     }
 
@@ -59,8 +63,13 @@ public class PayLightningPaymentUseCase {
         if (request.paymentRequest() == null || request.paymentRequest().isBlank()) {
             throw new IllegalArgumentException("A valid Lightning invoice is required.");
         }
+        treasuryService.assertLightningOutboundAvailable(externalPaymentsMath.btcToSats(request.amount()));
 
         WalletEntity wallet = walletPort.requireWallet(userId, request.fromWalletName());
+        if (wallet.isSelfCustodyMode()) {
+            throw new IllegalStateException(
+                    "Self-custody wallets cannot originate custodial Lightning payments.");
+        }
         ExternalPaymentsAuthorizationPort.AuthorizationResult authorization = authorizationPort.authorizeOutboundTransfer(
                 userId,
                 wallet,
@@ -109,6 +118,9 @@ public class PayLightningPaymentUseCase {
                 externalPaymentsMath.firstNonBlank(payment.status(), "SETTLED"),
                 resolveProviderName(),
                 request.paymentRequest(),
+                payment.providerReference(),
+                null,
+                payment.txid(),
                 externalReference,
                 request.paymentRequest(),
                 request.amount(),
@@ -117,6 +129,12 @@ public class PayLightningPaymentUseCase {
                 reservedTotal,
                 null,
                 request.description()));
+        transfer.setDetectedAt(LocalDateTime.now());
+        transfer.setProviderPayload(payment.rawPayload());
+        if ("SETTLED".equalsIgnoreCase(transfer.getStatus()) || "COMPLETED".equalsIgnoreCase(transfer.getStatus())) {
+            transfer.setSettledAt(LocalDateTime.now());
+        }
+        transfer = externalTransfersPort.save(transfer);
 
         ledgerPort.recordPlatformFee(transfer.getId(), userId, reservedTotal, platformFee);
         ledgerPort.recordHistory(new ExternalPaymentsLedgerPort.HistoryRecord(

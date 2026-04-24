@@ -14,7 +14,7 @@ class AccountSecurityProfileDTOTest {
         UserDataBase user = new UserDataBase();
         user.setAccountSecurity(AccountSecurityType.STANDARD);
 
-        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true);
+        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true, null, null);
 
         assertTrue(profile.requiredFactors().contains("PASSKEY"));
         assertFalse(profile.requiredFactors().contains("TOTP"));
@@ -26,7 +26,7 @@ class AccountSecurityProfileDTOTest {
         user.setAccountSecurity(AccountSecurityType.MULTISIG_2FA);
         user.setMultisigThreshold(2);
 
-        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true);
+        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true, null, null);
 
         assertTrue(profile.requiredFactors().contains("PASSPHRASE"));
         assertTrue(profile.requiredFactors().contains("TOTP"));
@@ -39,7 +39,7 @@ class AccountSecurityProfileDTOTest {
         user.setAccountSecurity(AccountSecurityType.MULTISIG_2FA);
         user.setMultisigThreshold(3);
 
-        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true);
+        AccountSecurityProfileDTO profile = AccountSecurityProfileDTO.fromUser(user, true, null, null);
 
         assertTrue(profile.requiredFactors().contains("PASSKEY"));
     }

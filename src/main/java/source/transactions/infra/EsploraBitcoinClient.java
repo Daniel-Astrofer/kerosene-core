@@ -3,10 +3,16 @@ package source.transactions.infra;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.bitcoinj.core.Address;
+import org.bitcoinj.core.AddressFormatException;
+import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.params.TestNet3Params;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,14 +21,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import source.common.service.AddressDerivationService;
+import source.transactions.service.BitcoinNodeService;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -31,24 +36,31 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * require an API key by default.
  */
 @Component
+@ConditionalOnMissingBean(BitcoinNodeService.class)
 public class EsploraBitcoinClient implements BlockchainClient {
 
     private static final Logger log = LoggerFactory.getLogger(EsploraBitcoinClient.class);
-    private static final double MOCK_HOT_WALLET_BTC = 1.5d;
+    private static final long REMOTE_RATE_LIMIT_BACKOFF_MS = 5 * 60 * 1000L;
 
     private final String esploraBaseUrl;
+    private final String bitcoinNetwork;
     private final String hotWalletAddress;
     private final String hotWalletXpub;
     private final int hotWalletXpubScanRange;
     private final boolean mockMode;
+    private final NetworkParameters networkParameters;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final AddressDerivationService addressDerivationService;
     private final AtomicBoolean missingHotWalletWarningLogged = new AtomicBoolean(false);
+    private final AtomicBoolean remoteRateLimitWarningLogged = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicLong remoteLookupPausedUntilEpochMillis =
+            new java.util.concurrent.atomic.AtomicLong(0L);
+    private final Set<String> skippedInvalidAddresses = ConcurrentHashMap.newKeySet();
 
     public EsploraBitcoinClient(
             @Value("${bitcoin.esplora.base-url:}") String configuredBaseUrl,
-            @Value("${bitcoin.network:mainnet}") String network,
+            @Value("${bitcoin.network:testnet}") String network,
             @Value("${bitcoin.hot-wallet.address:}") String hotWalletAddress,
             @Value("${bitcoin.hot-wallet.xpub:}") String hotWalletXpub,
             @Value("${bitcoin.hot-wallet.xpub-scan-range:128}") int hotWalletXpubScanRange,
@@ -56,17 +68,19 @@ public class EsploraBitcoinClient implements BlockchainClient {
             @Qualifier("esploraRestTemplate") RestTemplate restTemplate,
             ObjectMapper objectMapper,
             AddressDerivationService addressDerivationService) {
+        this.bitcoinNetwork = normalizeNetwork(network);
         this.esploraBaseUrl = sanitizeBaseUrl(resolveBaseUrl(configuredBaseUrl, network));
         this.hotWalletAddress = normalize(hotWalletAddress);
         this.hotWalletXpub = normalize(hotWalletXpub);
         this.hotWalletXpubScanRange = Math.max(1, hotWalletXpubScanRange);
         this.mockMode = mockMode;
+        this.networkParameters = resolveNetworkParameters(this.bitcoinNetwork);
         this.addressDerivationService = addressDerivationService;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
 
         if (mockMode) {
-            log.info("[EsploraBitcoinClient] bitcoin.mock-mode=true. Using deterministic local responses.");
+            log.warn("[EsploraBitcoinClient] bitcoin.mock-mode=true was requested, but mock responses are disabled. Using real Esplora lookups against {}.", this.esploraBaseUrl);
         } else {
             log.info("[EsploraBitcoinClient] Using Esplora base URL {}", this.esploraBaseUrl);
         }
@@ -102,10 +116,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
 
     @Override
     public long getHotWalletBalance() {
-        if (mockMode) {
-            return btcToSats(MOCK_HOT_WALLET_BTC);
-        }
-
         if (hotWalletXpub != null) {
             return getConfirmedBalanceForXpub(hotWalletXpub, hotWalletXpubScanRange, true);
         }
@@ -122,10 +132,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
 
     @Override
     public FeeRates estimateSmartFee(int fastBlocks, int halfHourBlocks, int hourBlocks) {
-        if (mockMode) {
-            return new FeeRates(50L, 25L, 10L);
-        }
-
         try {
             JsonNode feeEstimates = readJson(getUrl("/fee-estimates"));
             return new FeeRates(
@@ -143,13 +149,19 @@ public class EsploraBitcoinClient implements BlockchainClient {
         if (address == null || address.isBlank()) {
             return objectMapper.createArrayNode();
         }
-        if (mockMode) {
+        if (shouldSkipAddressLookup(address)) {
+            return objectMapper.createArrayNode();
+        }
+        if (isRemoteLookupPaused()) {
             return objectMapper.createArrayNode();
         }
 
         try {
             JsonNode transactions = readJson(getUrl("/address/" + address + "/txs"));
             return transactions != null && transactions.isArray() ? transactions : objectMapper.createArrayNode();
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+            pauseRemoteLookupsAfterRateLimit(ex);
+            return objectMapper.createArrayNode();
         } catch (HttpClientErrorException.NotFound ex) {
             return objectMapper.createArrayNode();
         } catch (Exception ex) {
@@ -163,7 +175,10 @@ public class EsploraBitcoinClient implements BlockchainClient {
         if (address == null || address.isBlank()) {
             return 0L;
         }
-        if (mockMode) {
+        if (shouldSkipAddressLookup(address)) {
+            return 0L;
+        }
+        if (isRemoteLookupPaused()) {
             return 0L;
         }
 
@@ -173,6 +188,9 @@ public class EsploraBitcoinClient implements BlockchainClient {
             long funded = asLong(chainStats.path("funded_txo_sum"));
             long spent = asLong(chainStats.path("spent_txo_sum"));
             return Math.max(0L, funded - spent);
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+            pauseRemoteLookupsAfterRateLimit(ex);
+            return 0L;
         } catch (HttpClientErrorException.NotFound ex) {
             return 0L;
         } catch (Exception ex) {
@@ -184,9 +202,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
     @Override
     public long getConfirmedBalanceForXpub(String xpub, int range, boolean includeChangeBranch) {
         if (xpub == null || xpub.isBlank()) {
-            return 0L;
-        }
-        if (mockMode) {
             return 0L;
         }
 
@@ -206,12 +221,11 @@ public class EsploraBitcoinClient implements BlockchainClient {
         if (address == null || address.isBlank()) {
             return java.util.List.of();
         }
-        if (mockMode) {
-            return java.util.List.of(new AddressUtxo(
-                    deterministicTxId("mock-utxo:" + address),
-                    0,
-                    btcToSats(MOCK_HOT_WALLET_BTC),
-                    null));
+        if (shouldSkipAddressLookup(address)) {
+            return java.util.List.of();
+        }
+        if (isRemoteLookupPaused()) {
+            return java.util.List.of();
         }
 
         try {
@@ -230,6 +244,9 @@ public class EsploraBitcoinClient implements BlockchainClient {
                 }
             }
             return results;
+        } catch (HttpClientErrorException.TooManyRequests ex) {
+            pauseRemoteLookupsAfterRateLimit(ex);
+            return java.util.List.of();
         } catch (HttpClientErrorException.NotFound ex) {
             return java.util.List.of();
         } catch (Exception ex) {
@@ -242,9 +259,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
     public String sendRawTransaction(String hex) {
         if (hex == null || hex.isBlank()) {
             return null;
-        }
-        if (mockMode) {
-            return deterministicTxId(hex);
         }
 
         try {
@@ -269,9 +283,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
     public JsonNode getRawTransaction(String txid, boolean verbose) {
         if (txid == null || txid.isBlank()) {
             return null;
-        }
-        if (mockMode) {
-            return executeMockGetRawTransaction(txid, verbose);
         }
 
         try {
@@ -304,17 +315,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
             log.warn("[EsploraBitcoinClient] Transaction lookup failed for {}: {}", txid, ex.getMessage());
             return null;
         }
-    }
-
-    private JsonNode executeMockGetRawTransaction(String txid, boolean verbose) {
-        if (!verbose) {
-            return objectMapper.getNodeFactory().textNode("00");
-        }
-
-        ObjectNode result = objectMapper.createObjectNode();
-        result.put("txid", txid);
-        result.put("confirmations", 1);
-        return result;
     }
 
     private JsonNode readJson(String url) throws Exception {
@@ -430,24 +430,59 @@ public class EsploraBitcoinClient implements BlockchainClient {
             return explicit;
         }
 
-        String normalizedNetwork = normalize(network);
-        if (normalizedNetwork == null) {
-            return "https://blockstream.info/api";
-        }
-
-        return switch (normalizedNetwork.toLowerCase(Locale.ROOT)) {
+        return switch (normalizeNetwork(network)) {
             case "testnet" -> "https://blockstream.info/testnet/api";
             case "signet" -> "https://blockstream.info/signet/api";
             default -> "https://blockstream.info/api";
         };
     }
 
-    private String deterministicTxId(String payload) {
+    private boolean shouldSkipAddressLookup(String address) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available for mock txid generation", e);
+            Address.fromString(networkParameters, address);
+            return false;
+        } catch (AddressFormatException ex) {
+            if (skippedInvalidAddresses.add(address)) {
+                log.debug(
+                        "[EsploraBitcoinClient] Skipping address {} because it is incompatible with bitcoin.network={}",
+                        address,
+                        bitcoinNetwork);
+            }
+            return true;
         }
+    }
+
+    private boolean isRemoteLookupPaused() {
+        long pausedUntil = remoteLookupPausedUntilEpochMillis.get();
+        long now = System.currentTimeMillis();
+        if (pausedUntil > now) {
+            return true;
+        }
+
+        remoteRateLimitWarningLogged.set(false);
+        return false;
+    }
+
+    private void pauseRemoteLookupsAfterRateLimit(HttpClientErrorException.TooManyRequests ex) {
+        long now = System.currentTimeMillis();
+        long pausedUntil = now + REMOTE_RATE_LIMIT_BACKOFF_MS;
+        remoteLookupPausedUntilEpochMillis.updateAndGet(current -> Math.max(current, pausedUntil));
+
+        if (remoteRateLimitWarningLogged.compareAndSet(false, true)) {
+            log.warn(
+                    "[EsploraBitcoinClient] Esplora returned HTTP 429. Pausing remote address lookups for {} seconds. Configure a private Esplora endpoint or API-capable provider for production.",
+                    REMOTE_RATE_LIMIT_BACKOFF_MS / 1000L);
+        } else {
+            log.debug("[EsploraBitcoinClient] Esplora lookup skipped during HTTP 429 backoff: {}", ex.getStatusCode());
+        }
+    }
+
+    private String normalizeNetwork(String network) {
+        String normalized = normalize(network);
+        return normalized == null ? "testnet" : normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private NetworkParameters resolveNetworkParameters(String network) {
+        return "mainnet".equals(network) ? MainNetParams.get() : TestNet3Params.get();
     }
 }

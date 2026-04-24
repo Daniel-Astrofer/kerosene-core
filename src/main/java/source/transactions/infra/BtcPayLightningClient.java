@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import source.transactions.service.BitcoinNodeService;
 
 /**
  * BTCPay Server / Lightning balance adapter.
@@ -21,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
  * inventing reserves.
  */
 @Component
+@ConditionalOnMissingBean(BitcoinNodeService.class)
 public class BtcPayLightningClient implements LightningClient {
 
     private static final Logger log = LoggerFactory.getLogger(BtcPayLightningClient.class);

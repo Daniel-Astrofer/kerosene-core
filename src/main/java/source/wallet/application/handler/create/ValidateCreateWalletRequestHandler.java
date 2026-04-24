@@ -25,8 +25,21 @@ public class ValidateCreateWalletRequestHandler extends AbstractWalletRequestHan
     protected void doHandle(CreateWalletContext context) {
         context.setNormalizedName(WalletNamingPolicy.normalizeName(context.getRequest().name()));
         context.setNormalizedXpub(WalletNamingPolicy.normalizeOptionalXpub(context.getRequest().xpub()));
+        context.setNormalizedWalletMode(WalletNamingPolicy.normalizeWalletMode(context.getRequest().walletMode()));
 
-        walletCredentialsPort.validateBip39Passphrase(context.getRequest().passphrase());
+        if (context.getNormalizedWalletMode().name().equals("SELF_CUSTODY")) {
+            if (context.getNormalizedXpub() == null) {
+                throw new IllegalArgumentException("Self-custody wallets require a valid XPUB.");
+            }
+            if (context.getRequest().passphrase() == null || context.getRequest().passphrase().isBlank()) {
+                throw new IllegalArgumentException("A management passphrase is required for self-custody wallets.");
+            }
+        } else {
+            if (context.getNormalizedXpub() != null) {
+                throw new IllegalArgumentException("XPUB can only be attached to SELF_CUSTODY wallets.");
+            }
+            walletCredentialsPort.validateBip39Passphrase(context.getRequest().passphrase());
+        }
 
         if (walletReader.existsByUserIdAndName(context.getUserId(), context.getNormalizedName())) {
             throw new WalletExceptions.WalletNameAlreadyExists("you are using this name");

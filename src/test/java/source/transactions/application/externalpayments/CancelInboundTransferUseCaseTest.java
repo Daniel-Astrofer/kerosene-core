@@ -6,8 +6,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import source.transactions.exception.ExternalPaymentsExceptions;
+import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.CustodyGateway;
 import source.transactions.model.ExternalTransferEntity;
+import source.transactions.service.BlockchainAddressWatchService;
+import source.transactions.service.NetworkTransferLifecycleService;
+import source.wallet.repository.WalletRepository;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -27,13 +31,29 @@ class CancelInboundTransferUseCaseTest {
     @Mock
     private CustodyGateway custodyGateway;
 
+    @Mock
+    private BlockchainClient blockchainClient;
+
+    @Mock
+    private BlockchainAddressWatchService blockchainAddressWatchService;
+
+    @Mock
+    private NetworkTransferLifecycleService networkTransferLifecycleService;
+
+    @Mock
+    private WalletRepository walletRepository;
+
     @Test
     void cancelsPendingLightningInvoiceAndPersistsStatus() {
-        ExternalTransferFactory factory = new ExternalTransferFactory(new ExternalPaymentsMath());
+        ExternalTransferFactory factory = new ExternalTransferFactory(new ExternalPaymentsMath("testnet"));
         CancelInboundTransferUseCase useCase = new CancelInboundTransferUseCase(
                 externalTransfersPort,
                 factory,
-                custodyGateway);
+                custodyGateway,
+                blockchainClient,
+                blockchainAddressWatchService,
+                networkTransferLifecycleService,
+                walletRepository);
 
         UUID transferId = UUID.randomUUID();
         ExternalTransferEntity transfer = new ExternalTransferEntity();
@@ -43,10 +63,13 @@ class CancelInboundTransferUseCaseTest {
         transfer.setWalletNameSnapshot("MAIN");
         transfer.setTransferType("INBOUND_INVOICE");
         transfer.setStatus("PENDING");
-        transfer.setExternalReference("payment-hash-123");
+        transfer.setExternalReference("btcpay-invoice-123");
+        transfer.setPaymentHash("payment-hash-123");
         transfer.setInvoiceData("lnbc1example");
 
         when(externalTransfersPort.findByIdAndUserId(transferId, 7L)).thenReturn(Optional.of(transfer));
+        when(custodyGateway.getLightningInvoiceStatus(any())).thenReturn(
+                new CustodyGateway.IncomingLightningInvoiceStatus("PENDING", null, null, "raw"));
         when(custodyGateway.cancelLightningInvoice(any())).thenReturn(true);
         when(externalTransfersPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -61,11 +84,15 @@ class CancelInboundTransferUseCaseTest {
 
     @Test
     void rejectsCancellationForCompletedTransfer() {
-        ExternalTransferFactory factory = new ExternalTransferFactory(new ExternalPaymentsMath());
+        ExternalTransferFactory factory = new ExternalTransferFactory(new ExternalPaymentsMath("testnet"));
         CancelInboundTransferUseCase useCase = new CancelInboundTransferUseCase(
                 externalTransfersPort,
                 factory,
-                custodyGateway);
+                custodyGateway,
+                blockchainClient,
+                blockchainAddressWatchService,
+                networkTransferLifecycleService,
+                walletRepository);
 
         UUID transferId = UUID.randomUUID();
         ExternalTransferEntity transfer = new ExternalTransferEntity();

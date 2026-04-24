@@ -7,6 +7,8 @@ import source.wallet.application.port.out.WalletPersistencePort;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 
+import java.util.Objects;
+
 @Service
 @Transactional
 public class WalletPersistenceSupport {
@@ -41,6 +43,7 @@ public class WalletPersistenceSupport {
     }
 
     public int incrementLastDerivedIndex(Long walletId) {
+        Objects.requireNonNull(walletId, "walletId must not be null");
         WalletEntity wallet = walletPersistencePort.findByIdForUpdate(walletId)
                 .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
 

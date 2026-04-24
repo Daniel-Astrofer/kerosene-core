@@ -1,61 +1,81 @@
 package source.auth.controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.service.passkey.PasskeyInventoryService;
+import source.auth.application.service.account.AppPinService;
 import source.auth.application.service.security.profile.AdvancedAccountSecurityAvailability;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.dto.AccountSecurityProfileDTO;
 import source.auth.dto.AccountSecurityUpdateRequestDTO;
+import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 import source.common.dto.ApiResponse;
+import source.common.exception.ErrorCodes;
 
 @RestController
 @RequestMapping("/auth/security")
 public class AccountSecurityController {
 
     private final UserServiceContract userService;
-    private final PasskeyCredentialRepository passkeyCredentialRepository;
+    private final PasskeyInventoryService passkeyInventoryService;
     private final AdvancedAccountSecurityAvailability advancedAccountSecurityAvailability;
+    private final AppPinService appPinService;
 
     public AccountSecurityController(
             UserServiceContract userService,
-            PasskeyCredentialRepository passkeyCredentialRepository,
-            AdvancedAccountSecurityAvailability advancedAccountSecurityAvailability) {
+            PasskeyInventoryService passkeyInventoryService,
+            AdvancedAccountSecurityAvailability advancedAccountSecurityAvailability,
+            AppPinService appPinService) {
         this.userService = userService;
-        this.passkeyCredentialRepository = passkeyCredentialRepository;
+        this.passkeyInventoryService = passkeyInventoryService;
         this.advancedAccountSecurityAvailability = advancedAccountSecurityAvailability;
+        this.appPinService = appPinService;
     }
 
     @GetMapping("/profile")
-    public ResponseEntity<ApiResponse<AccountSecurityProfileDTO>> getProfile() {
+    public ResponseEntity<ApiResponse<AccountSecurityProfileDTO>> getProfile(
+            @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash) {
         UserDataBase user = getAuthenticatedUser();
-        boolean passkeyAvailable = !passkeyCredentialRepository.findByUserId(user.getId()).isEmpty();
+        PasskeyInventoryDTO passkeys = passkeyInventoryService.inventoryFor(user);
+        boolean passkeyAvailable = passkeys.passkeyRegistered();
         return ResponseEntity.ok(ApiResponse.success(
                 "Account security profile retrieved successfully.",
-                AccountSecurityProfileDTO.fromUser(user, passkeyAvailable)));
+                AccountSecurityProfileDTO.fromUser(
+                        user,
+                        passkeyAvailable,
+                        passkeys,
+                        appPinService.getStatus(user, deviceHash))));
     }
 
     @PutMapping("/profile")
     public ResponseEntity<ApiResponse<AccountSecurityProfileDTO>> updateProfile(
+            @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash,
             @RequestBody AccountSecurityUpdateRequestDTO request) {
         UserDataBase user = getAuthenticatedUser();
-        boolean passkeyAvailable = !passkeyCredentialRepository.findByUserId(user.getId()).isEmpty();
+        PasskeyInventoryDTO passkeys = passkeyInventoryService.inventoryFor(user);
 
-        validateAndApply(user, request, passkeyAvailable);
+        validateAndApply(user, request);
         user = userService.createUserInDataBase(user);
 
+        passkeys = passkeyInventoryService.inventoryFor(user);
         return ResponseEntity.ok(ApiResponse.success(
                 "Account security profile updated successfully.",
-                AccountSecurityProfileDTO.fromUser(user, passkeyAvailable)));
+                AccountSecurityProfileDTO.fromUser(
+                        user,
+                        passkeys.passkeyRegistered(),
+                        passkeys,
+                        appPinService.getStatus(user, deviceHash))));
     }
 
     private UserDataBase getAuthenticatedUser() {
@@ -75,8 +95,7 @@ public class AccountSecurityController {
 
     private void validateAndApply(
             UserDataBase user,
-            AccountSecurityUpdateRequestDTO request,
-            boolean passkeyAvailable) {
+            AccountSecurityUpdateRequestDTO request) {
         AccountSecurityType mode = request.getAccountSecurity() != null
                 ? request.getAccountSecurity()
                 : AccountSecurityType.STANDARD;
@@ -109,9 +128,14 @@ public class AccountSecurityController {
                     throw new AuthExceptions.InvalidCredentials(
                             "Multisig threshold must be 2 or 3 factors.");
                 }
-                if (multisigThreshold == 3 && !passkeyAvailable) {
-                    throw new AuthExceptions.InvalidCredentials(
-                            "A registered passkey is required to enable a 3-factor multisig vault.");
+                if (multisigThreshold == 3 && !passkeyInventoryService.hasUsablePasskeyForCurrentLogin(user)) {
+                    throw new AuthExceptions.StructuredAuthException(
+                            "Nenhuma passkey compativel com este login esta vinculada a conta.",
+                            HttpStatus.CONFLICT,
+                            ErrorCodes.AUTH_PASSKEY_LINK_REQUIRED,
+                            passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                    user,
+                                    "Vincule uma passkey deste dispositivo antes de ativar multisig 3FA."));
                 }
 
                 user.setAccountSecurity(AccountSecurityType.MULTISIG_2FA);
@@ -120,9 +144,14 @@ public class AccountSecurityController {
                 user.setMultisigThreshold(multisigThreshold);
             }
             case PASSKEY -> {
-                if (!passkeyAvailable) {
-                    throw new AuthExceptions.InvalidCredentials(
-                            "A registered passkey is required before switching to passkey-only protection.");
+                if (!passkeyInventoryService.hasUsablePasskeyForCurrentLogin(user)) {
+                    throw new AuthExceptions.StructuredAuthException(
+                            "Nenhuma passkey compativel com este login esta vinculada a conta.",
+                            HttpStatus.CONFLICT,
+                            ErrorCodes.AUTH_PASSKEY_LINK_REQUIRED,
+                            passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                    user,
+                                    "Vincule uma passkey deste dispositivo antes de ativar protecao por passkey."));
                 }
                 user.setAccountSecurity(AccountSecurityType.PASSKEY);
                 user.setShamirTotalShares(null);

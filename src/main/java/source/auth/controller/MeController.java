@@ -4,8 +4,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import source.auth.application.service.account.AppPinService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
@@ -19,13 +21,16 @@ import java.util.Optional;
 public class MeController {
 
     private final UserServiceContract userServiceContract;
+    private final AppPinService appPinService;
 
-    public MeController(UserServiceContract userServiceContract) {
+    public MeController(UserServiceContract userServiceContract, AppPinService appPinService) {
         this.userServiceContract = userServiceContract;
+        this.appPinService = appPinService;
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCurrentUser() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCurrentUser(
+            @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).build();
@@ -46,6 +51,7 @@ public class MeController {
             response.put("username", user.getUsername());
             response.put("testBalanceClaimed", Boolean.TRUE.equals(user.getTestBalanceClaimed()));
             response.put("passkeyEnabledForTransactions", Boolean.TRUE.equals(user.getPasskeyEnabledForTransactions()));
+            response.put("appPinEnabled", appPinService.getStatus(user, deviceHash).enabled());
             
             if (user.getCreatedAt() != null) {
                 response.put("createdAt", user.getCreatedAt().toString());

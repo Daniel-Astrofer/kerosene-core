@@ -55,8 +55,7 @@ class CaptureReserveSnapshotInteractorTest {
                 walletMonitoringPort,
                 treasuryConfigPort,
                 20,
-                128,
-                false);
+                128);
 
         ReserveSnapshot snapshot = interactor.captureSnapshot();
 
@@ -64,8 +63,8 @@ class CaptureReserveSnapshotInteractorTest {
         assertEquals(new BigDecimal("0.00000500"), snapshot.walletMonitoredOnchainBtc());
         assertEquals(new BigDecimal("0.00000400"), snapshot.treasuryXpubOnchainBtc());
         assertEquals(new BigDecimal("0.00000050"), snapshot.lightningBtc());
-        assertEquals(new BigDecimal("0.00001000"), snapshot.totalOnchainBtc());
-        assertEquals(new BigDecimal("0.00001050"), snapshot.totalAssetsBtc());
+        assertEquals(new BigDecimal("0.00000500"), snapshot.totalOnchainBtc());
+        assertEquals(new BigDecimal("0.00000550"), snapshot.totalAssetsBtc());
 
         verify(blockchainReservePort).getConfirmedBalanceForXpub("xpub-1", 24, true);
     }

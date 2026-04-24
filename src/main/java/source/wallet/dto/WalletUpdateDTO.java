@@ -9,5 +9,11 @@ public record WalletUpdateDTO(
 
         String newName,
 
-        String newXpub) {
+        String newXpub,
+
+        String newWalletMode) {
+
+    public WalletUpdateDTO(String passphrase, String name, String newName, String newXpub) {
+        this(passphrase, name, newName, newXpub, null);
+    }
 }

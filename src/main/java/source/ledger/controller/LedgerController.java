@@ -18,7 +18,7 @@ import source.ledger.service.LedgerService;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
 import source.ledger.service.LedgerPaymentRequestService;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.common.dto.ApiResponse;
 
 import java.math.BigDecimal;
@@ -39,21 +39,21 @@ public class LedgerController {
      * Rate limit: max 10 financial operations per user per minute.
      * Applies to /transaction and /payment-request/{linkId}/pay.
      */
-    private static final int TX_RATE_LIMIT = 10;
+    private static final int TX_RATE_LIMIT = 3;
     private static final String TX_RATE_PREFIX = "ledger_tx_rl:";
 
     private final LedgerService ledgerService;
-    private final WalletService walletService;
+    private final WalletLookupPort walletLookupPort;
     private final TransactionContract transaction;
     private final LedgerPaymentRequestService paymentRequestService;
     private final LedgerTransactionHistoryRepository historyRepository;
     private final StringRedisTemplate redisTemplate;
 
-    public LedgerController(LedgerService ledgerService, WalletService walletService, TransactionContract transaction,
+    public LedgerController(LedgerService ledgerService, WalletLookupPort walletLookupPort, TransactionContract transaction,
             LedgerPaymentRequestService paymentRequestService, LedgerTransactionHistoryRepository historyRepository,
             StringRedisTemplate redisTemplate) {
         this.ledgerService = ledgerService;
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.transaction = transaction;
         this.paymentRequestService = paymentRequestService;
         this.historyRepository = historyRepository;
@@ -115,7 +115,7 @@ public class LedgerController {
         Long userId = getAuthenticatedUserId();
 
         // Scoped lookup: finds wallet only if it belongs to the authenticated user
-        WalletEntity wallet = walletService.findByNameAndUserId(walletName, userId);
+        WalletEntity wallet = walletLookupPort.findByNameAndUserId(walletName, userId);
         if (wallet == null) {
             throw new LedgerExceptions.LedgerNotFoundException("Wallet not found.");
         }
@@ -130,7 +130,7 @@ public class LedgerController {
         Long userId = getAuthenticatedUserId();
 
         // Scoped lookup: finds wallet only if it belongs to the authenticated user
-        WalletEntity wallet = walletService.findByNameAndUserId(walletName, userId);
+        WalletEntity wallet = walletLookupPort.findByNameAndUserId(walletName, userId);
         if (wallet == null) {
             throw new LedgerExceptions.LedgerNotFoundException("Wallet not found.");
         }

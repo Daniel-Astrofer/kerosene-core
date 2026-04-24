@@ -9,6 +9,7 @@ import source.common.service.AddressDerivationService;
 import source.ledger.sync.QuorumSyncService;
 import source.transactions.infra.CustodyGateway;
 import source.wallet.model.WalletEntity;
+import source.wallet.model.WalletMode;
 import source.wallet.repository.WalletRepository;
 
 import java.util.Optional;
@@ -43,6 +44,7 @@ class CustodialAddressAllocatorTest {
         wallet.setId(42L);
         wallet.setName("MAIN");
         wallet.setPassphraseHash("hashed-passphrase");
+        wallet.setWalletMode(WalletMode.KEROSENE);
         wallet.setLastDerivedIndex(-1);
     }
 
@@ -53,6 +55,7 @@ class CustodialAddressAllocatorTest {
                 addressDerivationService,
                 quorumSyncService,
                 custodyGateway,
+                "testnet",
                 "xpub-master",
                 "",
                 "KEROSENE_LOCAL");
@@ -64,9 +67,8 @@ class CustodialAddressAllocatorTest {
 
         CustodialAddressAllocator.Allocation allocation = allocator.allocate(7L, wallet, "wallet:MAIN", true);
 
-        assertEquals("xpub-wallet-42", wallet.getXpub());
         assertEquals("bc1qwallet420", allocation.address());
-        assertEquals("XPUB_INDEX_0", allocation.externalReference());
+        assertEquals("KEROSENE_XPUB_INDEX_0", allocation.externalReference());
         assertEquals(0, wallet.getLastDerivedIndex());
         verify(walletRepository).save(wallet);
     }
@@ -78,13 +80,13 @@ class CustodialAddressAllocatorTest {
                 addressDerivationService,
                 quorumSyncService,
                 custodyGateway,
+                "testnet",
                 "xpub-master",
                 "",
                 "KEROSENE_LOCAL");
 
         wallet.setDepositAddress("bc1qcurrent");
         wallet.setExternalWalletReference("XPUB_INDEX_9");
-        wallet.setXpub("xpub-wallet-42");
         wallet.setLastDerivedIndex(9);
 
         when(walletRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(wallet));
@@ -104,6 +106,7 @@ class CustodialAddressAllocatorTest {
                 addressDerivationService,
                 quorumSyncService,
                 custodyGateway,
+                "testnet",
                 "",
                 "",
                 "KEROSENE_LOCAL");
@@ -121,5 +124,31 @@ class CustodialAddressAllocatorTest {
         assertEquals("wallet-ref", allocation.externalReference());
         assertEquals("BCX", allocation.provider());
         verify(addressDerivationService, never()).deriveAddressFromXpub(any(), anyInt());
+    }
+
+    @Test
+    void derivesSelfCustodyAddressWithoutOverwritingUserXpub() {
+        wallet.setWalletMode(WalletMode.SELF_CUSTODY);
+        wallet.setXpub("xpub-user");
+
+        CustodialAddressAllocator allocator = new CustodialAddressAllocator(
+                walletRepository,
+                addressDerivationService,
+                quorumSyncService,
+                custodyGateway,
+                "testnet",
+                "xpub-master",
+                "",
+                "KEROSENE_LOCAL");
+
+        when(walletRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(wallet));
+        when(addressDerivationService.deriveAddressFromXpub("xpub-user", 0)).thenReturn("tb1qselfcustody0");
+
+        CustodialAddressAllocator.Allocation allocation = allocator.allocate(7L, wallet, "wallet:MAIN", true);
+
+        assertEquals("xpub-user", wallet.getXpub());
+        assertEquals("tb1qselfcustody0", allocation.address());
+        assertEquals("XPUB_INDEX_0", allocation.externalReference());
+        verify(quorumSyncService, never()).proposeTransactionToQuorum(any());
     }
 }

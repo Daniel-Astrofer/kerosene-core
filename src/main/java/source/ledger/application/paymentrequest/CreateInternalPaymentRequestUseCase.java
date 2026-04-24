@@ -5,8 +5,8 @@ import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.exceptions.LedgerExceptions;
+import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletContract;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,7 +19,7 @@ public class CreateInternalPaymentRequestUseCase {
     private static final long TTL_MINUTES = 30L;
 
     private final InternalPaymentRequestStore paymentRequestStore;
-    private final WalletContract walletService;
+    private final WalletLookupPort walletLookupPort;
     private final UserService userService;
     private final AccountActivationService accountActivationService;
     private final PaymentRequestDestinationHashService destinationHashService;
@@ -28,14 +28,14 @@ public class CreateInternalPaymentRequestUseCase {
 
     public CreateInternalPaymentRequestUseCase(
             InternalPaymentRequestStore paymentRequestStore,
-            WalletContract walletService,
+            WalletLookupPort walletLookupPort,
             UserService userService,
             AccountActivationService accountActivationService,
             PaymentRequestDestinationHashService destinationHashService,
             PaymentRequestHistoryService paymentRequestHistoryService,
             PaymentRequestNotificationService paymentRequestNotificationService) {
         this.paymentRequestStore = paymentRequestStore;
-        this.walletService = walletService;
+        this.walletLookupPort = walletLookupPort;
         this.userService = userService;
         this.accountActivationService = accountActivationService;
         this.destinationHashService = destinationHashService;
@@ -53,7 +53,7 @@ public class CreateInternalPaymentRequestUseCase {
                 () -> new RuntimeException("Requester user not found"));
         accountActivationService.assertInboundEnabled(requesterUserId);
 
-        WalletEntity wallet = walletService.findByNameAndUserId(receiverWalletName, requesterUserId);
+        WalletEntity wallet = walletLookupPort.findByNameAndUserId(receiverWalletName, requesterUserId);
         if (wallet == null) {
             throw new LedgerExceptions.ReceiverNotFoundException(
                     "Receiver wallet not found or does not belong to you.");
