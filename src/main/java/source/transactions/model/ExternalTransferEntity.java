@@ -20,7 +20,8 @@ import java.util.UUID;
         @Index(name = "idx_network_transfers_status", columnList = "status"),
         @Index(name = "idx_network_transfers_txid", columnList = "blockchain_txid"),
         @Index(name = "idx_network_transfers_invoice_id", columnList = "invoice_id"),
-        @Index(name = "idx_network_transfers_payment_hash", columnList = "payment_hash")
+        @Index(name = "idx_network_transfers_payment_hash", columnList = "payment_hash"),
+        @Index(name = "idx_network_transfers_idempotency_key", columnList = "idempotency_key")
 })
 public class ExternalTransferEntity {
 
@@ -69,6 +70,9 @@ public class ExternalTransferEntity {
     @Column(name = "invoice_data", columnDefinition = "TEXT")
     private String invoiceData;
 
+    @Column(name = "expected_amount_btc", precision = 19, scale = 8)
+    private BigDecimal expectedAmountBtc;
+
     @Column(name = "amount_btc", precision = 19, scale = 8)
     private BigDecimal amountBtc;
 
@@ -98,6 +102,9 @@ public class ExternalTransferEntity {
 
     @Column(name = "provider_payload", columnDefinition = "TEXT")
     private String providerPayload;
+
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -219,6 +226,14 @@ public class ExternalTransferEntity {
         this.invoiceData = invoiceData;
     }
 
+    public BigDecimal getExpectedAmountBtc() {
+        return expectedAmountBtc;
+    }
+
+    public void setExpectedAmountBtc(BigDecimal expectedAmountBtc) {
+        this.expectedAmountBtc = expectedAmountBtc;
+    }
+
     public BigDecimal getAmountBtc() {
         return amountBtc;
     }
@@ -301,6 +316,14 @@ public class ExternalTransferEntity {
 
     public void setProviderPayload(String providerPayload) {
         this.providerPayload = providerPayload;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public void setCreatedAt(LocalDateTime createdAt) {

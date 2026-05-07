@@ -24,11 +24,16 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.config.websocket.inbound.StompInboundMessageHandlerChain;
+import source.ledger.application.paymentrequest.InternalPaymentRequestStore;
+import source.ledger.dto.InternalPaymentRequestDTO;
 
 class StompInboundChannelInterceptorTest {
 
     @Mock
     private JwtServicer jwtServicer;
+
+    @Mock
+    private InternalPaymentRequestStore paymentRequestStore;
 
     private AutoCloseable mocks;
     private MessageChannel channel;
@@ -38,7 +43,7 @@ class StompInboundChannelInterceptorTest {
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
         channel = mock(MessageChannel.class);
-        interceptor = new StompInboundChannelInterceptor(new StompInboundMessageHandlerChain(jwtServicer));
+        interceptor = new StompInboundChannelInterceptor(new StompInboundMessageHandlerChain(jwtServicer, paymentRequestStore));
     }
 
     @AfterEach
@@ -65,20 +70,12 @@ class StompInboundChannelInterceptorTest {
     }
 
     @Test
-    void shouldAuthenticateConnectUsingHandshakeTokenFallback() {
-        when(jwtServicer.extractId("handshake-token")).thenReturn(7L);
-
+    void shouldRejectConnectUsingHandshakeTokenFallback() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
         accessor.setSessionId("session-fallback");
         accessor.setSessionAttributes(new HashMap<>(Map.of("token", "handshake-token")));
 
-        Message<?> result = interceptor.preSend(message(accessor), channel);
-        StompHeaderAccessor resultAccessor = MessageHeaderAccessor.getAccessor(result, StompHeaderAccessor.class);
-
-        assertNotNull(resultAccessor);
-        assertNotNull(resultAccessor.getUser());
-        assertEquals("7", resultAccessor.getUser().getName());
-        verify(jwtServicer).extractId("handshake-token");
+        assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message(accessor), channel));
     }
 
     @Test
@@ -95,6 +92,67 @@ class StompInboundChannelInterceptorTest {
         accessor.setDestination("/topic/payment-request/123");
 
         assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message(accessor), channel));
+    }
+
+    @Test
+    void shouldRejectBalanceSubscribeForDifferentUser() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/topic/balance/99");
+
+        assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message(accessor), channel));
+    }
+
+    @Test
+    void shouldAllowBalanceSubscribeForSameUser() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/topic/balance/42");
+
+        Message<?> result = interceptor.preSend(message(accessor), channel);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldRejectPaymentRequestSubscribeForDifferentRequester() {
+        InternalPaymentRequestDTO request = new InternalPaymentRequestDTO();
+        request.setId("req-1");
+        request.setRequesterUserId(99L);
+        when(paymentRequestStore.findById("req-1")).thenReturn(request);
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/topic/payment-request/req-1");
+
+        assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message(accessor), channel));
+    }
+
+    @Test
+    void shouldAllowPaymentRequestSubscribeForRequester() {
+        InternalPaymentRequestDTO request = new InternalPaymentRequestDTO();
+        request.setId("req-1");
+        request.setRequesterUserId(42L);
+        when(paymentRequestStore.findById("req-1")).thenReturn(request);
+
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/topic/payment-request/req-1");
+
+        Message<?> result = interceptor.preSend(message(accessor), channel);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldAllowUserQueueSubscribeForAuthenticatedUser() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/user/queue/balance");
+
+        Message<?> result = interceptor.preSend(message(accessor), channel);
+
+        assertNotNull(result);
     }
 
     private Message<byte[]> message(StompHeaderAccessor accessor) {

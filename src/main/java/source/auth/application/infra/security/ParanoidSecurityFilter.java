@@ -2,6 +2,8 @@ package source.auth.application.infra.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ReadListener;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -9,10 +11,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import source.security.SuicideService;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -20,6 +24,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Filtro de Entrada "Blind" e Camada Paranoica
@@ -64,8 +69,10 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
                 return; // Rejeita e encerra silenciosamente
             }
 
-            // Payload Limit Guard: Max 2048 Bytes (2KB)
-            if (request.getContentLength() > 2048) {
+            // Payload Limit Guard: default 2KB. PSBT payloads are larger by
+            // design, so only the PSBT routes get a bounded 64KB envelope.
+            int maxPayloadBytes = maxPayloadBytesForPath(request.getRequestURI());
+            if (request.getContentLength() > maxPayloadBytes) {
                 response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
                 return;
             }
@@ -100,8 +107,20 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
             }
         };
 
-        // Envolve o Request para conseguir ler o Body sem consumir a Stream do Jackson
-        ContentCachingRequestWrapper wrappedRequest = new ContentCachingRequestWrapper(sanitizedRequest);
+        byte[] bodyBytes = readRequestBodyIfPresent(sanitizedRequest, hasBody);
+        if (bodyBytes.length > maxPayloadBytesForPath(request.getRequestURI())) {
+            response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
+            return;
+        }
+
+        if (!verifyMilitaryDigest(sanitizedRequest, bodyBytes)) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+
+        HttpServletRequest requestForChain = hasBody
+                ? new CachedBodyRequestWrapper(sanitizedRequest, bodyBytes)
+                : sanitizedRequest;
 
         // 2. Response: O "Manto de Silêncio"
         response.setHeader("X-Content-Type-Options", "nosniff");
@@ -116,12 +135,7 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
         long startTime = System.currentTimeMillis();
 
         try {
-            filterChain.doFilter(wrappedRequest, response);
-
-            // 4. mTLS e Assinatura de Payload (Militar)
-            // Valida o Digest Head se a rota exigir segurança militar
-            verifyMilitaryDigest(wrappedRequest);
-
+            filterChain.doFilter(requestForChain, response);
         } finally {
             // 3. Camada Paranoica: Noise Injection
 
@@ -156,16 +170,30 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
         }
     }
 
+    private int maxPayloadBytesForPath(String path) {
+        if (path != null && (path.startsWith("/bitcoin/psbt/")
+                || path.contains("/cold-wallets/") && path.endsWith("/psbt"))) {
+            return 64 * 1024;
+        }
+        return 2048;
+    }
+
     /**
      * Valida o Header de Digest = SHA-256
      * Se houver divergência de bit, assume interceptação Middle-Man / Taint na RAM
      * e suicida.
      */
-    private void verifyMilitaryDigest(ContentCachingRequestWrapper request) {
+    private byte[] readRequestBodyIfPresent(HttpServletRequest request, boolean hasBody) throws IOException {
+        if (!hasBody) {
+            return new byte[0];
+        }
+        return request.getInputStream().readAllBytes();
+    }
+
+    private boolean verifyMilitaryDigest(HttpServletRequest request, byte[] bodyBytes) {
         String digestHeader = request.getHeader("Digest");
         if (digestHeader != null && digestHeader.startsWith("SHA-256=")) {
             String clientHash = digestHeader.substring(8);
-            byte[] bodyBytes = request.getContentAsByteArray();
 
             try {
                 MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -173,14 +201,75 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
                 String serverHash = Base64.getEncoder().encodeToString(serverHashBytes);
 
                 if (!MessageDigest.isEqual(clientHash.getBytes(), serverHash.getBytes())) {
-                    // 🛡️ DIVERGÊNCIA DE HASHDATA NO NÍVEL CORE!
                     suicideService.triggerInstantSuicide(
                             "Payload Digest Hash Mismatch! Request Tampered or Man-In-The-Middle. Client sent "
                                     + clientHash + " but calculated " + serverHash);
+                    return false;
                 }
             } catch (NoSuchAlgorithmException e) {
                 // Ignorado (Impossível na JVM Java padrão)
             }
+        }
+        return true;
+    }
+
+    private static final class CachedBodyRequestWrapper extends HttpServletRequestWrapper {
+        private final byte[] body;
+
+        private CachedBodyRequestWrapper(HttpServletRequest request, byte[] body) {
+            super(request);
+            this.body = body != null ? body : new byte[0];
+        }
+
+        @Override
+        public ServletInputStream getInputStream() {
+            ByteArrayInputStream input = new ByteArrayInputStream(body);
+            return new ServletInputStream() {
+                @Override
+                public boolean isFinished() {
+                    return input.available() == 0;
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setReadListener(ReadListener readListener) {
+                    if (readListener == null) {
+                        return;
+                    }
+                    try {
+                        readListener.onDataAvailable();
+                        if (isFinished()) {
+                            readListener.onAllDataRead();
+                        }
+                    } catch (IOException e) {
+                        readListener.onError(e);
+                    }
+                }
+
+                @Override
+                public int read() {
+                    return input.read();
+                }
+            };
+        }
+
+        @Override
+        public BufferedReader getReader() {
+            return new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.UTF_8));
+        }
+
+        @Override
+        public int getContentLength() {
+            return body.length;
+        }
+
+        @Override
+        public long getContentLengthLong() {
+            return body.length;
         }
     }
 }

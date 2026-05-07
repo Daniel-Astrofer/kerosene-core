@@ -1,9 +1,12 @@
 package source.transactions.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import source.auth.application.service.account.AccountActivationService;
 import source.transactions.dto.*;
@@ -32,6 +35,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/transactions")
+@Validated
 public class TransactionController {
 
         private final TransactionService service;
@@ -61,16 +65,23 @@ public class TransactionController {
          * @return Endereço Bitcoin (Base58 ou Bech32)
          */
         @GetMapping("/deposit-address")
-        public ResponseEntity<ApiResponse<String>> getDepositAddress(HttpServletRequest request, Authentication auth) {
+        public ResponseEntity<ApiResponse<String>> getDepositAddress(
+                        @RequestParam(required = false) BigDecimal expectedAmountBtc,
+                        HttpServletRequest request,
+                        Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 WalletEntity wallet = walletLookupPort.findPrimaryWallet(userId);
                 if (wallet == null) {
                         throw new IllegalStateException("User has no wallet configured to receive on-chain deposits.");
                 }
+                if (expectedAmountBtc == null || expectedAmountBtc.signum() <= 0) {
+                        throw new IllegalArgumentException(
+                                        "expectedAmountBtc is required. Use /transactions/network/onchain/address for new deposit flows.");
+                }
 
                 OnchainAddressAllocationDTO allocation = externalPaymentsService.issueOnchainAddress(
                                 userId,
-                                new OnchainAddressRequestDTO(wallet.getName(), true));
+                                new OnchainAddressRequestDTO(wallet.getName(), expectedAmountBtc));
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Dedicated deposit address issued successfully. Send only Bitcoin (BTC) to this address.",
@@ -158,7 +169,7 @@ public class TransactionController {
          * @return DTO com ID do payment link e demais informações
          */
         @PostMapping("/create-payment-link")
-        public ResponseEntity<ApiResponse<PaymentLinkDTO>> createPaymentLink(@RequestBody CreatePaymentLinkRequest req,
+        public ResponseEntity<ApiResponse<PaymentLinkDTO>> createPaymentLink(@Valid @RequestBody CreatePaymentLinkRequest req,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 accountActivationService.assertInboundEnabled(userId);
@@ -196,9 +207,13 @@ public class TransactionController {
          */
         @PostMapping("/payment-link/{linkId}/confirm")
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> confirmPayment(@PathVariable String linkId,
-                        @RequestBody ConfirmPaymentRequest req,
+                        @Valid @RequestBody ConfirmPaymentRequest req,
                         HttpServletRequest request) {
-                PaymentLinkDTO link = paymentLinkService.confirmPayment(linkId, req.getTxid(), req.getFromAddress());
+                PaymentLinkDTO link = paymentLinkService.confirmPayment(
+                                linkId,
+                                req.getTxid(),
+                                req.getFromAddress(),
+                                req.getIdempotencyKey());
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Payment confirmed successfully. The transaction is now being monitored on the blockchain.",
                                 link));
@@ -214,6 +229,7 @@ public class TransactionController {
          */
         @PostMapping("/payment-link/{linkId}/complete")
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> completePayment(@PathVariable String linkId,
+                        @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 PaymentLinkDTO link = paymentLinkService.getPaymentLink(linkId);
@@ -223,7 +239,7 @@ public class TransactionController {
                                                         "The specified payment link could not be found or you do not have permission to access it.",
                                                         "ERR_PAYMENT_LINK_NOT_FOUND"));
                 }
-                PaymentLinkDTO completed = paymentLinkService.completePayment(linkId);
+                PaymentLinkDTO completed = paymentLinkService.completePayment(linkId, idempotencyKey);
                 return ResponseEntity
                                 .ok(ApiResponse.success("The payment link has been successfully marked as completed.",
                                                 completed));
@@ -273,7 +289,7 @@ public class TransactionController {
          * @return DTO com TXID da transação na blockchain
          */
         @PostMapping("/withdraw")
-        public ResponseEntity<ApiResponse<TransactionResponseDTO>> withdraw(@RequestBody WithdrawRequestDTO req,
+        public ResponseEntity<ApiResponse<TransactionResponseDTO>> withdraw(@Valid @RequestBody WithdrawRequestDTO req,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 TransactionResponseDTO response = service.withdraw(userId, req);

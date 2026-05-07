@@ -63,6 +63,10 @@ public class WalletService implements WalletContract {
         return walletReader.findByDepositAddress(depositAddress);
     }
 
+    public WalletEntity findByDestinationHash(String destinationHash) {
+        return walletReader.findByDestinationHash(destinationHash);
+    }
+
     public WalletEntity findByLightningAddress(String lightningAddress) {
         return walletReader.findByLightningAddress(lightningAddress);
     }

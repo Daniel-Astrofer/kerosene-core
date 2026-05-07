@@ -1,5 +1,7 @@
 package source.auth.application.orchestrator.signup;
 
+import org.bitcoinj.crypto.MnemonicCode;
+import org.bitcoinj.crypto.MnemonicException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,6 +22,7 @@ import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.model.UserNotificationPayload;
 import source.security.VaultKeyProvider;
+import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
 import source.wallet.application.port.in.CreateWalletUseCase;
 import source.wallet.application.port.in.WalletLookupPort;
@@ -28,6 +31,8 @@ import source.wallet.model.WalletEntity;
 import source.ledger.service.LedgerContract;
 import source.ledger.exceptions.LedgerExceptions;
 
+import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +46,7 @@ public class FinalizeSignupAccount {
     private static final String ACCOUNT_CREATED_TITLE = "Conta criada";
     private static final String ACCOUNT_CREATED_BODY =
             "Sua conta foi criada com sucesso.";
+    private static final String DEFAULT_ONBOARDING_WALLET_NAME = "ACCOUNT 01";
 
     private final SignupStateStore stateStore;
     private final UserServiceContract userService;
@@ -51,6 +57,7 @@ public class FinalizeSignupAccount {
     private final CreateWalletUseCase walletUseCase;
     private final WalletLookupPort walletLookupPort;
     private final LedgerContract ledgerContract;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public FinalizeSignupAccount(
             SignupStateStore stateStore,
@@ -96,7 +103,8 @@ public class FinalizeSignupAccount {
             schedulePostCommitCleanup(sessionId, user.getId());
             return user;
         } catch (DataIntegrityViolationException e) {
-            log.warn("Concurrent signup finalization detected for session {}", sessionId, e);
+            log.warn("Concurrent signup finalization detected for sessionRef={}",
+                    LogSanitizer.fingerprint(sessionId), e);
             throw e;
         }
     }
@@ -134,8 +142,8 @@ public class FinalizeSignupAccount {
         user.setPasswordHash(new String(state.getPassphrase()));
         user.setTOTPSecret(state.isTotpVerified() ? state.getTotpSecret() : null);
         user.setBackupCodes(state.isTotpVerified() ? state.getBackupCodes() : Collections.emptyList());
-        user.setIsActive(true);
-        user.setActivatedAt(java.time.LocalDateTime.now());
+        user.setIsActive(false);
+        user.setActivatedAt(null);
         user.setAccountSecurity(state.getAccountSecurity() != null
                 ? state.getAccountSecurity()
                 : AccountSecurityType.STANDARD);
@@ -153,8 +161,8 @@ public class FinalizeSignupAccount {
     private void maybeAttachCosignerSecret(String sessionId, UserDataBase user) {
         if (needsCosignerSecret(user)) {
             user.setPlatformCosignerSecret(cosignerSecretService.generateAndEncrypt());
-            log.info("[Security] Platform co-signer secret generated for session {} mode {}",
-                    sessionId, user.getAccountSecurity());
+            log.info("[Security] Platform co-signer secret generated for sessionRef={} mode={}",
+                    LogSanitizer.fingerprint(sessionId), user.getAccountSecurity());
         }
     }
 
@@ -168,33 +176,59 @@ public class FinalizeSignupAccount {
         credential.setUser(user);
         credential.setDeviceName(state.getPasskeyDeviceName());
         credential.setPublicKeyCose(CryptoUtils.decodeBase64(publicKeyMaterial(state)));
-        credential.setCredentialId(CryptoUtils.decodeBase64(state.getPasskeyCredentialId()));
-        credential.setUserHandle(CryptoUtils.decodeBase64(state.getPasskeyUserHandle()));
+        byte[] credentialId = CryptoUtils.decodeBase64(state.getPasskeyCredentialId());
+        credential.setCredentialId(credentialId);
+        byte[] userHandle = CryptoUtils.decodeBase64(state.getPasskeyUserHandle());
+        credential.setUserHandle(userHandle != null ? userHandle : credentialId);
         credential.setRelyingPartyId(state.getPasskeyRelyingPartyId());
         credential.setOriginHost(state.getPasskeyOriginHost());
+        credential.setBrand(state.getPasskeyBrand());
+        credential.setModel(state.getPasskeyModel());
+        credential.setSerialNumber(state.getPasskeySerialNumber());
+        credential.setDeviceInstallId(state.getPasskeyDeviceInstallId());
+        credential.setPlatform(state.getPasskeyPlatform());
+        credential.setBrowser(state.getPasskeyBrowser());
+        credential.setStatus("ACTIVE");
         passkeyGateway.save(credential);
     }
 
     public void ensureUserFinancialsReady(UserDataBase user, SignupState optionalState) {
         List<WalletEntity> wallets = walletLookupPort.findByUserId(user.getId());
         if (wallets.isEmpty() && optionalState != null) {
-            String passphrase = optionalState.getPassphrase() != null ? new String(optionalState.getPassphrase()) : "PASSKEY_SECURED";
-            WalletRequestDTO request = new WalletRequestDTO(passphrase, "ACCOUNT 01", null);
+            WalletRequestDTO request = new WalletRequestDTO(
+                    generateInternalWalletMnemonic(),
+                    DEFAULT_ONBOARDING_WALLET_NAME,
+                    null,
+                    "KEROSENE");
             walletUseCase.createWallet(request, user.getId());
-            log.info("[Onboarding] Primary wallet created for user {}", user.getUsername());
+            log.info("[Onboarding] Primary wallet created for userId={}", user.getId());
         } else {
             for (WalletEntity wallet : wallets) {
                 try {
                     if (!ledgerContract.existsByWalletId(wallet.getId())) {
                         ledgerContract.createLedger(wallet, "Automated healing for missing ledger");
-                        log.info("[Onboarding] Healed missing ledger for wallet {} user {}", wallet.getName(), user.getUsername());
+                        log.info("[Onboarding] Healed missing ledger for walletId={} userId={}",
+                                wallet.getId(), user.getId());
                     }
                 } catch (LedgerExceptions.LedgerAlreadyExistsException ignored) {
                     // Already has a ledger, that's fine.
                 } catch (Exception e) {
-                    log.error("[Onboarding] Failed to heal ledger for wallet {} user {}", wallet.getName(), user.getUsername(), e);
+                    log.error("[Onboarding] Failed to heal ledger for walletId={} userId={}",
+                            wallet.getId(), user.getId(), e);
                 }
             }
+        }
+    }
+
+    private String generateInternalWalletMnemonic() {
+        byte[] entropy = new byte[16];
+        try {
+            secureRandom.nextBytes(entropy);
+            return String.join(" ", MnemonicCode.INSTANCE.toMnemonic(entropy));
+        } catch (MnemonicException.MnemonicLengthException exception) {
+            throw new IllegalStateException("Unable to generate onboarding wallet seed.", exception);
+        } finally {
+            Arrays.fill(entropy, (byte) 0);
         }
     }
 
@@ -216,7 +250,8 @@ public class FinalizeSignupAccount {
         try {
             stateStore.deleteSignupState(sessionId);
         } catch (RuntimeException exception) {
-            log.warn("Failed to delete signup state for session {} after commit.", sessionId, exception);
+            log.warn("Failed to delete signup state for sessionRef={} after commit.",
+                    LogSanitizer.fingerprint(sessionId), exception);
         }
 
         try {

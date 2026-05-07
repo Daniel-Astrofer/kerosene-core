@@ -11,6 +11,7 @@ import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
 
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -30,7 +31,7 @@ public class IssueSessionToken {
 
     public String issue(UserDataBase user) {
         notifyLogin(user.getId());
-        return user.getId() + " " + jwtService.generateToken(user.getId());
+        return user.getId() + " " + jwtService.generateToken(user.getId(), List.of(user.getRole().name()));
     }
 
     private void notifyLogin(Long userId) {

@@ -82,7 +82,7 @@ public class RecoveryCredentialRotator {
         }
 
         byte[] publicKeyBytes = decodePasskeyPublicKey(request);
-        if (!passkeyService.verifySignature(
+        if (!passkeyService.verifyRegistrationSignature(
                 state.getUsername(),
                 state.getPasskeyChallenge(),
                 request.getSignature(),
@@ -133,15 +133,21 @@ public class RecoveryCredentialRotator {
 
         Base64.Decoder decoder = Base64.getDecoder();
         try {
-            credential.setCredentialId(decoder.decode(request.getCredentialId()));
+            byte[] credentialId = decoder.decode(request.getCredentialId());
+            credential.setCredentialId(credentialId);
             if (request.getUserHandle() != null && !request.getUserHandle().isBlank()) {
                 credential.setUserHandle(decoder.decode(request.getUserHandle()));
+            } else {
+                credential.setUserHandle(credentialId);
             }
         } catch (IllegalArgumentException e) {
             decoder = Base64.getUrlDecoder();
-            credential.setCredentialId(decoder.decode(request.getCredentialId()));
+            byte[] credentialId = decoder.decode(request.getCredentialId());
+            credential.setCredentialId(credentialId);
             if (request.getUserHandle() != null && !request.getUserHandle().isBlank()) {
                 credential.setUserHandle(decoder.decode(request.getUserHandle()));
+            } else {
+                credential.setUserHandle(credentialId);
             }
         }
 

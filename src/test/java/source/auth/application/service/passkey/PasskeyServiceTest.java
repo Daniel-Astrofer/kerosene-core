@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -89,12 +90,119 @@ class PasskeyServiceTest {
                 assertion.clientDataJsonB64Url()));
     }
 
+    @Test
+    void verifySignatureAcceptsConfiguredAndroidAppOriginWithOnionRpId() throws Exception {
+        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setServerName(onionHost);
+        request.addHeader("Host", onionHost);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        PasskeyService service = new PasskeyService(
+                mock(RedisServicer.class),
+                new ObjectMapper(),
+                new ObjectMapper(),
+                "android:apk-key-hash:kerosene,http://localhost:3000,http://localhost:8080",
+                "localhost");
+
+        AssertionFixture assertion = createAssertion(
+                onionHost,
+                "android:apk-key-hash:kerosene",
+                HexFormat.of().formatHex(new byte[] {
+                        2, 2, 2, 2, 2, 2, 2, 2,
+                        2, 2, 2, 2, 2, 2, 2, 2,
+                        2, 2, 2, 2, 2, 2, 2, 2,
+                        2, 2, 2, 2, 2, 2, 2, 2
+                }));
+
+        assertTrue(service.isClientDataOriginAllowed(assertion.clientDataJsonB64Url()));
+        assertTrue(service.verifySignature(
+                "alice",
+                assertion.challengeHex(),
+                assertion.signatureB64Url(),
+                assertion.rawPublicKey(),
+                assertion.authDataB64Url(),
+                assertion.clientDataJsonB64Url()));
+    }
+
+    @Test
+    void authenticationVerificationRejectsRegistrationClientDataType() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setServerName("localhost");
+        request.addHeader("Host", "localhost");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        PasskeyService service = new PasskeyService(
+                mock(RedisServicer.class),
+                new ObjectMapper(),
+                new ObjectMapper(),
+                "http://localhost:3000",
+                "localhost");
+
+        AssertionFixture assertion = createAssertion(
+                "localhost",
+                "http://localhost:3000",
+                HexFormat.of().formatHex(new byte[] {
+                        3, 3, 3, 3, 3, 3, 3, 3,
+                        3, 3, 3, 3, 3, 3, 3, 3,
+                        3, 3, 3, 3, 3, 3, 3, 3,
+                        3, 3, 3, 3, 3, 3, 3, 3
+                }),
+                "webauthn.create");
+
+        assertFalse(service.verifyAuthenticationSignature(
+                "alice",
+                assertion.challengeHex(),
+                assertion.signatureB64Url(),
+                assertion.rawPublicKey(),
+                assertion.authDataB64Url(),
+                assertion.clientDataJsonB64Url()));
+    }
+
+    @Test
+    void emptyAllowedOriginsStillRequiresDynamicOriginHostToMatchRequestHost() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setServerName("localhost");
+        request.addHeader("Host", "localhost");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        PasskeyService service = new PasskeyService(
+                mock(RedisServicer.class),
+                new ObjectMapper(),
+                new ObjectMapper(),
+                "",
+                "localhost");
+
+        AssertionFixture assertion = createAssertion(
+                "localhost",
+                "https://evil.example",
+                HexFormat.of().formatHex(new byte[] {
+                        4, 4, 4, 4, 4, 4, 4, 4,
+                        4, 4, 4, 4, 4, 4, 4, 4,
+                        4, 4, 4, 4, 4, 4, 4, 4,
+                        4, 4, 4, 4, 4, 4, 4, 4
+                }));
+
+        assertFalse(service.isClientDataOriginAllowed(assertion.clientDataJsonB64Url()));
+        assertFalse(service.verifyAuthenticationSignature(
+                "alice",
+                assertion.challengeHex(),
+                assertion.signatureB64Url(),
+                assertion.rawPublicKey(),
+                assertion.authDataB64Url(),
+                assertion.clientDataJsonB64Url()));
+    }
+
     private AssertionFixture createAssertion(String rpId, String origin, String challengeHex) throws Exception {
+        return createAssertion(rpId, origin, challengeHex, "webauthn.get");
+    }
+
+    private AssertionFixture createAssertion(String rpId, String origin, String challengeHex, String type) throws Exception {
         byte[] challengeBytes = HexFormat.of().parseHex(challengeHex);
         String challengeB64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(challengeBytes);
         byte[] clientDataBytes = ("""
-                {"type":"webauthn.get","challenge":"%s","origin":"%s"}
-                """.formatted(challengeB64Url, origin)).getBytes(StandardCharsets.UTF_8);
+                {"type":"%s","challenge":"%s","origin":"%s"}
+                """.formatted(type, challengeB64Url, origin)).getBytes(StandardCharsets.UTF_8);
 
         byte[] authData = new byte[37];
         byte[] rpIdHash = MessageDigest.getInstance("SHA-256").digest(rpId.getBytes(StandardCharsets.UTF_8));

@@ -20,8 +20,10 @@ import source.ledger.dto.LedgerDTO;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.entity.LedgerEntity;
+import source.ledger.exceptions.LedgerExceptions;
 import source.ledger.orchestrator.TransactionContract;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
+import source.ledger.repository.LedgerSyncEventView;
 import source.ledger.service.LedgerPaymentRequestService;
 import source.ledger.service.LedgerService;
 import source.security.SuicideService;
@@ -34,8 +36,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -116,6 +120,7 @@ class LedgerControllerTest {
         transactionDTO.setSender("sender");
         transactionDTO.setReceiver("receiver");
         transactionDTO.setAmount(new BigDecimal("50.00"));
+        transactionDTO.setIdempotencyKey("idem-ledger-controller");
         transactionDTO.setContext("Test transaction");
 
         ledgerDTO = new LedgerDTO();
@@ -158,6 +163,78 @@ class LedgerControllerTest {
 
     @Test
     @WithMockUser(username = "1")
+    @DisplayName("Should reject negative transaction amount")
+    void shouldRejectNegativeTransactionAmount() throws Exception {
+        transactionDTO.setAmount(new BigDecimal("-1.00"));
+
+        mockMvc.perform(post("/ledger/transaction")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(transactionDTO)))
+                .andExpect(status().isBadRequest());
+
+        verify(transaction, never()).processTransaction(any(TransactionDTO.class));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("Should reject zero transaction amount")
+    void shouldRejectZeroTransactionAmount() throws Exception {
+        transactionDTO.setAmount(BigDecimal.ZERO);
+
+        mockMvc.perform(post("/ledger/transaction")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(transactionDTO)))
+                .andExpect(status().isBadRequest());
+
+        verify(transaction, never()).processTransaction(any(TransactionDTO.class));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("Should reject null transaction amount")
+    void shouldRejectNullTransactionAmount() throws Exception {
+        transactionDTO.setAmount(null);
+
+        mockMvc.perform(post("/ledger/transaction")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(transactionDTO)))
+                .andExpect(status().isBadRequest());
+
+        verify(transaction, never()).processTransaction(any(TransactionDTO.class));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("Should reject missing idempotency key")
+    void shouldRejectMissingIdempotencyKey() throws Exception {
+        transactionDTO.setIdempotencyKey(null);
+
+        mockMvc.perform(post("/ledger/transaction")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(transactionDTO)))
+                .andExpect(status().isBadRequest());
+
+        verify(transaction, never()).processTransaction(any(TransactionDTO.class));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("Should return a specific receiver not ready error for transaction endpoint")
+    void shouldReturnReceiverNotReadyErrorWhenTransactionFailsForDestinationReadiness() throws Exception {
+        doThrow(LedgerExceptions.ReceiverNotReadyException.noReceivingWallet())
+                .when(transaction).processTransaction(any(TransactionDTO.class));
+
+        mockMvc.perform(post("/ledger/transaction")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(transactionDTO)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("ERR_LEDGER_RECEIVER_NOT_READY"))
+                .andExpect(jsonPath("$.data.reason").value("NO_RECEIVING_WALLET"));
+    }
+
+    @Test
+    @WithMockUser(username = "1")
     @DisplayName("Should get all ledgers successfully")
     void shouldGetAllLedgersSuccessfully() throws Exception {
         List<LedgerEntity> ledgers = Arrays.asList(ledger);
@@ -175,6 +252,35 @@ class LedgerControllerTest {
 
         verify(ledgerService).findByUserId(1L);
         verify(ledgerService).toDTOList(ledgers);
+    }
+
+    @Test
+    @WithMockUser(username = "1")
+    @DisplayName("Should return sanitized ephemeral ledger sync events")
+    void shouldReturnSanitizedEphemeralLedgerSyncEvents() throws Exception {
+        UUID historyId = UUID.randomUUID();
+        LocalDateTime createdAt = LocalDateTime.now();
+        LedgerSyncEventView history = new LedgerSyncEventView() {
+            @Override public UUID getId() { return historyId; }
+            @Override public String getTransactionType() { return "EXTERNAL_WITHDRAWAL"; }
+            @Override public BigDecimal getAmount() { return new BigDecimal("0.01000000"); }
+            @Override public String getStatus() { return "PENDING"; }
+            @Override public BigDecimal getNetworkFee() { return new BigDecimal("0.00001000"); }
+            @Override public String getBlockchainTxid() { return "a".repeat(64); }
+            @Override public LocalDateTime getCreatedAt() { return createdAt; }
+            @Override public Integer getConfirmations() { return 1; }
+        };
+        when(historyRepository.findUserHistoryView(eq(1L), any())).thenReturn(List.of(history));
+
+        mockMvc.perform(get("/ledger/history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].transactionType").value("EXTERNAL_WITHDRAWAL"))
+                .andExpect(jsonPath("$.data[0].txidFingerprint").value(org.hamcrest.Matchers.startsWith("sha256:")))
+                .andExpect(jsonPath("$.data[0].senderIdentifier").doesNotExist())
+                .andExpect(jsonPath("$.data[0].receiverIdentifier").doesNotExist())
+                .andExpect(jsonPath("$.data[0].context").doesNotExist())
+                .andExpect(jsonPath("$.data[0].blockchainTxid").doesNotExist());
     }
 
     @Test

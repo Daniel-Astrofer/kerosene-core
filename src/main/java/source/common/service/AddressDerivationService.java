@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import source.common.infra.logging.LogSanitizer;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,9 +33,11 @@ public class AddressDerivationService {
     private final String derivationSalt;
 
     public AddressDerivationService(
-            @Value("${bitcoin.network:testnet}") String network,
+            @Value("${bitcoin.network:mainnet}") String network,
             @Value("${bitcoin.derivation.salt:kerosene_sovereign_salt_2026}") String salt) {
-        this.netParams = "mainnet".equalsIgnoreCase(network) ? MainNetParams.get() : TestNet3Params.get();
+        this.netParams = ("mainnet".equalsIgnoreCase(network) || "main".equalsIgnoreCase(network))
+                ? MainNetParams.get()
+                : TestNet3Params.get();
         this.derivationSalt = salt;
     }
 
@@ -60,7 +63,8 @@ public class AddressDerivationService {
             SegwitAddress address = SegwitAddress.fromHash(netParams, pubKeyHash);
 
             String derived = address.toString();
-            log.info("[Derivation] Derived Segwit address {} for wallet ID {}", derived, walletId);
+            log.info("[Derivation] Derived Segwit addressRef={} for walletId={}",
+                    LogSanitizer.fingerprint(derived), walletId);
             return derived;
 
         } catch (NoSuchAlgorithmException e) {
@@ -97,7 +101,8 @@ public class AddressDerivationService {
             SegwitAddress address = SegwitAddress.fromHash(netParams, childKey.getPubKeyHash());
             return new DerivedAddress(address.toString(), childKey.getPubKey(), index, isChange);
         } catch (Exception e) {
-            log.error("[Derivation] Failed to derive address from xpub {}: {}", xpub, e.getMessage());
+            log.error("[Derivation] Failed to derive address from xpubRef={}: {}",
+                    LogSanitizer.fingerprint(xpub), e.getMessage());
             throw new RuntimeException("XPub derivation failed", e);
         }
     }
@@ -133,7 +138,8 @@ public class AddressDerivationService {
             DeterministicKey childKey = HDKeyDerivation.deriveChildKey(parentKey, childIndex);
             return childKey.serializePubB58(netParams);
         } catch (Exception e) {
-            log.error("[Derivation] Failed to derive child xpub from parent {}: {}", parentXpub, e.getMessage());
+            log.error("[Derivation] Failed to derive child xpub from parentRef={}: {}",
+                    LogSanitizer.fingerprint(parentXpub), e.getMessage());
             throw new RuntimeException("Child xpub derivation failed", e);
         }
     }

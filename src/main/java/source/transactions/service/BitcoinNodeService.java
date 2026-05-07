@@ -20,16 +20,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
+import source.common.infra.logging.LogSanitizer;
 import source.common.service.AddressDerivationService;
-import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.CustodyGateway;
+import source.transactions.infra.LightningInvoiceGateway;
+import source.transactions.infra.LightningPaymentGateway;
 import source.transactions.infra.LightningClient;
 import source.transactions.infra.lnd.proto.lnrpc.AddInvoiceResponse;
 import source.transactions.infra.lnd.proto.lnrpc.ChannelBalanceRequest;
 import source.transactions.infra.lnd.proto.lnrpc.ChannelBalanceResponse;
 import source.transactions.infra.lnd.proto.lnrpc.GetInfoRequest;
+import source.transactions.infra.lnd.proto.lnrpc.GetInfoResponse;
 import source.transactions.infra.lnd.proto.lnrpc.GetTransactionsRequest;
 import source.transactions.infra.lnd.proto.lnrpc.Invoice;
 import source.transactions.infra.lnd.proto.lnrpc.InvoiceSubscription;
@@ -62,10 +64,9 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-@Primary
-@Component
+@Component("lndLightningGateway")
 @ConditionalOnProperty(prefix = "lightning.lnd", name = "enabled", havingValue = "true")
-public class BitcoinNodeService implements CustodyGateway, LightningClient, BlockchainClient {
+public class BitcoinNodeService implements LightningInvoiceGateway, LightningPaymentGateway, LightningClient, WatchOnlyAddressImportPort {
 
     private static final Logger log = LoggerFactory.getLogger(BitcoinNodeService.class);
     private static final HexFormat HEX = HexFormat.of();
@@ -96,7 +97,7 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
             @Value("${lightning.lnd.macaroon:}") String macaroonHex,
             @Value("${lightning.lnd.macaroon-path:}") String macaroonPath,
             @Value("${lightning.lnd.payment-timeout-seconds:30}") int paymentTimeoutSeconds,
-            @Value("${lightning.lnd.provider-name:LND_NEUTRINO}") String providerName) {
+            @Value("${lightning.lnd.provider-name:LND_BITCOIND_PRUNED}") String providerName) {
         this.objectMapper = objectMapper;
         this.addressDerivationService = addressDerivationService;
         this.host = host != null ? host.trim() : "";
@@ -107,7 +108,7 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         this.paymentTimeoutSeconds = Math.max(5, paymentTimeoutSeconds);
         this.providerName = providerName != null && !providerName.isBlank()
                 ? providerName.trim()
-                : "LND_NEUTRINO";
+                : "LND_BITCOIND_PRUNED";
     }
 
     @PostConstruct
@@ -149,13 +150,7 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
     }
 
     @Override
-    public GeneratedOnchainAddress createOnchainAddress(OnchainAddressCommand command) {
-        throw new UnsupportedOperationException(
-                "On-chain addresses are derived locally from XPUBs and then watched through LND.");
-    }
-
-    @Override
-    public GeneratedLightningInvoice createLightningInvoice(LightningInvoiceCommand command) {
+    public CustodyGateway.GeneratedLightningInvoice createLightningInvoice(CustodyGateway.LightningInvoiceCommand command) {
         Invoice invoice = Invoice.newBuilder()
                 .setMemo(safe(command.memo()))
                 .setValue(command.amountSats())
@@ -163,7 +158,7 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
                 .build();
         AddInvoiceResponse response = lightningBlockingStub.addInvoice(invoice);
         String paymentHash = HEX.formatHex(response.getRHash().toByteArray());
-        return new GeneratedLightningInvoice(
+        return new CustodyGateway.GeneratedLightningInvoice(
                 response.getPaymentRequest(),
                 paymentHash,
                 null,
@@ -172,9 +167,9 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
     }
 
     @Override
-    public IncomingLightningInvoiceStatus getLightningInvoiceStatus(LightningInvoiceStatusCommand command) {
+    public CustodyGateway.IncomingLightningInvoiceStatus getLightningInvoiceStatus(CustodyGateway.LightningInvoiceStatusCommand command) {
         Invoice invoice = lookupInvoice(command.paymentHash());
-        return new IncomingLightningInvoiceStatus(
+        return new CustodyGateway.IncomingLightningInvoiceStatus(
                 mapInvoiceStatus(invoice),
                 invoice.getAmtPaidSat() > 0 ? invoice.getAmtPaidSat() : null,
                 invoice.getSettleDate() > 0
@@ -184,18 +179,12 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
     }
 
     @Override
-    public boolean cancelLightningInvoice(LightningInvoiceCancellationCommand command) {
+    public boolean cancelLightningInvoice(CustodyGateway.LightningInvoiceCancellationCommand command) {
         return false;
     }
 
     @Override
-    public PaymentResult sendOnchain(OnchainPaymentCommand command) {
-        throw new UnsupportedOperationException(
-                "On-chain sends remain routed through the existing quorum signing flow.");
-    }
-
-    @Override
-    public PaymentResult payLightning(LightningPaymentCommand command) {
+    public CustodyGateway.PaymentResult payLightning(CustodyGateway.LightningPaymentCommand command) {
         SendRequest request = SendRequest.newBuilder()
                 .setPaymentRequest(command.paymentRequest())
                 .setAmt(command.amountSats())
@@ -212,7 +201,7 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         long feeSats = response.hasPaymentRoute()
                 ? Math.max(response.getPaymentRoute().getTotalFees(), response.getPaymentRoute().getTotalFeesMsat() / 1000L)
                 : 0L;
-        return new PaymentResult(
+        return new CustodyGateway.PaymentResult(
                 HEX.formatHex(response.getPaymentHash().toByteArray()),
                 null,
                 HEX.formatHex(response.getPaymentHash().toByteArray()),
@@ -244,7 +233,11 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
 
     @Override
     public double getNodeUptime() {
-        return lightningBlockingStub.getInfo(GetInfoRequest.newBuilder().build()).getSyncedToChain() ? 1.0d : 0.0d;
+        return getInfo().getSyncedToChain() ? 1.0d : 0.0d;
+    }
+
+    public GetInfoResponse getInfo() {
+        return lightningBlockingStub.getInfo(GetInfoRequest.newBuilder().build());
     }
 
     @Override
@@ -252,7 +245,6 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         return 0L;
     }
 
-    @Override
     public JsonNode executeRpc(String method, Object... params) {
         if (method == null || method.isBlank()) {
             return null;
@@ -272,12 +264,6 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         };
     }
 
-    @Override
-    public String sendRawTransaction(String hex) {
-        throw new UnsupportedOperationException("Broadcasting raw transactions directly through LND gRPC is not implemented.");
-    }
-
-    @Override
     public JsonNode getRawTransaction(String txid, boolean verbose) {
         Transaction transaction = findTransaction(txid);
         if (transaction == null) {
@@ -286,12 +272,10 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         return toJson(transaction);
     }
 
-    @Override
     public long getHotWalletBalance() {
         return Math.max(0L, lightningBlockingStub.walletBalance(WalletBalanceRequest.newBuilder().build()).getConfirmedBalance());
     }
 
-    @Override
     public JsonNode getAddressTransactions(String address) {
         ArrayNode array = objectMapper.createArrayNode();
         if (address == null || address.isBlank()) {
@@ -306,7 +290,6 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         return array;
     }
 
-    @Override
     public long getConfirmedBalanceForAddress(String address) {
         if (address == null || address.isBlank()) {
             return 0L;
@@ -314,7 +297,6 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
         return listAddressBalances().getOrDefault(address, 0L);
     }
 
-    @Override
     public long getConfirmedBalanceForXpub(String xpub, int range, boolean includeChangeBranch) {
         if (xpub == null || xpub.isBlank()) {
             return 0L;
@@ -353,10 +335,12 @@ public class BitcoinNodeService implements CustodyGateway, LightningClient, Bloc
                     .setPublicKey(com.google.protobuf.ByteString.copyFrom(publicKey))
                     .setAddressType(source.transactions.infra.lnd.proto.walletrpc.AddressType.WITNESS_PUBKEY_HASH)
                     .build());
-            log.info("[BitcoinNodeService] Imported watch-only public key for address {}.", expectedAddress);
+            log.info("[BitcoinNodeService] Imported watch-only public key for addressRef={}.",
+                    LogSanitizer.fingerprint(expectedAddress));
         } catch (StatusRuntimeException ex) {
             if (isAlreadyExists(ex)) {
-                log.debug("[BitcoinNodeService] Watch-only key for {} was already imported.", expectedAddress);
+                log.debug("[BitcoinNodeService] Watch-only key for addressRef={} was already imported.",
+                        LogSanitizer.fingerprint(expectedAddress));
                 return;
             }
             throw ex;

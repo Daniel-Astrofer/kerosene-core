@@ -1,28 +1,25 @@
 package source.transactions.infra.paymentlink;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import source.transactions.application.paymentlink.PaymentLinkDescription;
 import source.transactions.application.paymentlink.PaymentLinkValidationPort;
 import source.transactions.dto.PaymentLinkDTO;
 import source.transactions.exception.PaymentLinkExceptions;
 import source.transactions.infra.BlockchainClient;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.regex.Pattern;
 
 @Component
 public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidationPort {
 
-    private static final Logger log = LoggerFactory.getLogger(PocketPaymentLinkValidationAdapter.class);
     private static final Pattern MAINNET_TXID = Pattern.compile("^[0-9a-fA-F]{64}$");
+    private static final BigDecimal SATS_PER_BTC = new BigDecimal("100000000");
 
     private final BlockchainClient blockchainClient;
     private final int requiredConfirmations;
-    private final boolean bitcoinMockMode;
-    private final boolean voucherMockMode;
 
     public PocketPaymentLinkValidationAdapter(
             BlockchainClient blockchainClient,
@@ -31,8 +28,6 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
             @Value("${voucher.mock.accept-any-txid:false}") boolean voucherMockMode) {
         this.blockchainClient = blockchainClient;
         this.requiredConfirmations = Math.max(1, requiredConfirmations);
-        this.bitcoinMockMode = bitcoinMockMode;
-        this.voucherMockMode = voucherMockMode;
     }
 
     @Override
@@ -41,10 +36,13 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
             throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction("Transacao nao e valida");
         }
 
-        if (isAllowedMockPaymentLink(paymentLink) || bitcoinMockMode) {
-            log.warn("[PaymentLink] Mock transaction accepted for link {} while mock mode is enabled.",
-                    paymentLink.getId());
-            return;
+        if (paymentLink == null || paymentLink.getDepositAddress() == null || paymentLink.getDepositAddress().isBlank()) {
+            throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction(
+                    "Payment link does not have a locked deposit address.");
+        }
+        if (paymentLink.getAmountBtc() == null || paymentLink.getAmountBtc().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction(
+                    "Payment link amount is invalid.");
         }
 
         if (!MAINNET_TXID.matcher(txid).matches()) {
@@ -66,14 +64,81 @@ public class PocketPaymentLinkValidationAdapter implements PaymentLinkValidation
                     "Transacao encontrada, mas ainda possui " + confirmations
                             + " confirmacao(oes). Aguarde " + requiredConfirmations + ".");
         }
-    }
 
-    private boolean isAllowedMockPaymentLink(PaymentLinkDTO paymentLink) {
-        if (!voucherMockMode || paymentLink == null || paymentLink.getDescription() == null) {
-            return false;
+        if (transaction.path("replaced_by_txid").isTextual()) {
+            throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction(
+                    "Transacao foi substituida na rede e nao pode liquidar este payment link.");
         }
 
-        return PaymentLinkDescription.ONBOARDING_VOUCHER.equals(paymentLink.getDescription())
-                || PaymentLinkDescription.ACCOUNT_ACTIVATION.equals(paymentLink.getDescription());
+        long expectedSats = btcToSats(paymentLink.getAmountBtc());
+        long matchedOutputSats = findOutputSats(transaction, paymentLink.getDepositAddress());
+        if (matchedOutputSats <= 0L) {
+            throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction(
+                    "Transacao nao paga o endereco esperado do payment link.");
+        }
+
+        boolean exactAmountRequired = paymentLink.getAmountLocked() == null || paymentLink.getAmountLocked();
+        boolean amountMatches = exactAmountRequired
+                ? matchedOutputSats == expectedSats
+                : matchedOutputSats >= expectedSats;
+        if (!amountMatches) {
+            throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction(
+                    "Transacao nao paga o valor esperado do payment link.");
+        }
+    }
+
+    private long findOutputSats(JsonNode transaction, String expectedAddress) {
+        JsonNode outputs = transaction.path("vout");
+        if (!outputs.isArray()) {
+            return 0L;
+        }
+        long total = 0L;
+        for (JsonNode output : outputs) {
+            if (outputPaysAddress(output, expectedAddress)) {
+                total += outputValueSats(output);
+            }
+        }
+        return total;
+    }
+
+    private boolean outputPaysAddress(JsonNode output, String expectedAddress) {
+        if (expectedAddress.equals(output.path("scriptpubkey_address").asText(null))) {
+            return true;
+        }
+        JsonNode scriptPubKey = output.path("scriptPubKey");
+        if (expectedAddress.equals(scriptPubKey.path("address").asText(null))) {
+            return true;
+        }
+        JsonNode addresses = scriptPubKey.path("addresses");
+        if (addresses.isArray()) {
+            for (JsonNode address : addresses) {
+                if (expectedAddress.equals(address.asText())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private long outputValueSats(JsonNode output) {
+        JsonNode sats = output.path("value");
+        if (sats.isIntegralNumber()) {
+            return sats.asLong();
+        }
+        if (sats.isNumber()) {
+            return btcToSats(sats.decimalValue());
+        }
+        return 0L;
+    }
+
+    private long btcToSats(BigDecimal amountBtc) {
+        try {
+            return amountBtc.multiply(SATS_PER_BTC)
+                    .setScale(0, RoundingMode.UNNECESSARY)
+                    .longValueExact();
+        } catch (ArithmeticException ex) {
+            throw new PaymentLinkExceptions.InvalidPaymentLinkTransaction(
+                    "Payment link amount uses invalid BTC precision.");
+        }
     }
 }

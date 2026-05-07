@@ -2,10 +2,8 @@ package source.security;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -18,9 +16,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * ─── Phase 4: RAM-Only Telemetry (Low-Trace Monitoring) ─────────────────────
  *
  * Design Principles:
- * - ALL metrics live exclusively in JVM heap — zero disk writes.
- * - Uses SimpleMeterRegistry (in-process only), NOT Prometheus/Graphite
- * exports.
+     * - Metrics are emitted through Spring's MeterRegistry and can be scraped via
+     * Actuator/Prometheus when the runtime enables that endpoint.
  * - Recent event log capped at MAX_EVENTS entries to bound memory usage.
  * - Exposed only at GET /sovereignty/telemetry (internal network).
  *
@@ -156,13 +153,4 @@ public class TelemetryService {
         }
     }
 
-    /**
-     * Provide a SimpleMeterRegistry bean so Spring uses in-process metrics only.
-     * This intentionally overrides any auto-configured Prometheus/Graphite exporter
-     * in the event those dependencies are added to the classpath in the future.
-     */
-    @Bean
-    public static MeterRegistry keroseneInMemoryRegistry() {
-        return new SimpleMeterRegistry();
-    }
 }

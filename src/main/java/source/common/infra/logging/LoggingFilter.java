@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
@@ -21,7 +23,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Component
+@Order(Ordered.LOWEST_PRECEDENCE - 10)
 public class LoggingFilter extends OncePerRequestFilter {
 
     private static final Logger accessLogger = LoggerFactory.getLogger("source.common.infra.logging.LoggingFilter");
@@ -64,24 +69,18 @@ public class LoggingFilter extends OncePerRequestFilter {
         String uri = request.getRequestURI();
         int status = response.getStatus();
 
-        // Optional logic to skip noisy endpoints like healthchecks
-        if (uri.startsWith("/actuator") || uri.startsWith("/ws")) {
+        if (uri.startsWith("/actuator") || uri.startsWith("/health/") || uri.startsWith("/ws")) {
             return;
         }
 
-        Map<String, String> safeHeaders = getSafeHeaders(request);
-        String safeRequestBody = safeBodyForLogging(
-                uri,
-                getPayload(request.getContentAsByteArray(), request.getCharacterEncoding()));
-        String safeResponseBody = safeBodyForLogging(
-                uri,
-                getPayload(response.getContentAsByteArray(), response.getCharacterEncoding()));
-
-        // OpSec rule: IP is not logged correctly or is masked pseudo-anonymously
-        String clientIp = "MASKED_IP";
-
-        accessLogger.info("HTTP {} {} - Status: {} - Duration: {}ms - IP: {} - Headers: {} - ReqBody: {} - ResBody: {}",
-                method, uri, status, duration, clientIp, safeHeaders, safeRequestBody, safeResponseBody);
+        accessLogger.info("http_access {} {} {} {} {} {} {}",
+                kv("http.method", method),
+                kv("url.path", uri),
+                kv("http.status_code", status),
+                kv("duration_ms", duration),
+                kv("client.ip", LogSanitizer.maskedIp(request.getRemoteAddr())),
+                kv("http.request.body.bytes", request.getContentAsByteArray().length),
+                kv("http.response.body.bytes", response.getContentAsByteArray().length));
     }
 
     private Map<String, String> getSafeHeaders(HttpServletRequest request) {

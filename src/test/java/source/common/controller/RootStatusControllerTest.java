@@ -16,7 +16,8 @@ class RootStatusControllerTest {
 
         assertEquals("ok", payload.get("status"));
         assertEquals("v0.5", payload.get("service"));
-        assertEquals("/actuator/health", payload.get("health"));
+        assertEquals("/health/ready", payload.get("health"));
+        assertEquals("/health/live", payload.get("liveness"));
         assertEquals("/sovereignty/status", payload.get("sovereignty"));
     }
 }

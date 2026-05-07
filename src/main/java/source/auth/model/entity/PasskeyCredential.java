@@ -1,6 +1,9 @@
 package source.auth.model.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -31,6 +34,35 @@ public class PasskeyCredential {
 
     @Column(name = "origin_host")
     private String originHost;
+
+    @Column(name = "brand")
+    private String brand;
+
+    @Column(name = "model")
+    private String model;
+
+    @Column(name = "serial_number")
+    private String serialNumber;
+
+    @Column(name = "device_install_id")
+    private String deviceInstallId;
+
+    @Column(name = "platform")
+    private String platform;
+
+    @Column(name = "browser")
+    private String browser;
+
+    @Column(name = "status", nullable = false, length = 32)
+    private String status = "ACTIVE";
+
+    @CreationTimestamp
+    @Column(name = "first_access_at", updatable = false)
+    private LocalDateTime firstAccessAt;
+
+    @UpdateTimestamp
+    @Column(name = "last_access_at")
+    private LocalDateTime lastAccessAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -101,6 +133,70 @@ public class PasskeyCredential {
 
     public void setOriginHost(String originHost) {
         this.originHost = originHost;
+    }
+
+    public String getBrand() {
+        return brand;
+    }
+
+    public void setBrand(String brand) {
+        this.brand = brand;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    public String getSerialNumber() {
+        return serialNumber;
+    }
+
+    public void setSerialNumber(String serialNumber) {
+        this.serialNumber = serialNumber;
+    }
+
+    public String getDeviceInstallId() {
+        return deviceInstallId;
+    }
+
+    public void setDeviceInstallId(String deviceInstallId) {
+        this.deviceInstallId = deviceInstallId;
+    }
+
+    public String getPlatform() {
+        return platform;
+    }
+
+    public void setPlatform(String platform) {
+        this.platform = platform;
+    }
+
+    public String getBrowser() {
+        return browser;
+    }
+
+    public void setBrowser(String browser) {
+        this.browser = browser;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status == null || status.isBlank() ? "ACTIVE" : status.trim().toUpperCase(java.util.Locale.ROOT);
+    }
+
+    public LocalDateTime getFirstAccessAt() {
+        return firstAccessAt;
+    }
+
+    public LocalDateTime getLastAccessAt() {
+        return lastAccessAt;
     }
 
     public UserDataBase getUser() {

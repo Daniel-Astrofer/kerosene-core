@@ -3,6 +3,7 @@ package source.notification.model;
 public enum NotificationKind {
     SYSTEM_INFO("system_info"),
     SECURITY_LOGIN_DETECTED("security_login_detected"),
+    SECURITY_ADMIN_ACCESS_ATTEMPT("security_admin_access_attempt"),
     SECURITY_RECOVERY_COMPLETED("security_recovery_completed"),
     ACCOUNT_CREATED("account_created"),
     TRANSFER_RECEIVED("transfer_received"),

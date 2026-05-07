@@ -11,6 +11,7 @@ import source.auth.application.service.identityaccess.TransactionalAuthenticatio
 import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
+import source.common.observability.FinancialOperationsMetrics;
 import source.ledger.application.transaction.AuthenticatedUserPort;
 import source.ledger.application.transaction.InternalTransferHistoryPort;
 import source.ledger.application.transaction.TransactionIdempotencyPort;
@@ -76,6 +77,9 @@ class TransactionTest {
     @Mock
     private TransactionNotificationPort notificationPort;
 
+    @Mock
+    private FinancialOperationsMetrics financialMetrics;
+
     private TransactionProcessingUseCase transactionProcessingUseCase;
 
     private TransactionDTO transactionDTO;
@@ -91,7 +95,7 @@ class TransactionTest {
                 new TransactionTimestampValidationHandler(),
                 new AuthenticatedSenderHandler(authenticatedUserPort, participantResolver),
                 new TransactionAuthenticationHandler(authenticationPort),
-                new TransactionIdempotencyHandler(transactionIdempotencyPort),
+                new TransactionIdempotencyHandler(transactionIdempotencyPort, financialMetrics),
                 new TransactionWalletResolutionHandler(participantResolver),
                 new TransactionExecutionHandler(new TransactionLedgerService(ledgerService)),
                 new TransactionHistoryHandler(historyPort),
@@ -130,6 +134,7 @@ class TransactionTest {
         transactionDTO.setReceiver("receiver");
         transactionDTO.setAmount(new BigDecimal("50.00"));
         transactionDTO.setContext("Payment for services");
+        transactionDTO.setIdempotencyKey("idem-transaction-test");
         transactionDTO.setConfirmationPassphrase("sender-passphrase");
         transactionDTO.setTotpCode("123456");
 
@@ -193,6 +198,29 @@ class TransactionTest {
                 eq(senderWallet.getId()),
                 eq(transactionDTO.getAmount().negate()),
                 anyString());
+    }
+
+    @Test
+    @DisplayName("Should reject negative amount before ledger mutation")
+    void shouldRejectNegativeAmountBeforeLedgerMutation() {
+        transactionDTO.setAmount(new BigDecimal("-50.00"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> transactionProcessingUseCase.process(transactionDTO));
+
+        verify(ledgerService, never()).updateBalance(anyLong(), any(BigDecimal.class), anyString());
+    }
+
+    @Test
+    @DisplayName("Should require idempotency key before ledger mutation")
+    void shouldRequireIdempotencyKeyBeforeLedgerMutation() {
+        transactionDTO.setIdempotencyKey(null);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> transactionProcessingUseCase.process(transactionDTO));
+
+        verify(transactionIdempotencyPort, never()).reserve(anyString(), anyLong(), any(TimeUnit.class));
+        verify(ledgerService, never()).updateBalance(anyLong(), any(BigDecimal.class), anyString());
     }
 
     @Test

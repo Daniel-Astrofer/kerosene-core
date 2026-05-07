@@ -1,10 +1,29 @@
 package source.transactions.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.math.BigDecimal;
 
 public class WithdrawRequestDTO {
+    @NotBlank(message = "idempotencyKey is required")
+    @Size(max = 96, message = "idempotencyKey must have at most 96 characters")
+    private String idempotencyKey;
+
+    @NotBlank(message = "fromWalletName is required")
     private String fromWalletName;
+
+    @NotBlank(message = "toAddress is required")
     private String toAddress;
+
+    @NotNull(message = "amount is required")
+    @DecimalMin(value = "0.00000001", message = "amount must be greater than zero")
+    @DecimalMax(value = "21000000.00000000", message = "amount exceeds the maximum supported BTC amount")
+    @Digits(integer = 8, fraction = 8, message = "amount must use BTC precision with at most 8 decimal places")
     private BigDecimal amount;
     private String description;
     private String totpCode;
@@ -21,6 +40,14 @@ public class WithdrawRequestDTO {
 
     public void setConfirmationPassphrase(String confirmationPassphrase) {
         this.confirmationPassphrase = confirmationPassphrase;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public String getFromWalletName() {

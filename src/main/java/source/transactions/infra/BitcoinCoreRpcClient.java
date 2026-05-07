@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -96,12 +97,38 @@ public class BitcoinCoreRpcClient implements BlockchainClient {
 
     @Override
     public JsonNode getRawTransaction(String txid, boolean verbose) {
-        return unwrapResult(executeRpc("getrawtransaction", txid, verbose ? 1 : 0));
+        try {
+            return unwrapResult(executeRpc("getrawtransaction", txid, verbose ? 1 : 0));
+        } catch (RuntimeException rawTransactionFailure) {
+            return walletTransaction(txid, rawTransactionFailure);
+        }
     }
 
     public long getBlockCount() {
         JsonNode result = unwrapResult(executeRpc("getblockcount"));
         return result != null && result.isNumber() ? result.asLong() : 0L;
+    }
+
+    public String walletName() {
+        return walletName;
+    }
+
+    public String getNewAddress(String label) {
+        JsonNode result = unwrapResult(executeRpc("getnewaddress", label != null ? label : "", "bech32"));
+        String address = result != null && !result.isNull() ? result.asText() : "";
+        if (address.isBlank()) {
+            throw new IllegalStateException("Bitcoin Core did not return a new receiving address.");
+        }
+        return address;
+    }
+
+    private JsonNode walletTransaction(String txid, RuntimeException rawTransactionFailure) {
+        try {
+            return unwrapResult(executeRpc("gettransaction", txid, true, true));
+        } catch (RuntimeException walletFailure) {
+            rawTransactionFailure.addSuppressed(walletFailure);
+            throw rawTransactionFailure;
+        }
     }
 
     public FundedPsbt createFundedPsbt(String destinationAddress, long amountSats, Integer confirmationTarget) {
@@ -126,6 +153,68 @@ public class BitcoinCoreRpcClient implements BlockchainClient {
         String psbt = text(result, "psbt");
         long feeSats = btcNodeToSats(result.path("fee"));
         return new FundedPsbt(psbt, feeSats);
+    }
+
+    public void importWatchOnlyDescriptor(String descriptor, LocalDateTime timestamp) {
+        if (descriptor == null || descriptor.isBlank()) {
+            throw new IllegalArgumentException("descriptor is required");
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("desc", descriptor.trim());
+        request.put("timestamp", "now");
+        request.put("active", true);
+        request.put("watchonly", true);
+        if (descriptor.contains("*")) {
+            request.put("range", List.of(0, 1000));
+        }
+        unwrapResult(executeRpc("importdescriptors", List.of(request)));
+    }
+
+    public FundedPsbt createWatchOnlyPsbt(
+            List<PsbtInput> selectedInputs,
+            String destinationAddress,
+            long amountSats,
+            Integer confirmationTarget,
+            Long feeRateSatsPerVbyte) {
+        if (selectedInputs == null || selectedInputs.isEmpty()) {
+            throw new IllegalArgumentException("At least one selected input is required for watch-only PSBT creation.");
+        }
+        List<Map<String, Object>> inputs = selectedInputs.stream()
+                .map(input -> Map.<String, Object>of(
+                        "txid", input.txid(),
+                        "vout", input.vout()))
+                .toList();
+
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put(destinationAddress, satsToBtc(amountSats));
+
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("includeWatching", true);
+        options.put("add_inputs", false);
+        options.put("change_type", "bech32");
+        boolean explicitFeeRate = feeRateSatsPerVbyte != null && feeRateSatsPerVbyte > 0L;
+        if (explicitFeeRate) {
+            options.put("fee_rate", satsPerVbyteToBtcPerKvbyte(feeRateSatsPerVbyte));
+        }
+        if (!explicitFeeRate && confirmationTarget != null && confirmationTarget > 0) {
+            options.put("conf_target", confirmationTarget);
+        }
+
+        JsonNode result = unwrapResult(executeRpc(
+                "walletcreatefundedpsbt",
+                inputs,
+                List.of(output),
+                0,
+                options,
+                true));
+
+        String psbt = text(result, "psbt");
+        long feeSats = btcNodeToSats(result.path("fee"));
+        return new FundedPsbt(psbt, feeSats);
+    }
+
+    public JsonNode decodePsbt(String psbt) {
+        return unwrapResult(executeRpc("decodepsbt", psbt));
     }
 
     public String combinePsbt(List<String> partialPsbts) {
@@ -175,6 +264,12 @@ public class BitcoinCoreRpcClient implements BlockchainClient {
                 .longValue();
     }
 
+    private BigDecimal satsPerVbyteToBtcPerKvbyte(long satsPerVbyte) {
+        return BigDecimal.valueOf(satsPerVbyte)
+                .multiply(BigDecimal.valueOf(1000L))
+                .divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.HALF_UP);
+    }
+
     private BigDecimal satsToBtc(long sats) {
         return new BigDecimal(sats).divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.HALF_UP);
     }
@@ -196,5 +291,8 @@ public class BitcoinCoreRpcClient implements BlockchainClient {
     }
 
     public record FinalizedPsbt(String hex, boolean complete) {
+    }
+
+    public record PsbtInput(String txid, int vout) {
     }
 }

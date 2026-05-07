@@ -2,7 +2,7 @@ package source.transactions.infra;
 
 import java.time.LocalDateTime;
 
-public interface CustodyGateway {
+public interface CustodyGateway extends LightningInvoiceGateway, LightningPaymentGateway {
 
     boolean isLive();
 
@@ -82,6 +82,7 @@ public interface CustodyGateway {
             String destinationAddress,
             long amountSats,
             String description,
+            String idempotencyKey,
             String authorizationProof) {
     }
 
@@ -93,6 +94,7 @@ public interface CustodyGateway {
             long amountSats,
             long maxFeeSats,
             String description,
+            String idempotencyKey,
             String authorizationProof) {
     }
 

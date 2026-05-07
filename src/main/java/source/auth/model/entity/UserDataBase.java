@@ -5,6 +5,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import source.auth.model.contracts.UserDB;
 import source.auth.model.enums.AccountSecurityType;
+import source.auth.model.enums.UserRole;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
@@ -66,6 +67,10 @@ public class UserDataBase implements UserDB {
 
     @Column(name = "test_balance_claimed", nullable = false, columnDefinition = "boolean default false")
     private Boolean testBalanceClaimed = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 32, columnDefinition = "VARCHAR(32) DEFAULT 'USER'")
+    private UserRole role = UserRole.USER;
 
     /**
      * AES-256-GCM encrypted co-signer secret (Base64-encoded IV + ciphertext).
@@ -240,6 +245,14 @@ public class UserDataBase implements UserDB {
 
     public void setTestBalanceClaimed(Boolean testBalanceClaimed) {
         this.testBalanceClaimed = testBalanceClaimed;
+    }
+
+    public UserRole getRole() {
+        return role != null ? role : UserRole.USER;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role != null ? role : UserRole.USER;
     }
 
     public java.util.List<String> getBackupCodes() {

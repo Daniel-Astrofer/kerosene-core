@@ -17,7 +17,9 @@ public class ProductionSafetyCheckChain {
         this.beanFactory = beanFactory;
         this.chain = new MockBeanProductionSafetyCheck(
                 new BooleanPropertyProductionSafetyCheck(
-                        new TextPropertyProductionSafetyCheck(null)));
+                        new PlatformMpcSigningProductionSafetyCheck(
+                                new ExternalRailProviderProductionSafetyCheck(
+                                        new TextPropertyProductionSafetyCheck(null)))));
     }
 
     public List<String> collectViolations() {

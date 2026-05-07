@@ -29,6 +29,10 @@ public class PaymentLinkDTO {
     private LocalDateTime completedAt;
     private LocalDateTime cancelledAt;
     private String cancelReason;
+    private String paymentRail = "ONCHAIN";
+    private String paymentIntentStatus = "QUOTED";
+    private String settlementReference;
+    private Boolean terminal = false;
 
     public PaymentLinkDTO() {
     }
@@ -39,6 +43,7 @@ public class PaymentLinkDTO {
         this.amountBtc = amountBtc;
         this.depositAddress = depositAddress;
         this.status = "pending";
+        refreshPaymentIntentCompatibility();
     }
 
     public String getId() {
@@ -47,6 +52,7 @@ public class PaymentLinkDTO {
 
     public void setId(String id) {
         this.id = id;
+        refreshPaymentIntentCompatibility();
     }
 
     public Long getUserId() {
@@ -159,6 +165,7 @@ public class PaymentLinkDTO {
 
     public void setStatus(String status) {
         this.status = status;
+        refreshPaymentIntentCompatibility();
     }
 
     public String getTxid() {
@@ -167,6 +174,7 @@ public class PaymentLinkDTO {
 
     public void setTxid(String txid) {
         this.txid = txid;
+        refreshPaymentIntentCompatibility();
     }
 
     public LocalDateTime getExpiresAt() {
@@ -215,5 +223,81 @@ public class PaymentLinkDTO {
 
     public void setCancelReason(String cancelReason) {
         this.cancelReason = cancelReason;
+    }
+
+    public String getPaymentRail() {
+        return paymentRail;
+    }
+
+    public void setPaymentRail(String paymentRail) {
+        this.paymentRail = hasText(paymentRail) ? paymentRail : "ONCHAIN";
+    }
+
+    public String getPaymentIntentStatus() {
+        return paymentIntentStatus;
+    }
+
+    public void setPaymentIntentStatus(String paymentIntentStatus) {
+        this.paymentIntentStatus = hasText(paymentIntentStatus)
+                ? paymentIntentStatus
+                : mapPaymentIntentStatus(status);
+        this.terminal = isTerminalPaymentIntentStatus(this.paymentIntentStatus);
+    }
+
+    public String getSettlementReference() {
+        return settlementReference;
+    }
+
+    public void setSettlementReference(String settlementReference) {
+        this.settlementReference = hasText(settlementReference)
+                ? settlementReference
+                : defaultSettlementReference();
+    }
+
+    public Boolean getTerminal() {
+        return terminal;
+    }
+
+    public void setTerminal(Boolean terminal) {
+        this.terminal = terminal;
+    }
+
+    private void refreshPaymentIntentCompatibility() {
+        this.paymentRail = "ONCHAIN";
+        this.paymentIntentStatus = mapPaymentIntentStatus(status);
+        this.settlementReference = defaultSettlementReference();
+        this.terminal = isTerminalPaymentIntentStatus(paymentIntentStatus);
+    }
+
+    private String mapPaymentIntentStatus(String status) {
+        if (status == null) {
+            return "REQUIRES_RECONCILIATION";
+        }
+        return switch (status.trim().toLowerCase()) {
+            case "pending" -> "QUOTED";
+            case "paid", "completed" -> "SETTLED";
+            case "expired" -> "EXPIRED";
+            case "cancelled", "canceled" -> "CANCELED";
+            case "verifying_onboarding", "verifying_activation" -> "PROCESSING";
+            default -> "REQUIRES_RECONCILIATION";
+        };
+    }
+
+    private boolean isTerminalPaymentIntentStatus(String status) {
+        return "SETTLED".equals(status)
+                || "FAILED".equals(status)
+                || "CANCELED".equals(status)
+                || "EXPIRED".equals(status);
+    }
+
+    private String defaultSettlementReference() {
+        if (hasText(txid)) {
+            return txid;
+        }
+        return hasText(id) ? "payment-link:" + id : null;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

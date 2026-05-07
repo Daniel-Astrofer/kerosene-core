@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -20,8 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import source.common.infra.logging.LogSanitizer;
 import source.common.service.AddressDerivationService;
-import source.transactions.service.BitcoinNodeService;
 
 import java.util.ArrayList;
 import java.util.Locale;
@@ -36,7 +37,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * require an API key by default.
  */
 @Component
-@ConditionalOnMissingBean(BitcoinNodeService.class)
+@ConditionalOnProperty(prefix = "bitcoin.esplora", name = "enabled", havingValue = "true")
+@ConditionalOnMissingBean(BlockchainClient.class)
 public class EsploraBitcoinClient implements BlockchainClient {
 
     private static final Logger log = LoggerFactory.getLogger(EsploraBitcoinClient.class);
@@ -60,7 +62,7 @@ public class EsploraBitcoinClient implements BlockchainClient {
 
     public EsploraBitcoinClient(
             @Value("${bitcoin.esplora.base-url:}") String configuredBaseUrl,
-            @Value("${bitcoin.network:testnet}") String network,
+            @Value("${bitcoin.network:mainnet}") String network,
             @Value("${bitcoin.hot-wallet.address:}") String hotWalletAddress,
             @Value("${bitcoin.hot-wallet.xpub:}") String hotWalletXpub,
             @Value("${bitcoin.hot-wallet.xpub-scan-range:128}") int hotWalletXpubScanRange,
@@ -165,7 +167,8 @@ public class EsploraBitcoinClient implements BlockchainClient {
         } catch (HttpClientErrorException.NotFound ex) {
             return objectMapper.createArrayNode();
         } catch (Exception ex) {
-            log.warn("[EsploraBitcoinClient] Address transaction lookup failed for {}: {}", address, ex.getMessage());
+            log.warn("[EsploraBitcoinClient] Address transaction lookup failed for addressRef={}: {}",
+                    LogSanitizer.fingerprint(address), ex.getMessage());
             return objectMapper.createArrayNode();
         }
     }
@@ -194,7 +197,8 @@ public class EsploraBitcoinClient implements BlockchainClient {
         } catch (HttpClientErrorException.NotFound ex) {
             return 0L;
         } catch (Exception ex) {
-            log.warn("[EsploraBitcoinClient] Address balance lookup failed for {}: {}", address, ex.getMessage());
+            log.warn("[EsploraBitcoinClient] Address balance lookup failed for addressRef={}: {}",
+                    LogSanitizer.fingerprint(address), ex.getMessage());
             return 0L;
         }
     }
@@ -250,7 +254,8 @@ public class EsploraBitcoinClient implements BlockchainClient {
         } catch (HttpClientErrorException.NotFound ex) {
             return java.util.List.of();
         } catch (Exception ex) {
-            log.warn("[EsploraBitcoinClient] UTXO lookup failed for {}: {}", address, ex.getMessage());
+            log.warn("[EsploraBitcoinClient] UTXO lookup failed for addressRef={}: {}",
+                    LogSanitizer.fingerprint(address), ex.getMessage());
             return java.util.List.of();
         }
     }
@@ -312,7 +317,8 @@ public class EsploraBitcoinClient implements BlockchainClient {
         } catch (HttpClientErrorException.NotFound ex) {
             return null;
         } catch (Exception ex) {
-            log.warn("[EsploraBitcoinClient] Transaction lookup failed for {}: {}", txid, ex.getMessage());
+            log.warn("[EsploraBitcoinClient] Transaction lookup failed for txRef={}: {}",
+                    LogSanitizer.fingerprint(txid), ex.getMessage());
             return null;
         }
     }
@@ -430,11 +436,9 @@ public class EsploraBitcoinClient implements BlockchainClient {
             return explicit;
         }
 
-        return switch (normalizeNetwork(network)) {
-            case "testnet" -> "https://blockstream.info/testnet/api";
-            case "signet" -> "https://blockstream.info/signet/api";
-            default -> "https://blockstream.info/api";
-        };
+        throw new IllegalArgumentException(
+                "bitcoin.esplora.base-url must be set when bitcoin.esplora.enabled=true. "
+                        + "Use a local Esplora/electrs-compatible endpoint, not a public API as the primary source.");
     }
 
     private boolean shouldSkipAddressLookup(String address) {
@@ -444,8 +448,8 @@ public class EsploraBitcoinClient implements BlockchainClient {
         } catch (AddressFormatException ex) {
             if (skippedInvalidAddresses.add(address)) {
                 log.debug(
-                        "[EsploraBitcoinClient] Skipping address {} because it is incompatible with bitcoin.network={}",
-                        address,
+                        "[EsploraBitcoinClient] Skipping addressRef={} because it is incompatible with bitcoin.network={}",
+                        LogSanitizer.fingerprint(address),
                         bitcoinNetwork);
             }
             return true;

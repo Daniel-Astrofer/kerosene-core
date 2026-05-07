@@ -1,5 +1,6 @@
 package source.transactions.controller;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -57,7 +58,7 @@ public class NetworkPaymentsController {
 
     @PostMapping("/onchain/send")
     public ResponseEntity<ApiResponse<ExternalTransferResponseDTO>> sendOnchain(
-            @RequestBody OnchainSendRequestDTO request,
+            @Valid @RequestBody OnchainSendRequestDTO request,
             Authentication authentication) {
         ExternalTransferResponseDTO response = externalPaymentsService.sendOnchain(
                 authenticatedUserId(authentication),
@@ -69,7 +70,7 @@ public class NetworkPaymentsController {
 
     @PostMapping("/lightning/invoice")
     public ResponseEntity<ApiResponse<LightningInvoiceResponseDTO>> createLightningInvoice(
-            @RequestBody LightningInvoiceRequestDTO request,
+            @Valid @RequestBody LightningInvoiceRequestDTO request,
             Authentication authentication) {
         LightningInvoiceResponseDTO response = externalPaymentsService.createLightningInvoice(
                 authenticatedUserId(authentication),
@@ -90,7 +91,7 @@ public class NetworkPaymentsController {
 
     @PostMapping("/lightning/pay")
     public ResponseEntity<ApiResponse<ExternalTransferResponseDTO>> payLightning(
-            @RequestBody LightningPaymentRequestDTO request,
+            @Valid @RequestBody LightningPaymentRequestDTO request,
             Authentication authentication) {
         ExternalTransferResponseDTO response = externalPaymentsService.payLightning(
                 authenticatedUserId(authentication),

@@ -90,6 +90,7 @@ public class ExternalTransferFactory {
                 entity.getBlockchainTxid(),
                 entity.getPaymentHash(),
                 entity.getInvoiceData(),
+                entity.getExpectedAmountBtc(),
                 entity.getAmountBtc(),
                 entity.getNetworkFeeBtc(),
                 entity.getPlatformFeeBtc(),

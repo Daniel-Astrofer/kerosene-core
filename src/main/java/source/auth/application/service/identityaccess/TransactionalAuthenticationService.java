@@ -9,18 +9,17 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import source.auth.AuthExceptions;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import source.auth.application.service.cripto.contracts.Hasher;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 import source.common.exception.ErrorCodes;
+import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
-
-import java.util.Base64;
 
 @Service
 public class TransactionalAuthenticationService implements TransactionalAuthenticationPort {
@@ -133,7 +132,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         if (!hasher.verify(confirmationPassphrase.toCharArray(), user.getPassphrase())) {
             throw new AuthExceptions.InvalidPassphrase("Invalid passphrase for transaction authorization.");
         }
-        log.info("Transaction passphrase factor verified for {}", user.getUsername());
+        log.info("Transaction passphrase factor verified for userId={}", user.getId());
         return true;
     }
 
@@ -160,7 +159,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         } else {
             totpVerifier.totpVerify(request.totpSecret(), request.totpCode());
         }
-        log.info("Transaction TOTP factor verified for {}", user.getUsername());
+        log.info("Transaction TOTP factor verified for userId={}", user.getId());
         return true;
     }
 
@@ -191,14 +190,14 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
 
             byte[] credentialIdBytes = CryptoUtils.decodeBase64(credentialId);
 
-            log.info("Searching for passkey: userId={}, credentialId={} (string: {})",
-                    user.getId(), bytesToHex(credentialIdBytes), credentialId);
+            log.info("Searching for passkey: userId={} credentialRef={}",
+                    user.getId(), LogSanitizer.fingerprint(credentialIdBytes));
 
-            PasskeyCredential credential = passkeyCredentialRepository
-                    .findByCredentialIdAndUserId(credentialIdBytes, user.getId())
+            PasskeyVerificationProjection credential = passkeyCredentialRepository
+                    .findVerificationByCredentialIdAndUserId(credentialIdBytes, user.getId())
                     .orElseThrow(() -> {
-                        log.error("Passkey NOT FOUND for user {}: credentialId={} (decodes to hex: {})",
-                                user.getUsername(), credentialId, bytesToHex(credentialIdBytes));
+                        log.error("Passkey not found for userId={} credentialRef={}",
+                                user.getId(), LogSanitizer.fingerprint(credentialIdBytes));
                         return new AuthExceptions.StructuredAuthException(
                                 "A passkey informada nao esta vinculada a este usuario.",
                                 HttpStatus.CONFLICT,
@@ -208,9 +207,29 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                                         "A passkey enviada nao pertence a esta conta. Vincule uma nova passkey."));
                     });
 
+            if (!isActiveCredential(credential.status())) {
+                throw new AuthExceptions.StructuredAuthException(
+                        "Este dispositivo autenticado foi bloqueado ou revogado.",
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                        passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                user,
+                                "Revise os dispositivos autenticados no app antes de tentar novamente."));
+            }
+            if (passkeyInventoryService.isKnownIncompatibleForCurrentLogin(
+                    credential.relyingPartyId(), credential.originHost())) {
+                throw new AuthExceptions.StructuredAuthException(
+                        "Esta passkey foi vinculada a outro login/origem e nao pode autenticar aqui.",
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.AUTH_PASSKEY_LINK_REQUIRED,
+                        passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                user,
+                                "Entre com senha + TOTP e vincule uma nova passkey compativel com este dispositivo."));
+            }
+
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(user.getUsername());
             if (consumedChallenge == null) {
-                log.warn("Passkey challenge expired or not found for user {}", user.getUsername());
+                log.warn("Passkey challenge expired or not found for userId={}", user.getId());
                 String renewedChallenge = passkeyService.generateChallenge(user.getUsername());
                 throw new AuthExceptions.StructuredAuthException(
                         "PASSKEY_CHALLENGE_REQUIRED:" + renewedChallenge,
@@ -222,14 +241,14 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                                 "O challenge da passkey expirou. Assine um novo challenge para continuar."));
             }
 
-            boolean passkeyValid = passkeyService.verifySignature(
+            PasskeyService.PasskeyVerificationResult verification = passkeyService.verifyAuthenticationAssertion(
                     user.getUsername(),
                     consumedChallenge,
                     signature,
-                    credential.getPublicKeyCose(),
+                    credential.publicKeyCose(),
                     authData,
                     clientDataJSON);
-            if (!passkeyValid) {
+            if (!verification.verified()) {
                 String renewedChallenge = passkeyService.generateChallenge(user.getUsername());
                 throw new AuthExceptions.StructuredAuthException(
                         "PASSKEY_CHALLENGE_REQUIRED:" + renewedChallenge,
@@ -241,10 +260,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                                 "A assertiva da passkey foi rejeitada. Gere uma nova assinatura ou vincule outra passkey."));
             }
 
-            long newSignatureCount = passkeyService.extractSignatureCount(authData);
-            if (newSignatureCount <= credential.getSignatureCount()) {
-                log.error("Passkey signature counter replay detected for user {}. stored={} received={}",
-                        user.getUsername(), credential.getSignatureCount(), newSignatureCount);
+            long newSignatureCount = verification.signatureCount();
+            if (newSignatureCount <= credential.signatureCount()) {
+                log.error("Passkey signature counter replay detected for userId={}. stored={} received={}",
+                        user.getId(), credential.signatureCount(), newSignatureCount);
                 throw new AuthExceptions.StructuredAuthException(
                         "O contador do autenticador nao avancou; a passkey foi rejeitada por seguranca.",
                         HttpStatus.CONFLICT,
@@ -254,10 +273,23 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                                 "Esta passkey retornou um contador invalido. Vincule outra passkey ou refaca o login."));
             }
 
-            credential.setSignatureCount(newSignatureCount);
-            passkeyCredentialRepository.save(credential);
+            int updated = passkeyCredentialRepository.advanceSignatureCount(
+                    credential.credentialId(),
+                    user.getId(),
+                    newSignatureCount);
+            if (updated != 1) {
+                log.error("Passkey signature counter atomic advance rejected for userId={} received={}",
+                        user.getId(), newSignatureCount);
+                throw new AuthExceptions.StructuredAuthException(
+                        "O contador do autenticador nao avancou; a passkey foi rejeitada por seguranca.",
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.AUTH_PASSKEY_REPLAY,
+                        passkeyInventoryService.buildLinkNewPasskeyGuidance(
+                                user,
+                                "Esta passkey retornou um contador invalido. Vincule outra passkey ou refaca o login."));
+            }
 
-            log.info("Transaction passkey factor verified for {}", user.getUsername());
+            log.info("Transaction passkey factor verified for userId={}", user.getId());
             return true;
         } catch (AuthExceptions.AuthValidationException exception) {
             throw exception;
@@ -341,16 +373,11 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return value;
     }
 
-    private String bytesToHex(byte[] bytes) {
-        if (bytes == null) return "null";
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
-    }
-
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private boolean isActiveCredential(String status) {
+        return status == null || status.isBlank() || "ACTIVE".equalsIgnoreCase(status);
     }
 }

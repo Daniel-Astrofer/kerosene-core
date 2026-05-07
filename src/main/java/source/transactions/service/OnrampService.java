@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
+import source.common.infra.logging.LogSanitizer;
 import source.transactions.application.externalpayments.ExternalPaymentsMath;
 import source.transactions.application.externalpayments.ExternalTransferFactory;
 import source.transactions.application.externalpayments.ExternalTransfersPort;
@@ -154,8 +155,10 @@ public class OnrampService {
                 "onramp:" + wallet.getName(),
                 true);
         registerAddressWatch(allocation.address(), wallet, allocation.externalReference());
-        log.info("[Onramp] Issued dedicated custodial address {} for wallet {} (ref={})",
-                allocation.address(), wallet.getId(), allocation.externalReference());
+        log.info("[Onramp] Issued dedicated custodial addressRef={} for wallet {} externalRef={}",
+                LogSanitizer.fingerprint(allocation.address()),
+                wallet.getId(),
+                LogSanitizer.fingerprint(allocation.externalReference()));
         return new AddressAllocation(allocation.address(), allocation.externalReference(), allocation.provider());
     }
 

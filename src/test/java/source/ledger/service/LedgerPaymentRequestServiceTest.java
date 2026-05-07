@@ -156,7 +156,7 @@ class LedgerPaymentRequestServiceTest {
         when(paymentRequestStore.findById(linkId)).thenReturn(req);
         when(walletService.findById(55L)).thenReturn(receiverWallet);
 
-        service.payRequest(linkId, 22L, "PAYER", "123456", null, "passphrase");
+        service.payRequest(linkId, 22L, "PAYER", "pay-request-idem-1", "123456", null, "passphrase");
 
         ArgumentCaptor<TransactionDTO> txCaptor = ArgumentCaptor.forClass(TransactionDTO.class);
         verify(transactionOrchestrator).processTransaction(txCaptor.capture());
@@ -165,6 +165,8 @@ class LedgerPaymentRequestServiceTest {
         assertEquals("55", tx.getReceiver());
         assertEquals(new BigDecimal("0.12500000"), tx.getAmount());
         assertEquals("Payment Link " + linkId, tx.getContext());
+        assertEquals("pay-request-idem-1", tx.getIdempotencyKey());
+        assertNotNull(tx.getRequestTimestamp());
 
         assertEquals("PAID", req.getStatus());
         verify(historyRepository).updateStatus(UUID.fromString(linkId), "CONCLUDED");

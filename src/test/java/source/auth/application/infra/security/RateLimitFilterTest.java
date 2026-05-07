@@ -41,13 +41,33 @@ class RateLimitFilterTest {
     @Test
     void shouldRejectWhenPublicRouteExceedsLimit() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(21L);
+        when(redisServicer.increment(anyString())).thenReturn(11L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(jsonRequest("/auth/login", "{\"username\":\"alice\"}"), response, chain);
+
+        assertEquals(429, response.getStatus());
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void shouldApplyGranularLimitToFundMovementRoutes() throws Exception {
+        RedisServicer redisServicer = mock(RedisServicer.class);
+        when(redisServicer.increment(anyString())).thenReturn(7L);
+
+        RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest request = jsonRequest(
+                "/transactions/network/onchain/send",
+                "{\"fromWalletName\":\"main\",\"idempotencyKey\":\"idem-1\"}");
+        request.addHeader("Authorization", "Bearer jwt");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, chain);
 
         assertEquals(429, response.getStatus());
         verify(chain, never()).doFilter(any(), any());

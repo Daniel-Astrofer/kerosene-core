@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import source.ledger.application.balance.LedgerActiveUserPort;
@@ -52,6 +53,19 @@ public class ShadowBalanceAuditService {
      */
     @Scheduled(fixedRate = 600000)
     public void auditShadowBalance() {
+        try {
+            runAuditShadowBalance();
+        } catch (DataAccessException exception) {
+            log.error("[ShadowAudit] Audit postponed: ledger storage is not available yet. Withdrawals should remain conservative until the next successful audit. reason={}",
+                    exception.getMostSpecificCause().getMessage());
+        } catch (RuntimeException exception) {
+            log.error("[ShadowAudit] Audit could not be completed. Withdrawals should remain conservative until the next successful audit: {}",
+                    exception.getMessage(),
+                    exception);
+        }
+    }
+
+    private void runAuditShadowBalance() {
         if (!vaultKeyProvider.isReady()) {
             log.warn("[ShadowAudit] Skipping audit: Master key not available yet (STALL mode).");
             return;

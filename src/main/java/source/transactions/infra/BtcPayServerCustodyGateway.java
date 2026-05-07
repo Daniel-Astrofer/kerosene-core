@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Primary
-@Component
+@Component("btcpayCustodyGateway")
 @ConditionalOnProperty(prefix = "btcpay", name = "enabled", havingValue = "true")
 public class BtcPayServerCustodyGateway implements CustodyGateway {
 

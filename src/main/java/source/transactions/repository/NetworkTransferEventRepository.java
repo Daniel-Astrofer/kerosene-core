@@ -8,4 +8,5 @@ import java.util.UUID;
 
 @Repository
 public interface NetworkTransferEventRepository extends JpaRepository<NetworkTransferEventEntity, UUID> {
+    java.util.List<NetworkTransferEventEntity> findTop100ByOrderByCreatedAtDesc();
 }

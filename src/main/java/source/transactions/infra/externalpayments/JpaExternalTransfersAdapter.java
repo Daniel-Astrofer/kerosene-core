@@ -50,6 +50,22 @@ public class JpaExternalTransfersAdapter implements ExternalTransfersPort {
     }
 
     @Override
+    public Optional<ExternalTransferEntity> findByPaymentHash(String paymentHash) {
+        if (paymentHash == null || paymentHash.isBlank()) {
+            return Optional.empty();
+        }
+        return externalTransferRepository.findTopByPaymentHashOrderByCreatedAtDesc(paymentHash);
+    }
+
+    @Override
+    public Optional<ExternalTransferEntity> findByIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return Optional.empty();
+        }
+        return externalTransferRepository.findByIdempotencyKey(idempotencyKey);
+    }
+
+    @Override
     public Optional<ExternalTransferEntity> findByBlockchainTxid(String blockchainTxid) {
         return externalTransferRepository.findTopByBlockchainTxidOrderByCreatedAtDesc(blockchainTxid);
     }

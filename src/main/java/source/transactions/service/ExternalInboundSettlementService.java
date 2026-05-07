@@ -18,6 +18,7 @@ import source.wallet.service.WalletCardProfileService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class ExternalInboundSettlementService {
@@ -62,16 +63,18 @@ public class ExternalInboundSettlementService {
         if (transfer == null || txid == null || txid.isBlank()) {
             return false;
         }
-        return processedTransactionService.processOnce(txid, "INBOUND_ONCHAIN", () -> {
+        AtomicBoolean settled = new AtomicBoolean(false);
+        boolean processed = processedTransactionService.processOnce(txid, "INBOUND_ONCHAIN", () -> {
             BigDecimal grossAmount = externalPaymentsMath.satsToBtc(grossSats);
-            settle(
+            settled.set(settle(
                     transfer,
                     grossAmount,
                     txid,
                     Math.max(0, confirmations),
                     "EXTERNAL_ONCHAIN_DEPOSIT",
-                    contextMessage != null ? contextMessage : "Deposito on-chain confirmado na rede Bitcoin.");
+                    contextMessage != null ? contextMessage : "Deposito on-chain confirmado na rede Bitcoin."));
         });
+        return processed ? settled.get() : isAlreadySettled(transfer);
     }
 
     @Transactional
@@ -83,19 +86,21 @@ public class ExternalInboundSettlementService {
         if (transfer == null || paymentHash == null || paymentHash.isBlank()) {
             return false;
         }
-        return processedTransactionService.processOnce(paymentHash, "INBOUND_LIGHTNING", () -> {
+        AtomicBoolean settled = new AtomicBoolean(false);
+        boolean processed = processedTransactionService.processOnce(paymentHash, "INBOUND_LIGHTNING", () -> {
             BigDecimal grossAmount = externalPaymentsMath.satsToBtc(grossSats);
-            settle(
+            settled.set(settle(
                     transfer,
                     grossAmount,
                     paymentHash,
                     transfer.getConfirmations() != null ? transfer.getConfirmations() : 0,
                     "EXTERNAL_LIGHTNING_DEPOSIT",
-                    contextMessage != null ? contextMessage : "Deposito Lightning liquidado com sucesso.");
+                    contextMessage != null ? contextMessage : "Deposito Lightning liquidado com sucesso."));
         });
+        return processed ? settled.get() : isAlreadySettled(transfer);
     }
 
-    private void settle(
+    private boolean settle(
             ExternalTransferEntity transfer,
             BigDecimal grossAmount,
             String settlementReference,
@@ -104,17 +109,44 @@ public class ExternalInboundSettlementService {
             String notificationBody) {
         if (grossAmount == null || grossAmount.signum() <= 0) {
             log.warn("[ExternalInboundSettlement] Transfer {} has no positive gross amount.", transfer.getId());
-            return;
+            markAutoResolutionPending(
+                    transfer,
+                    grossAmount,
+                    settlementReference,
+                    "INBOUND_INVALID_SETTLEMENT_AMOUNT",
+                    "Settlement amount must be positive.");
+            return false;
         }
 
         BigDecimal normalizedGross = externalPaymentsMath.normalizeBtc(grossAmount);
+        BigDecimal expectedAmount = transfer.getExpectedAmountBtc();
+        boolean amountMismatch = expectedAmount != null
+                && expectedAmount.signum() > 0
+                && expectedAmount.compareTo(normalizedGross) != 0;
+        if (amountMismatch && isLightningTransfer(transfer)) {
+            markAutoResolutionPending(
+                    transfer,
+                    normalizedGross,
+                    settlementReference,
+                    "INBOUND_AMOUNT_MISMATCH",
+                    "expected=" + expectedAmount.toPlainString()
+                            + " BTC | observed=" + normalizedGross.toPlainString() + " BTC");
+            return false;
+        }
         BigDecimal depositFee = walletCardProfileService.calculateDepositFee(
                 transfer.getUserId(),
                 normalizedGross);
         BigDecimal netCredit = externalPaymentsMath.normalizeBtc(normalizedGross.subtract(depositFee));
         if (netCredit.signum() <= 0) {
             log.warn("[ExternalInboundSettlement] Transfer {} net credit is non-positive.", transfer.getId());
-            return;
+            markAutoResolutionPending(
+                    transfer,
+                    normalizedGross,
+                    settlementReference,
+                    "INBOUND_NON_POSITIVE_NET_CREDIT",
+                    "gross=" + normalizedGross.toPlainString()
+                            + " BTC | fee=" + depositFee.toPlainString() + " BTC");
+            return false;
         }
 
         ledgerPort.updateBalance(
@@ -144,6 +176,18 @@ public class ExternalInboundSettlementService {
                 "Inbound transfer settled and credited. gross=" + normalizedGross.toPlainString()
                         + " BTC | fee=" + depositFee.toPlainString()
                         + " BTC | net=" + netCredit.toPlainString() + " BTC"));
+        if (amountMismatch) {
+            transfer.setContext(appendContext(
+                    transfer.getContext(),
+                    "Expected amount mismatch. expected=" + expectedAmount.toPlainString()
+                            + " BTC | observed=" + normalizedGross.toPlainString() + " BTC"));
+            networkTransferEventService.warn(
+                    transfer,
+                    "INBOUND_AMOUNT_MISMATCH",
+                    settlementReference,
+                    "expected=" + expectedAmount.toPlainString()
+                            + " BTC | observed=" + normalizedGross.toPlainString() + " BTC");
+        }
         externalTransfersPort.save(transfer);
         accountActivationService.activateUser(transfer.getUserId());
         networkTransferEventService.info(
@@ -166,6 +210,7 @@ public class ExternalInboundSettlementService {
                                 "grossAmountBtc", normalizedGross.toPlainString(),
                                 "netAmountBtc", netCredit.toPlainString(),
                                 "network", transfer.getNetwork())));
+        return true;
     }
 
     private String buildCompletionContext(
@@ -192,5 +237,36 @@ public class ExternalInboundSettlementService {
             return current;
         }
         return current + " | " + addition;
+    }
+
+    private void markAutoResolutionPending(
+            ExternalTransferEntity transfer,
+            BigDecimal observedAmount,
+            String settlementReference,
+            String eventType,
+            String reason) {
+        if (observedAmount != null && observedAmount.signum() > 0) {
+            transfer.setAmountBtc(externalPaymentsMath.normalizeBtc(observedAmount));
+        }
+        transfer.setStatus("AUTO_RESOLUTION_PENDING");
+        transfer.setDetectedAt(transfer.getDetectedAt() != null ? transfer.getDetectedAt() : LocalDateTime.now());
+        transfer.setContext(appendContext(
+                transfer.getContext(),
+                "Inbound settlement requires manual reconciliation. " + reason));
+        externalTransfersPort.save(transfer);
+        networkTransferEventService.warn(
+                transfer,
+                eventType,
+                settlementReference,
+                reason);
+    }
+
+    private boolean isAlreadySettled(ExternalTransferEntity transfer) {
+        return transfer != null
+                && ("COMPLETED".equalsIgnoreCase(transfer.getStatus()) || transfer.getSettledAt() != null);
+    }
+
+    private boolean isLightningTransfer(ExternalTransferEntity transfer) {
+        return transfer != null && "LIGHTNING".equalsIgnoreCase(transfer.getNetwork());
     }
 }

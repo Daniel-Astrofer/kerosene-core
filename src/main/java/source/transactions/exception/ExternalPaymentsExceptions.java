@@ -28,4 +28,10 @@ public final class ExternalPaymentsExceptions {
             super(message);
         }
     }
+
+    public static class DuplicateExternalPayment extends RuntimeException {
+        public DuplicateExternalPayment(String message) {
+            super(message);
+        }
+    }
 }

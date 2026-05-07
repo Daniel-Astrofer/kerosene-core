@@ -36,6 +36,7 @@ public class LedgerPaymentRequestService {
             String linkId,
             Long payerUserId,
             String payerWalletName,
+            String idempotencyKey,
             String totpCode,
             String passkeyAssertionJson,
             String confirmationPassphrase) {
@@ -43,6 +44,7 @@ public class LedgerPaymentRequestService {
                 linkId,
                 payerUserId,
                 payerWalletName,
+                idempotencyKey,
                 totpCode,
                 passkeyAssertionJson,
                 confirmationPassphrase);

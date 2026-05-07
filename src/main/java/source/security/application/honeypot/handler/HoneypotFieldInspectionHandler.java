@@ -3,6 +3,7 @@ package source.security.application.honeypot.handler;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import source.common.infra.logging.LogSanitizer;
 import source.security.application.honeypot.HoneypotInspectionContext;
 import source.security.domain.honeypot.HoneypotInspectionResult;
 
@@ -26,10 +27,10 @@ public class HoneypotFieldInspectionHandler extends AbstractHoneypotInspectionHa
 
         JsonNode honeypotField = payload.get(HONEYPOT_FIELD);
         if (honeypotField != null && !honeypotField.isNull() && !honeypotField.asText("").isBlank()) {
-            log.warn("[HONEYPOT] Triggered from IP={} path={} UA={}",
-                    context.remoteAddress(),
+            log.warn("[HONEYPOT] Triggered from ip={} path={} userAgentRef={}",
+                    LogSanitizer.maskedIp(context.remoteAddress()),
                     context.path(),
-                    context.userAgent());
+                    LogSanitizer.fingerprint(context.userAgent()));
             return Optional.of(HoneypotInspectionResult.blackhole());
         }
 

@@ -80,6 +80,7 @@ public class HardeningStressTest {
     void setUpRedis() {
         redisState.clear();
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.execute(any(org.springframework.data.redis.core.RedisCallback.class))).thenReturn("PONG");
         when(valueOperations.get(anyString())).thenAnswer(invocation -> redisState.get(invocation.getArgument(0)));
         doAnswer(invocation -> {
             redisState.put(invocation.getArgument(0), invocation.getArgument(1));

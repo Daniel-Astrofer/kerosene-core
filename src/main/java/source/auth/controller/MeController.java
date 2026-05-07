@@ -49,6 +49,8 @@ public class MeController {
             response.put("id", String.valueOf(user.getId()));
             response.put("userId", String.valueOf(user.getId()));
             response.put("username", user.getUsername());
+            response.put("role", user.getRole().name());
+            response.put("isAdmin", user.getRole() == source.auth.model.enums.UserRole.ADMIN);
             response.put("testBalanceClaimed", Boolean.TRUE.equals(user.getTestBalanceClaimed()));
             response.put("passkeyEnabledForTransactions", Boolean.TRUE.equals(user.getPasskeyEnabledForTransactions()));
             response.put("appPinEnabled", appPinService.getStatus(user, deviceHash).enabled());

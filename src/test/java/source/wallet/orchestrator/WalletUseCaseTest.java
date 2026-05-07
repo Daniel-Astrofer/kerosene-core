@@ -102,7 +102,6 @@ class WalletUseCaseTest {
         return new WalletResponseDTO(
                 1L,
                 name,
-                null,
                 LocalDateTime.now(),
                 LocalDateTime.now(),
                 true,

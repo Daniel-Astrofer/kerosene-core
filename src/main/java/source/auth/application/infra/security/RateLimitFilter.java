@@ -16,9 +16,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -26,10 +28,39 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final List<String> BODY_BUCKET_FIELDS = List.of(
             "username",
             "sessionId",
+            "recoverySessionId",
             "credentialId",
             "passkeyCredentialId",
             "userHandle",
+            "idempotencyKey",
+            "fromWalletName",
+            "payerWalletName",
+            "paymentIntentId",
             "txid");
+    private static final List<String> QUERY_BUCKET_FIELDS = List.of(
+            "username",
+            "sessionId",
+            "recoverySessionId",
+            "linkId",
+            "txid");
+    private static final List<RouteLimit> ROUTE_LIMITS = List.of(
+            new RouteLimit("/auth/recovery/emergency", "auth-recovery", 5),
+            new RouteLimit("/auth/passkey/verify", "auth-passkey-verify", 10),
+            new RouteLimit("/auth/passkey/register", "auth-passkey-register", 8),
+            new RouteLimit("/auth/passkey/onboarding/finish", "auth-passkey-onboarding-finish", 8),
+            new RouteLimit("/auth/passkey/onboarding/start", "auth-passkey-onboarding-start", 12),
+            new RouteLimit("/auth/passkey/challenge", "auth-passkey-challenge", 20),
+            new RouteLimit("/auth/login", "auth-login", 10),
+            new RouteLimit("/auth/signup", "auth-signup", 8),
+            new RouteLimit("/auth/pow/challenge", "auth-pow-challenge", 30),
+            new RouteLimit("/ledger/payment-request", "funds-payment-request", 6),
+            new RouteLimit("/ledger/transaction", "funds-ledger-transaction", 6),
+            new RouteLimit("/transactions/network/onchain/send", "funds-onchain-send", 4),
+            new RouteLimit("/transactions/network/lightning/pay", "funds-lightning-pay", 6),
+            new RouteLimit("/transactions/withdraw", "funds-withdraw", 4),
+            new RouteLimit("/payments/", "funds-payments", 10),
+            new RouteLimit("/transactions/network/onchain/address", "funds-onchain-address", 20),
+            new RouteLimit("/transactions/network/lightning/invoice", "funds-lightning-invoice", 20));
 
     private final RedisServicer redisService;
     private final ObjectMapper objectMapper;
@@ -42,6 +73,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri != null && (uri.startsWith("/health/") || uri.startsWith("/actuator/health"));
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         HttpServletRequest effectiveRequest = request;
@@ -51,11 +88,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String uri = effectiveRequest.getRequestURI();
         String requesterBucket = resolveRequesterBucket(effectiveRequest);
+        RouteLimit routeLimit = resolveRouteLimit(uri)
+                .orElseGet(() -> new RouteLimit(uriBucket(uri), uriBucket(uri), defaultLimitFor(uri)));
 
         long currentMinute = System.currentTimeMillis() / 60000;
-        String key = "ratelimit:" + uriBucket(uri) + ":" + requesterBucket + ":" + currentMinute;
-
-        int limit = isPublicRateLimitedRoute(uri) ? PUBLIC_MAX_REQUESTS_PER_MINUTE : MAX_REQUESTS_PER_MINUTE;
+        String key = "ratelimit:" + routeLimit.bucket() + ":" + requesterBucket + ":" + currentMinute;
+        int limit = routeLimit.requestsPerMinute();
 
         Long requests = redisService.increment(key);
         if (requests == 1) {
@@ -64,7 +102,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         if (requests > limit) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.getWriter().write("Too many requests");
+            response.setContentType("application/json");
+            response.getWriter().write("""
+                    {"success":false,"message":"Too many requests","errorCode":"RATE_LIMITED"}
+                    """);
             return;
         }
 
@@ -97,6 +138,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return "digest:" + stableHash(digest);
         }
 
+        String queryIdentity = extractQueryIdentity(request);
+        if (hasText(queryIdentity)) {
+            return queryIdentity;
+        }
+
         if (request instanceof CachedBodyHttpServletRequest cachedRequest) {
             String bodyIdentity = extractBodyIdentity(cachedRequest.getCachedBody());
             if (hasText(bodyIdentity)) {
@@ -106,6 +152,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String remoteAddr = request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
         return "net:" + stableHash(remoteAddr + "|" + request.getMethod() + "|" + request.getRequestURI());
+    }
+
+    private String extractQueryIdentity(HttpServletRequest request) {
+        for (String field : QUERY_BUCKET_FIELDS) {
+            String value = request.getParameter(field);
+            if (hasText(value)) {
+                return "query-" + field + ":" + stableHash(value.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        return null;
     }
 
     private String extractBodyIdentity(byte[] cachedBody) {
@@ -144,8 +200,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return "general";
     }
 
-    private boolean isPublicRateLimitedRoute(String uri) {
-        return uri != null && (uri.startsWith("/auth/") || "/auth".equals(uri));
+    private Optional<RouteLimit> resolveRouteLimit(String uri) {
+        if (!hasText(uri)) {
+            return Optional.empty();
+        }
+        return ROUTE_LIMITS.stream()
+                .filter(route -> uri.equals(route.pathPrefix()) || uri.startsWith(route.pathPrefix()))
+                .max(Comparator.comparingInt(route -> route.pathPrefix().length()));
+    }
+
+    private int defaultLimitFor(String uri) {
+        return uri != null && (uri.startsWith("/auth/") || "/auth".equals(uri))
+                ? PUBLIC_MAX_REQUESTS_PER_MINUTE
+                : MAX_REQUESTS_PER_MINUTE;
     }
 
     private String stableHash(String input) {
@@ -159,5 +226,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private record RouteLimit(String pathPrefix, String bucket, int requestsPerMinute) {
     }
 }

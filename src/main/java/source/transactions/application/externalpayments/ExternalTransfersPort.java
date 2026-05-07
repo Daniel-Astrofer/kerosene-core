@@ -18,6 +18,10 @@ public interface ExternalTransfersPort {
 
     Optional<ExternalTransferEntity> findByInvoiceId(String invoiceId);
 
+    Optional<ExternalTransferEntity> findByPaymentHash(String paymentHash);
+
+    Optional<ExternalTransferEntity> findByIdempotencyKey(String idempotencyKey);
+
     Optional<ExternalTransferEntity> findByBlockchainTxid(String blockchainTxid);
 
     List<ExternalTransferEntity> findInboundTransfersForMonitoring(int limit);

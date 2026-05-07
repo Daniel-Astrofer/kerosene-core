@@ -1,9 +1,16 @@
 package source.transactions.infra;
 
 import io.grpc.ManagedChannel;
+import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import source.mpc.grpc.KeygenRequest;
+import source.mpc.grpc.KeygenResponse;
+import source.mpc.grpc.MpcServiceGrpc;
+import source.mpc.grpc.SignRequest;
+import source.mpc.grpc.SignResponse;
+import com.google.protobuf.ByteString;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,7 +37,9 @@ public class MpcSidecarClient {
     private final String certChainPath;
     private final String privateKeyPath;
     private final String trustCertCollectionPath;
+    private final long requestTimeoutMs;
     private ManagedChannel channel;
+    private MpcServiceGrpc.MpcServiceBlockingStub blockingStub;
 
     public MpcSidecarClient(
             @Value("${mpc.sidecar.host:localhost}") String host,
@@ -38,13 +47,15 @@ public class MpcSidecarClient {
             @Value("${mpc.sidecar.tls.enabled:true}") boolean tlsEnabled,
             @Value("${mpc.sidecar.tls.cert-chain:}") String certChainPath,
             @Value("${mpc.sidecar.tls.private-key:}") String privateKeyPath,
-            @Value("${mpc.sidecar.tls.trust-cert-collection:}") String trustCertCollectionPath) {
+            @Value("${mpc.sidecar.tls.trust-cert-collection:}") String trustCertCollectionPath,
+            @Value("${mpc.sidecar.request-timeout-ms:5000}") long requestTimeoutMs) {
         this.host = host;
         this.port = port;
         this.tlsEnabled = tlsEnabled;
         this.certChainPath = certChainPath;
         this.privateKeyPath = privateKeyPath;
         this.trustCertCollectionPath = trustCertCollectionPath;
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     @PostConstruct
@@ -57,6 +68,7 @@ public class MpcSidecarClient {
             log.warn("[MPC Client] Plaintext gRPC is enabled. This is only acceptable in tests/local dev.");
             this.channel = builder.usePlaintext().build();
         }
+        this.blockingStub = MpcServiceGrpc.newBlockingStub(channel);
     }
 
     @PreDestroy
@@ -66,23 +78,55 @@ public class MpcSidecarClient {
         }
     }
 
-    /**
-     * Placeholder for Keygen call.
-     * In a real implementation, this would use the generated MpcServiceGrpc stub.
-     */
     public String keygen(String userId, int threshold, int totalParties) {
         log.info("[MPC Client] Requesting Keygen for user {}", userId);
-        throw new AuthExceptions.AuthValidationException(
-                "MPC keygen requires the generated mTLS gRPC stub. Refusing to return a placeholder public key.");
+        KeygenRequest request = KeygenRequest.newBuilder()
+                .setUserId(userId)
+                .setThreshold(threshold)
+                .setTotalParties(totalParties)
+                .build();
+        try {
+            KeygenResponse response = stub().keygen(request);
+            if (!response.getSuccess()) {
+                throw new AuthExceptions.AuthValidationException(
+                        "MPC keygen failed: " + response.getErrorMessage());
+            }
+            return response.getPublicKey();
+        } catch (StatusRuntimeException exception) {
+            throw new AuthExceptions.AuthValidationException(
+                    "MPC keygen gRPC call failed: " + exception.getStatus().getCode());
+        }
     }
 
-    /**
-     * Placeholder for Sign call.
-     */
     public byte[] sign(String userId, byte[] messageHash, String publicKey) {
         log.info("[MPC Client] Requesting Sign for hash of length {}", messageHash.length);
-        throw new AuthExceptions.AuthValidationException(
-                "MPC signing requires the generated mTLS gRPC stub. Refusing to return a placeholder signature.");
+        SignRequest request = SignRequest.newBuilder()
+                .setUserId(userId)
+                .setMessageHash(ByteString.copyFrom(messageHash))
+                .setPublicKey(publicKey == null ? "" : publicKey)
+                .build();
+        try {
+            SignResponse response = stub().sign(request);
+            if (!response.getSuccess()) {
+                throw new AuthExceptions.AuthValidationException(
+                        "MPC signing failed: " + response.getErrorMessage());
+            }
+            return response.getSignature().toByteArray();
+        } catch (StatusRuntimeException exception) {
+            throw new AuthExceptions.AuthValidationException(
+                    "MPC signing gRPC call failed: " + exception.getStatus().getCode());
+        }
+    }
+
+    public boolean isInitialized() {
+        return channel != null && !channel.isShutdown() && blockingStub != null;
+    }
+
+    private MpcServiceGrpc.MpcServiceBlockingStub stub() {
+        if (!isInitialized()) {
+            throw new AuthExceptions.AuthValidationException("MPC sidecar client is not initialized.");
+        }
+        return blockingStub.withDeadlineAfter(requestTimeoutMs, TimeUnit.MILLISECONDS);
     }
 
     private SslContext buildClientSslContext() {

@@ -9,6 +9,8 @@ import source.transactions.service.BlockchainAddressWatchService;
 import source.transactions.service.CustodialAddressAllocator;
 import source.wallet.model.WalletEntity;
 
+import java.math.BigDecimal;
+
 @Service
 public class IssueOnchainAddressUseCase {
 
@@ -26,7 +28,7 @@ public class IssueOnchainAddressUseCase {
             ExternalTransferFactory externalTransferFactory,
             CustodialAddressAllocator custodialAddressAllocator,
             BlockchainAddressWatchService blockchainAddressWatchService,
-            @org.springframework.beans.factory.annotation.Value("${bitcoin.network:testnet}") String bitcoinNetwork,
+            @org.springframework.beans.factory.annotation.Value("${bitcoin.network:mainnet}") String bitcoinNetwork,
             @org.springframework.beans.factory.annotation.Value("${bitcoin.min-confirmations:3}") int minimumConfirmations) {
         this.walletPort = walletPort;
         this.externalTransfersPort = externalTransfersPort;
@@ -40,15 +42,19 @@ public class IssueOnchainAddressUseCase {
     @Transactional
     public OnchainAddressAllocationDTO issue(Long userId, OnchainAddressRequestDTO request) {
         WalletEntity wallet = walletPort.requireWallet(userId, request.walletName());
-        boolean regenerate = Boolean.TRUE.equals(request.regenerate());
+        if (!wallet.isKeroseneCustodyMode()) {
+            throw new IllegalArgumentException(
+                    "On-chain deposits into a Kerosene account require a KEROSENE custodial wallet.");
+        }
+        BigDecimal expectedAmountBtc = normalizeExpectedAmount(request.expectedAmountBtc());
 
         CustodialAddressAllocator.Allocation allocation = custodialAddressAllocator.allocate(
                 userId,
                 wallet,
-                "wallet:" + wallet.getName(),
-                regenerate);
+                "deposit:" + wallet.getName(),
+                true);
 
-        ExternalTransferEntity transfer = externalTransfersPort.save(externalTransferFactory.newTransfer(
+        ExternalTransferEntity transfer = externalTransferFactory.newTransfer(
                 wallet,
                 "ONCHAIN",
                 "ADDRESS_ISSUE",
@@ -65,12 +71,16 @@ public class IssueOnchainAddressUseCase {
                 null,
                 null,
                 null,
-                "On-chain deposit address issued for wallet " + wallet.getName()));
-        blockchainAddressWatchService.register(transfer, allocation.address(), "wallet:" + wallet.getName());
+                "On-chain deposit address issued for wallet " + wallet.getName()
+                        + " expected=" + expectedAmountBtc.toPlainString() + " BTC");
+        transfer.setExpectedAmountBtc(expectedAmountBtc);
+        transfer = externalTransfersPort.save(transfer);
+        blockchainAddressWatchService.register(transfer, allocation.address(), "deposit:" + wallet.getName());
 
         return new OnchainAddressAllocationDTO(
                 wallet.getName(),
                 allocation.address(),
+                expectedAmountBtc,
                 bitcoinNetwork,
                 allocation.provider(),
                 allocation.externalReference(),
@@ -82,9 +92,20 @@ public class IssueOnchainAddressUseCase {
                 transfer.getBlockchainTxid());
     }
 
+    private BigDecimal normalizeExpectedAmount(BigDecimal value) {
+        if (value == null || value.signum() <= 0) {
+            throw new IllegalArgumentException("expectedAmountBtc is required and must be positive.");
+        }
+        BigDecimal normalized = value.setScale(8, java.math.RoundingMode.DOWN);
+        if (normalized.signum() <= 0) {
+            throw new IllegalArgumentException("expectedAmountBtc is below the minimum Bitcoin precision.");
+        }
+        return normalized;
+    }
+
     private String normalizeNetwork(String value) {
         if (value == null || value.isBlank()) {
-            return "testnet";
+            return "mainnet";
         }
         return value.trim().toLowerCase(java.util.Locale.ROOT);
     }

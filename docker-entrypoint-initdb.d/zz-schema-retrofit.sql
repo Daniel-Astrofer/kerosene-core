@@ -555,3 +555,83 @@ CREATE INDEX IF NOT EXISTS idx_network_transfer_events_reference
 
 CREATE INDEX IF NOT EXISTS idx_network_transfer_events_type
     ON financial.network_transfer_events(event_type);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 020: Admin access key flow and authenticated device metadata
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE auth.users_credentials
+    ADD COLUMN IF NOT EXISTS role VARCHAR(32) NOT NULL DEFAULT 'USER';
+
+UPDATE auth.users_credentials
+    SET role = 'USER'
+    WHERE role IS NULL OR role = '';
+
+CREATE INDEX IF NOT EXISTS idx_users_credentials_role
+    ON auth.users_credentials(role);
+
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS brand VARCHAR(255);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS model VARCHAR(255);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS serial_number VARCHAR(255);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS device_install_id VARCHAR(128);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS platform VARCHAR(128);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS browser VARCHAR(128);
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS first_access_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS last_access_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS auth.admin_keys (
+    id UUID PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    key_material_hash VARCHAR(128) NOT NULL,
+    key_fingerprint VARCHAR(64) NOT NULL,
+    device_install_id VARCHAR(128),
+    status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    rotated_at TIMESTAMP,
+    revoked_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS auth.admin_access_devices (
+    id UUID PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    device_id VARCHAR(128) NOT NULL,
+    device_name VARCHAR(255),
+    browser VARCHAR(128),
+    user_agent VARCHAR(512),
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    first_access_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_access_at TIMESTAMP,
+    CONSTRAINT uk_admin_access_device_user_device UNIQUE(user_id, device_id)
+);
+
+CREATE TABLE IF NOT EXISTS auth.admin_access_attempts (
+    id UUID PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    device_row_id UUID NOT NULL REFERENCES auth.admin_access_devices(id) ON DELETE CASCADE,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    browser VARCHAR(128),
+    user_agent VARCHAR(512),
+    ip_fingerprint VARCHAR(64),
+    requested_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    decided_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS auth.admin_access_events (
+    id UUID PRIMARY KEY,
+    admin_id BIGINT REFERENCES auth.users_credentials(id) ON DELETE SET NULL,
+    device_id VARCHAR(128),
+    browser VARCHAR(128),
+    sanitized_user_agent VARCHAR(512),
+    ip_fingerprint VARCHAR(64),
+    occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(32) NOT NULL,
+    reason VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_keys_user_status
+    ON auth.admin_keys(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_admin_access_attempts_user_status
+    ON auth.admin_access_attempts(user_id, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_admin_access_events_admin_time
+    ON auth.admin_access_events(admin_id, occurred_at DESC);

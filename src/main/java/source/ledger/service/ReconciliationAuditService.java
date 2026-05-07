@@ -79,9 +79,7 @@ public class ReconciliationAuditService {
         log.info("[ShadowAudit] Starting platform-wide reconciliation...");
 
         // 1. Get sum of all user balances in Postgres
-        BigDecimal totalLedgerBalance = ledgerRepository.findAll().stream()
-            .map(source.ledger.entity.LedgerEntity::getBalance)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalLedgerBalance = ledgerRepository.sumAllBalances();
         if (totalLedgerBalance == null) totalLedgerBalance = BigDecimal.ZERO;
 
         // 2. Get real on-chain balance (Hot Wallet)

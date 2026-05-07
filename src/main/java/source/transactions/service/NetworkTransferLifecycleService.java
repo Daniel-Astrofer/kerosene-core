@@ -70,15 +70,17 @@ public class NetworkTransferLifecycleService {
         if (confirmations >= minimumConfirmations
                 && updated.getTransferType() != null
                 && !"OUTBOUND_PAYMENT".equalsIgnoreCase(updated.getTransferType())) {
-            inboundSettlementService.settleOnchainInbound(
+            boolean settled = inboundSettlementService.settleOnchainInbound(
                     updated,
                     amountSats,
                     txid,
                     confirmations,
                     "Deposito on-chain confirmado via " + source + ".");
-            updated.setStatus("COMPLETED");
-            updated.setSettledAt(LocalDateTime.now());
-            updated = externalTransfersPort.save(updated);
+            if (settled || isAlreadyCompleted(updated)) {
+                updated.setStatus("COMPLETED");
+                updated.setSettledAt(updated.getSettledAt() != null ? updated.getSettledAt() : LocalDateTime.now());
+                updated = externalTransfersPort.save(updated);
+            }
         }
         return updated;
     }
@@ -94,23 +96,26 @@ public class NetworkTransferLifecycleService {
         transfer.setProviderPayload(payload);
         transfer.setPaymentHash(paymentHash != null ? paymentHash : transfer.getPaymentHash());
         transfer.setDetectedAt(transfer.getDetectedAt() != null ? transfer.getDetectedAt() : LocalDateTime.now());
-        if (status != null) {
-            transfer.setStatus(status.toUpperCase());
-        }
 
         String normalizedStatus = status != null ? status.trim().toUpperCase() : "";
-        if ("SETTLED".equals(normalizedStatus) || "COMPLETED".equals(normalizedStatus) || "PAID".equals(normalizedStatus)) {
-            inboundSettlementService.settleLightningInbound(
+        if (isSettledLightningStatus(normalizedStatus)) {
+            boolean settled = inboundSettlementService.settleLightningInbound(
                     transfer,
                     receivedSats,
                     paymentHash != null ? paymentHash : transfer.getPaymentHash(),
                     "Deposito Lightning liquidado via " + source + ".");
-            transfer.setStatus("COMPLETED");
-            transfer.setSettledAt(LocalDateTime.now());
+            if (settled || isAlreadyCompleted(transfer)) {
+                transfer.setStatus("COMPLETED");
+                transfer.setSettledAt(transfer.getSettledAt() != null ? transfer.getSettledAt() : LocalDateTime.now());
+            } else if (!"AUTO_RESOLUTION_PENDING".equalsIgnoreCase(transfer.getStatus())) {
+                transfer.setStatus(normalizedStatus);
+            }
         } else if ("EXPIRED".equals(normalizedStatus) || "INVALID".equals(normalizedStatus)) {
             transfer.setStatus("EXPIRED");
         } else if ("CANCELLED".equals(normalizedStatus)) {
             transfer.setStatus("CANCELLED");
+        } else if (!normalizedStatus.isBlank()) {
+            transfer.setStatus(normalizedStatus);
         }
 
         transfer = externalTransfersPort.save(transfer);
@@ -120,5 +125,51 @@ public class NetworkTransferLifecycleService {
                 paymentHash != null ? paymentHash : transfer.getInvoiceId(),
                 "source=" + source + " | status=" + transfer.getStatus() + " | receivedSats=" + receivedSats);
         return transfer;
+    }
+
+    @Transactional
+    public ExternalTransferEntity expireLightningInvoice(ExternalTransferEntity transfer, String source) {
+        if (transfer == null) {
+            return null;
+        }
+        if (isAlreadyCompleted(transfer)) {
+            return transfer;
+        }
+        transfer.setStatus("EXPIRED");
+        transfer.setContext(appendContext(
+                transfer.getContext(),
+                "Lightning invoice expired before settlement. source=" + source));
+        transfer = externalTransfersPort.save(transfer);
+        networkTransferEventService.info(
+                transfer,
+                "LIGHTNING_INVOICE_EXPIRED",
+                transfer.getPaymentHash() != null ? transfer.getPaymentHash() : transfer.getInvoiceId(),
+                "source=" + source);
+        return transfer;
+    }
+
+    private boolean isSettledLightningStatus(String status) {
+        return "SETTLED".equals(status)
+                || "COMPLETED".equals(status)
+                || "PAID".equals(status)
+                || "CONFIRMED".equals(status);
+    }
+
+    private boolean isAlreadyCompleted(ExternalTransferEntity transfer) {
+        return transfer != null
+                && ("COMPLETED".equalsIgnoreCase(transfer.getStatus()) || transfer.getSettledAt() != null);
+    }
+
+    private String appendContext(String current, String addition) {
+        if (addition == null || addition.isBlank()) {
+            return current;
+        }
+        if (current == null || current.isBlank()) {
+            return addition;
+        }
+        if (current.contains(addition)) {
+            return current;
+        }
+        return current + " | " + addition;
     }
 }

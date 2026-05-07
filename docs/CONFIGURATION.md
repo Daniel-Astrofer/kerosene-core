@@ -63,11 +63,33 @@ O arquivo `.env.example` documenta o baseline minimo para desenvolvimento:
 
 ### Bitcoin
 
-- `BITCOIN_ESPLORA_BASE_URL`
+- `BITCOIN_NETWORK`
+- `BITCOIN_CHAIN`
+- `BITCOIN_PRUNE_MB`
+- `BITCOIN_P2P_PORT`
+- `BITCOIN_RPC_ENABLED`
+- `BITCOIN_RPC_REQUIRED`
+- `BITCOIN_RPC_URL`
+- `BITCOIN_RPC_USER`
+- `BITCOIN_RPC_PASSWORD`
+- `BITCOIN_RPC_WALLET`
+- `BITCOIN_ZMQ_ENABLED`
+- `BITCOIN_ZMQ_RAWTX`
+- `BITCOIN_ZMQ_HASHBLOCK`
+- `BITCOIN_INDEXER_BASE_URL`
+- `BITCOIN_ESPLORA_ENABLED`
+- `BITCOIN_FEE_RECOMMENDATION_URL`
 - `BITCOIN_PLATFORM_MASTER_XPUB`
 - `BITCOIN_HOT_WALLET_ADDRESS`
 - `BITCOIN_HOT_WALLET_XPUB`
 - `BITCOIN_HOT_WALLET_XPUB_SCAN_RANGE`
+- `TRANSACTIONS_BITCOIN_CORE_WALLET_ADDRESS_ENABLED`
+- `LIGHTNING_LND_ENABLED`
+- `LIGHTNING_LND_HOST`
+- `LIGHTNING_LND_PORT`
+- `LIGHTNING_LND_TLS_CERT_PATH`
+- `LIGHTNING_LND_MACAROON_PATH`
+- `LND_WALLET_PASSWORD`
 
 ## Propriedades criticas por area
 
@@ -161,9 +183,7 @@ Producao segura implica:
 - `custody.api-key`
 - `custody.mock-mode`
 - `custody.*-path`
-- `lightning.provider.base-url`
-- `lightning.provider.api-key`
-- `lightning.provider.*-path`
+- `lightning.lnd.*`
 - `onramp.moonpay.api-key`
 - `onramp.moonpay.secret-key`
 - `onramp.moonpay.base-currency-code`
@@ -171,7 +191,12 @@ Producao segura implica:
 
 ### Bitcoin e transacoes
 
+- `bitcoin.network`
+- `bitcoin.rpc.*`
+- `bitcoin.rpc.zmq.*`
+- `bitcoin.esplora.enabled`
 - `bitcoin.esplora.base-url`
+- `bitcoin.fee-recommendation.url`
 - `bitcoin.deposit-address`
 - `bitcoin.min-confirmations`
 - `bitcoin.payment-link-expiration-minutes`

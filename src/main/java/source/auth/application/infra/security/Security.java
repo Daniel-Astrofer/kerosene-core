@@ -2,6 +2,7 @@ package source.auth.application.infra.security;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import source.common.release.ReleaseAttestationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -25,6 +27,7 @@ public class Security {
                         JwtAuthenticationFilter jwtAuthenticationFilter,
                         RateLimitFilter rateLimitFilter,
                         ParanoidSecurityFilter paranoidFilter,
+                        ObjectProvider<ReleaseAttestationFilter> releaseAttestationFilter,
                         org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource)
                         throws Exception {
                 http
@@ -33,7 +36,8 @@ public class Security {
                                 .csrf(AbstractHttpConfigurer::disable)
                                 .headers(headers -> headers
                                                 .contentSecurityPolicy(
-                                                                csp -> csp.policyDirectives("default-src 'self'"))
+                                                                csp -> csp.policyDirectives(
+                                                                                webAdminContentSecurityPolicy()))
                                                 .frameOptions(frame -> frame.deny())
                                                 .xssProtection(xss -> xss.headerValue(
                                                                 org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
@@ -47,11 +51,31 @@ public class Security {
                                 .authorizeHttpRequests(auth -> auth
 
                                                 .requestMatchers("/").permitAll()
+                                                .requestMatchers("/bitcoin-banking", "/bitcoin-banking/**", "/admin",
+                                                                "/admin/**", "/download", "/status").permitAll()
+                                                .requestMatchers("/index.html").permitAll()
+                                                .requestMatchers("/favicon.png").permitAll()
+                                                .requestMatchers("/manifest.json").permitAll()
+                                                .requestMatchers("/version.json").permitAll()
+                                                .requestMatchers("/flutter.js").permitAll()
+                                                .requestMatchers("/flutter_bootstrap.js").permitAll()
+                                                .requestMatchers("/flutter_service_worker.js").permitAll()
+                                                .requestMatchers("/main.dart.js").permitAll()
+                                                .requestMatchers("/assets/**").permitAll()
+                                                .requestMatchers("/canvaskit/**").permitAll()
+                                                .requestMatchers("/icons/**").permitAll()
                                                 .requestMatchers("/healthz").permitAll()
+                                                .requestMatchers("/health/live").permitAll()
+                                                .requestMatchers("/health/ready").permitAll()
+                                                .requestMatchers("/api/public/**").permitAll()
+                                                .requestMatchers("/bitcoin/receive/**").permitAll()
+                                                .requestMatchers("/system/release").permitAll()
                                                 .requestMatchers("/auth/signup").permitAll()
                                                 .requestMatchers("/auth/signup/totp/verify").permitAll()
                                                 .requestMatchers("/auth/login").permitAll()
                                                 .requestMatchers("/auth/login/totp/verify").permitAll()
+                                                .requestMatchers("/auth/admin/login").permitAll()
+                                                .requestMatchers("/auth/admin/login/*").permitAll()
                                                 .requestMatchers("/auth/passkey/challenge").permitAll()
                                                 .requestMatchers("/auth/passkey/verify").permitAll()
                                                 .requestMatchers("/auth/passkey/onboarding/start").permitAll()
@@ -82,8 +106,27 @@ public class Security {
                                 .addFilterBefore(paranoidFilter, UsernamePasswordAuthenticationFilter.class)
                                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                releaseAttestationFilter.ifAvailable(filter -> http.addFilterBefore(
+                                filter,
+                                UsernamePasswordAuthenticationFilter.class));
 
                 return http.build();
+        }
+
+        static String webAdminContentSecurityPolicy() {
+                return String.join("; ",
+                                "default-src 'self'",
+                                "base-uri 'self'",
+                                "object-src 'none'",
+                                "frame-ancestors 'none'",
+                                "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'",
+                                "style-src 'self' 'unsafe-inline'",
+                                "img-src 'self' data: blob:",
+                                "font-src 'self' data:",
+                                "connect-src 'self' ws: wss:",
+                                "worker-src 'self' blob:",
+                                "child-src 'self' blob:",
+                                "manifest-src 'self'");
         }
 
         @Bean
@@ -104,9 +147,20 @@ public class Security {
                                 "Authorization",
                                 "Content-Type",
                                 "Digest",
+                                "X-Correlation-Id",
+                                "X-Request-Id",
                                 "X-Requested-With",
-                                "X-Idempotency-Key"));
-                configuration.setExposedHeaders(java.util.List.of("X-New-Token"));
+                                "X-Idempotency-Key",
+                                "Idempotency-Key",
+                                "X-Admin-Token",
+                                "X-Owner-TOTP",
+                                "X-Hardware-Signature",
+                                ReleaseAttestationFilter.RELEASE_DIGEST_HEADER,
+                                ReleaseAttestationFilter.RELEASE_TIMESTAMP_HEADER,
+                                ReleaseAttestationFilter.RELEASE_PROOF_HEADER,
+                                ReleaseAttestationFilter.SERVICE_IDENTITY_HEADER,
+                                "X-Device-Hash"));
+                configuration.setExposedHeaders(java.util.List.of("X-New-Token", "X-Correlation-Id", "X-Request-Id"));
                 configuration.setAllowCredentials(true);
                 org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
                 source.registerCorsConfiguration("/**", configuration);

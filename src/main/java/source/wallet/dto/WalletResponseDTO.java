@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 public record WalletResponseDTO(
                 Long id,
                 String name,
-                String passphraseHash,
                 LocalDateTime createdAt,
                 LocalDateTime updatedAt,
                 Boolean isActive,

@@ -38,6 +38,8 @@ class PaymentLinkReaderTest {
         PaymentLinkDTO loaded = paymentLinkReader.getPaymentLink("pay-2");
 
         assertEquals(PaymentLinkStatus.EXPIRED, loaded.getStatus());
+        assertEquals("EXPIRED", loaded.getPaymentIntentStatus());
+        assertEquals(true, loaded.getTerminal());
         verify(paymentLinkStore).save(paymentLink);
     }
 

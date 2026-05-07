@@ -23,6 +23,7 @@ import source.auth.dto.EmergencyRecoveryFinishResponse;
 import source.auth.dto.EmergencyRecoveryStartRequest;
 import source.auth.dto.EmergencyRecoveryStartResponse;
 import source.auth.dto.EmergencyRecoveryState;
+import source.common.infra.logging.LogSanitizer;
 
 @Component
 public class EmergencyRecoveryUseCase {
@@ -55,8 +56,8 @@ public class EmergencyRecoveryUseCase {
                 secrets.hashedPassphrase(),
                 secrets.encryptedTotpSecret());
 
-        log.warn("[Recovery] Emergency recovery initiated for username={} using {} recovery codes.",
-                context.normalizedUsername(), context.matchedRecoveryCodeHashes().size());
+        log.warn("[Recovery] Emergency recovery initiated for userRef={} using {} recovery codes.",
+                LogSanitizer.fingerprint(context.normalizedUsername()), context.matchedRecoveryCodeHashes().size());
 
         return new EmergencyRecoveryStartResponse(
                 session.sessionId(),
@@ -74,7 +75,8 @@ public class EmergencyRecoveryUseCase {
         String totpSecret = secretProtector.recoverTotpSecret(state.getEncryptedTotpSecret());
         RotationResult result = credentialRotator.rotate(state, request, totpSecret);
 
-        log.warn("[Recovery] Emergency recovery finished for username={}. Old credentials rotated.", result.username());
+        log.warn("[Recovery] Emergency recovery finished for userRef={}. Old credentials rotated.",
+                LogSanitizer.fingerprint(result.username()));
         return new EmergencyRecoveryFinishResponse(result.username(), result.newBackupCodes());
     }
 

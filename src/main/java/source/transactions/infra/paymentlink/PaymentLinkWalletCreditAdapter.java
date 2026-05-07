@@ -3,6 +3,7 @@ package source.transactions.infra.paymentlink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import source.common.infra.logging.LogSanitizer;
 import source.ledger.service.LedgerService;
 import source.transactions.application.paymentlink.PaymentLinkCreditPort;
 import source.transactions.dto.PaymentLinkDTO;
@@ -58,8 +59,13 @@ public class PaymentLinkWalletCreditAdapter implements PaymentLinkCreditPort {
         paymentLink.setGrossAmountBtc(paymentLink.getAmountBtc());
         paymentLink.setDepositFeeBtc(depositFee);
         paymentLink.setNetAmountBtc(netAmount);
-        ledgerService.updateBalance(wallet.getId(), netAmount, "PAYMENT_LINK_" + paymentLink.getId());
+        ledgerService.updateBalance(wallet.getId(), netAmount, ledgerContext(paymentLink));
         log.info("Credited payment link {} to wallet {} with net amount {}", paymentLink.getId(), wallet.getId(),
                 netAmount);
+    }
+
+    private String ledgerContext(PaymentLinkDTO paymentLink) {
+        return "PAYMENT_LINK_CREDIT:paymentLink=" + paymentLink.getId()
+                + ":txid=" + LogSanitizer.fingerprint(paymentLink.getTxid());
     }
 }

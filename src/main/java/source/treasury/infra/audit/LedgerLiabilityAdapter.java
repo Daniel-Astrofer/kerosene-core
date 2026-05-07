@@ -17,8 +17,7 @@ public class LedgerLiabilityAdapter implements LedgerLiabilityPort {
 
     @Override
     public BigDecimal loadTotalLiabilities() {
-        return ledgerRepository.findAll().stream()
-                .map(source.ledger.entity.LedgerEntity::getBalance)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal total = ledgerRepository.sumAllBalances();
+        return total != null ? total : BigDecimal.ZERO;
     }
 }

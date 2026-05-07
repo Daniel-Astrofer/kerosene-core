@@ -77,7 +77,7 @@ public class OnrampServiceTest {
         mockWallet.setDepositAddress(mockAddress);
         mockWallet.setExternalWalletReference("STATIC_DERIVATION");
 
-        when(walletService.findByUserId(userId)).thenReturn(Collections.singletonList(mockWallet));
+        when(walletService.findPrimaryWallet(userId)).thenReturn(mockWallet);
         when(valueOperations.get(anyString())).thenReturn(null);
         when(externalTransfersPort.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(custodialAddressAllocator.allocate(eq(userId), any(WalletEntity.class), eq("onramp:MAIN"), eq(true)))
@@ -100,8 +100,7 @@ public class OnrampServiceTest {
     @Test
     public void testGenerateOnrampUrlsNoWallet() {
         Long userId = 1L;
-        when(walletService.findByUserId(userId)).thenReturn(Collections.emptyList());
-        when(valueOperations.get(anyString())).thenReturn(null);
+        when(walletService.findPrimaryWallet(userId)).thenReturn(null);
 
         assertThrows(IllegalStateException.class, () -> {
             onrampService.generateOnrampUrls(userId);

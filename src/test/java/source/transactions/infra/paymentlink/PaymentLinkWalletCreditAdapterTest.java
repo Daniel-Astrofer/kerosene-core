@@ -16,7 +16,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,11 +38,12 @@ class PaymentLinkWalletCreditAdapterTest {
         paymentLink.setId("pay-4");
         paymentLink.setUserId(8L);
         paymentLink.setAmountBtc(new BigDecimal("1.00000000"));
+        paymentLink.setTxid("tx-payment-link-4");
 
         WalletEntity wallet = new WalletEntity();
         wallet.setId(55L);
 
-        when(walletService.findByUserId(8L)).thenReturn(List.of(wallet));
+        when(walletService.findPrimaryWallet(8L)).thenReturn(wallet);
         when(walletCardProfileService.calculateDepositFee(8L, new BigDecimal("1.00000000")))
                 .thenReturn(new BigDecimal("0.00900000"));
 
@@ -52,6 +52,9 @@ class PaymentLinkWalletCreditAdapterTest {
         assertEquals(new BigDecimal("1.00000000"), paymentLink.getGrossAmountBtc());
         assertEquals(new BigDecimal("0.00900000"), paymentLink.getDepositFeeBtc());
         assertEquals(new BigDecimal("0.99100000"), paymentLink.getNetAmountBtc());
-        verify(ledgerService).updateBalance(eq(55L), eq(new BigDecimal("0.99100000")), contains("PAYMENT_LINK_pay-4"));
+        verify(ledgerService).updateBalance(
+                eq(55L),
+                eq(new BigDecimal("0.99100000")),
+                eq("PAYMENT_LINK_CREDIT:paymentLink=pay-4:txid=sha256:bb0e456ce8101095"));
     }
 }

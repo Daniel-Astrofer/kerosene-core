@@ -3,6 +3,8 @@ package source.transactions.infra.transaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import source.common.infra.logging.LogSanitizer;
+import source.common.idempotency.IdempotencyKeyBuilder;
 import source.ledger.entity.LedgerTransactionHistory;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
 import source.ledger.service.LedgerService;
@@ -51,7 +53,7 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
     @Override
     public void settleConfirmedTransaction(PendingTransaction transaction, int confirmations) {
         processedTransactionService.processOnce(
-                transaction.getTxid(),
+                IdempotencyKeyBuilder.build("blockchain-monitor", transaction.getTxid(), transaction.getToAddress()),
                 "BLOCKCHAIN_MONITOR",
                 () -> applyTransactionEffects(transaction, confirmations));
     }
@@ -63,7 +65,7 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
 
     private void applySenderEffects(PendingTransaction transaction, int confirmations) {
         try {
-            WalletEntity senderWallet = walletLookupPort.findByPassphraseHash(transaction.getFromAddress());
+            WalletEntity senderWallet = walletLookupPort.findByDepositAddress(transaction.getFromAddress());
             if (senderWallet == null) {
                 return;
             }
@@ -77,10 +79,9 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
                     totalDeduction.negate(),
                     "transfer_out: " + transaction.getTxid());
 
-            log.info("Deducted {} BTC from sender wallet {} for tx {}",
-                    totalDeduction,
+            log.info("Deducted BTC from sender wallet {} for txRef={}",
                     senderWallet.getId(),
-                    transaction.getTxid());
+                    LogSanitizer.fingerprint(transaction.getTxid()));
 
             try {
                 notificationService.notifyUser(
@@ -109,14 +110,15 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
                 log.error("Erro ao notificar confirmação de envio: {}", ex.getMessage());
             }
         } catch (Exception ex) {
-            log.error("Failed to update sender balance for tx {}: {}", transaction.getTxid(), ex.getMessage());
+            log.error("Failed to update sender balance for txRef={}: {}",
+                    LogSanitizer.fingerprint(transaction.getTxid()), ex.getMessage());
             throw ex;
         }
     }
 
     private void applyReceiverEffects(PendingTransaction transaction, int confirmations) {
         try {
-            WalletEntity receiverWallet = walletLookupPort.findByPassphraseHash(transaction.getToAddress());
+            WalletEntity receiverWallet = walletLookupPort.findByDepositAddress(transaction.getToAddress());
             if (receiverWallet == null) {
                 return;
             }
@@ -131,10 +133,9 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
                     netCredit,
                     "transfer_in: " + transaction.getTxid());
 
-            log.info("Credited {} BTC to receiver wallet {} for tx {}",
-                    netCredit,
+            log.info("Credited BTC to receiver wallet {} for txRef={}",
                     receiverWallet.getId(),
-                    transaction.getTxid());
+                    LogSanitizer.fingerprint(transaction.getTxid()));
 
             try {
                 notificationService.notifyUser(
@@ -161,7 +162,8 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
                 log.error("Erro ao notificar confirmação de depósito: {}", ex.getMessage());
             }
         } catch (Exception ex) {
-            log.error("Failed to update receiver balance for tx {}: {}", transaction.getTxid(), ex.getMessage());
+            log.error("Failed to update receiver balance for txRef={}: {}",
+                    LogSanitizer.fingerprint(transaction.getTxid()), ex.getMessage());
             throw ex;
         }
     }

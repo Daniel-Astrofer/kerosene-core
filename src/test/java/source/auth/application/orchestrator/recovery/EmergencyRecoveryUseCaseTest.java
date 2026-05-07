@@ -171,8 +171,11 @@ class EmergencyRecoveryUseCaseTest {
         when(userGateway.findByUsername("alice")).thenReturn(user);
         when(cryptography.decrypt(any(byte[].class), any())).thenReturn("BASE32SECRET".getBytes(StandardCharsets.UTF_8));
         when(totpVerifier.totpMatcher("BASE32SECRET", "123456")).thenReturn(true);
-        when(passkeyService.verifySignature(eq("alice"), eq("challenge-hex"), eq("signature"), any(byte[].class),
+        when(passkeyService.verifyRegistrationSignature(eq("alice"), eq("challenge-hex"), eq("signature"), any(byte[].class),
                 eq("authData"), eq("clientData"))).thenReturn(true);
+        when(passkeyService.extractSignatureCount("authData")).thenReturn(1L);
+        when(passkeyService.resolveRelyingPartyIdFromClientData("clientData")).thenReturn("localhost");
+        when(passkeyService.extractOriginHostFromClientData("clientData")).thenReturn("localhost");
         when(passkeyGateway.findByUserId(7L)).thenReturn(List.of(new PasskeyCredential()));
         when(userGateway.save(any(UserDataBase.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(recoveryCodeService.generateNewBackupCodes()).thenReturn(newCodes);

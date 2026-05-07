@@ -11,6 +11,7 @@ import org.bitcoinj.params.TestNet3Params;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -19,6 +20,8 @@ import org.zeromq.SocketType;
 import org.zeromq.ZMQ;
 import org.zeromq.ZContext;
 
+import source.common.infra.logging.LogSanitizer;
+import source.bitcoinaccounts.service.ReceivingRequestService;
 import source.transactions.application.externalpayments.ExternalTransfersPort;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.model.BlockchainAddressWatchEntity;
@@ -44,6 +47,7 @@ public class BlockchainZmqListenerService {
     private final BlockchainAddressWatchService blockchainAddressWatchService;
     private final NetworkTransferLifecycleService lifecycleService;
     private final NetworkTransferEventService networkTransferEventService;
+    private final ReceivingRequestService receivingRequestService;
     private final String rawTxEndpoint;
     private final String hashBlockEndpoint;
     private final NetworkParameters networkParameters;
@@ -61,15 +65,17 @@ public class BlockchainZmqListenerService {
             BlockchainAddressWatchService blockchainAddressWatchService,
             NetworkTransferLifecycleService lifecycleService,
             NetworkTransferEventService networkTransferEventService,
+            ObjectProvider<ReceivingRequestService> receivingRequestService,
             @Value("${bitcoin.rpc.zmq.rawtx}") String rawTxEndpoint,
             @Value("${bitcoin.rpc.zmq.hashblock}") String hashBlockEndpoint,
-            @Value("${bitcoin.network:testnet}") String bitcoinNetwork,
+            @Value("${bitcoin.network:mainnet}") String bitcoinNetwork,
             @Value("${bitcoin.min-confirmations:3}") int minimumConfirmations) {
         this.blockchainClient = blockchainClient;
         this.externalTransfersPort = externalTransfersPort;
         this.blockchainAddressWatchService = blockchainAddressWatchService;
         this.lifecycleService = lifecycleService;
         this.networkTransferEventService = networkTransferEventService;
+        this.receivingRequestService = receivingRequestService.getIfAvailable();
         this.rawTxEndpoint = rawTxEndpoint != null ? rawTxEndpoint.trim() : "";
         this.hashBlockEndpoint = hashBlockEndpoint != null ? hashBlockEndpoint.trim() : "";
         this.networkParameters = resolveNetworkParameters(bitcoinNetwork);
@@ -137,10 +143,17 @@ public class BlockchainZmqListenerService {
             Transaction transaction = new Transaction(networkParameters, payload);
             String txid = transaction.getTxId().toString();
 
-            for (TransactionOutput output : transaction.getOutputs()) {
+            List<TransactionOutput> outputs = transaction.getOutputs();
+            for (int outputIndex = 0; outputIndex < outputs.size(); outputIndex++) {
+                TransactionOutput output = outputs.get(outputIndex);
                 Address address = extractAddress(output);
                 if (address == null) {
                     continue;
+                }
+
+                long amountSats = output.getValue().getValue();
+                if (receivingRequestService != null) {
+                    receivingRequestService.observeOnchainPayment(address.toString(), txid, outputIndex, amountSats, 0);
                 }
 
                 BlockchainAddressWatchEntity watch = blockchainAddressWatchService.findActiveWatch(address.toString())
@@ -154,7 +167,6 @@ public class BlockchainZmqListenerService {
                     continue;
                 }
 
-                long amountSats = output.getValue().getValue();
                 blockchainAddressWatchService.markDetected(watch, txid, amountSats, 0);
                 lifecycleService.reconcileOnchainSettlement(
                         transfer,
@@ -205,7 +217,10 @@ public class BlockchainZmqListenerService {
                     }
                 });
             } catch (Exception ex) {
-                log.warn("[BlockchainZmq] Failed to reconcile tx {} after block {}: {}", txid, blockHash, ex.getMessage());
+                log.warn("[BlockchainZmq] Failed to reconcile txRef={} after blockRef={}: {}",
+                        LogSanitizer.fingerprint(txid),
+                        LogSanitizer.fingerprint(blockHash),
+                        ex.getMessage());
             }
         }
     }
@@ -243,6 +258,8 @@ public class BlockchainZmqListenerService {
 
     private NetworkParameters resolveNetworkParameters(String bitcoinNetwork) {
         String normalized = bitcoinNetwork != null ? bitcoinNetwork.toLowerCase(Locale.ROOT) : "";
-        return "mainnet".equals(normalized) ? MainNetParams.get() : TestNet3Params.get();
+        return ("mainnet".equals(normalized) || "main".equals(normalized))
+                ? MainNetParams.get()
+                : TestNet3Params.get();
     }
 }

@@ -3,6 +3,7 @@ package source.treasury.application.revenue.handler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import source.common.infra.logging.LogSanitizer;
 import source.treasury.application.revenue.AbstractRevenueCollectionHandler;
 import source.treasury.application.revenue.RevenueCollectionContext;
 
@@ -13,8 +14,8 @@ public class LogRevenueCollectionHandler extends AbstractRevenueCollectionHandle
 
     @Override
     protected void doHandle(RevenueCollectionContext context) {
-        log.info("[RevenueCollector] Profit interceptado: {} sats. Redirecionado para address auditado: {}",
+        log.info("[RevenueCollector] Profit intercepted: {} sats. Redirected to auditAddressRef={}",
                 context.profitSats(),
-                context.auditAddress());
+                LogSanitizer.fingerprint(context.auditAddress()));
     }
 }

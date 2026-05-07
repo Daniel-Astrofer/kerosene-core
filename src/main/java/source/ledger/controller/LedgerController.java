@@ -4,6 +4,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Digits;
 import source.auth.AuthExceptions;
 import source.ledger.dto.LedgerDTO;
 import source.ledger.dto.InternalTransactionResponseDTO;
@@ -11,17 +17,19 @@ import source.ledger.dto.PaymentRequestPublicDTO;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.entity.LedgerEntity;
-import source.ledger.entity.LedgerTransactionHistory;
 import source.ledger.exceptions.LedgerExceptions;
 import source.ledger.orchestrator.TransactionContract;
 import source.ledger.service.LedgerService;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
+import source.ledger.repository.LedgerSyncEventView;
 import source.ledger.service.LedgerPaymentRequestService;
 import source.wallet.model.WalletEntity;
 import source.wallet.application.port.in.WalletLookupPort;
 import source.common.dto.ApiResponse;
+import source.common.infra.logging.LogSanitizer;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -61,7 +69,7 @@ public class LedgerController {
     }
 
     @PostMapping("/transaction")
-    public ResponseEntity<ApiResponse<InternalTransactionResponseDTO>> transaction(@RequestBody TransactionDTO dto) {
+    public ResponseEntity<ApiResponse<InternalTransactionResponseDTO>> transaction(@Valid @RequestBody TransactionDTO dto) {
         Long userId = getAuthenticatedUserId();
         enforceTxRateLimit(userId);
 
@@ -89,16 +97,19 @@ public class LedgerController {
      * @param size page size, capped at 100 (default 50)
      */
     @GetMapping("/history")
-    public ResponseEntity<ApiResponse<List<LedgerTransactionHistory>>> getHistory(
+    public ResponseEntity<ApiResponse<List<LedgerSyncEventDTO>>> getHistory(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         Long userId = getAuthenticatedUserId();
         int safeSize = Math.min(size, 100); // hard-cap to prevent huge queries
-        List<LedgerTransactionHistory> history = LogContext.timed("FETCH_HISTORY",
-                () -> historyRepository.findUserHistory(userId, PageRequest.of(page, safeSize)));
+        List<LedgerSyncEventDTO> history = LogContext.timed("FETCH_HISTORY",
+                () -> historyRepository.findUserHistoryView(userId, PageRequest.of(page, safeSize))
+                        .stream()
+                        .map(this::toSyncEvent)
+                        .toList());
         log.info("History fetched: {} entries for userId={}", history.size(), userId);
         return ResponseEntity
-                .ok(ApiResponse.success("Transaction history retrieved successfully.", history));
+                .ok(ApiResponse.success("Ephemeral sync events retrieved successfully.", history));
     }
 
     @GetMapping("/all")
@@ -173,10 +184,49 @@ public class LedgerController {
         }
     }
 
-    public record CreatePaymentRequestReq(BigDecimal amount, String receiverWalletName) {
+    private LedgerSyncEventDTO toSyncEvent(LedgerSyncEventView history) {
+        return new LedgerSyncEventDTO(
+                history.getId(),
+                history.getTransactionType(),
+                history.getAmount(),
+                history.getStatus(),
+                history.getNetworkFee(),
+                LogSanitizer.fingerprint(history.getBlockchainTxid()),
+                history.getCreatedAt(),
+                history.getConfirmations());
+    }
+
+    /**
+     * Authenticated mobile sync view for the short-lived legacy ledger buffer.
+     *
+     * It intentionally omits sender/receiver identifiers, free-form context and
+     * full txid. Durable readable history remains encrypted on the mobile client;
+     * backend audit continuity uses hash-chain/Merkle proofs.
+     */
+    public record LedgerSyncEventDTO(
+            UUID id,
+            String transactionType,
+            BigDecimal amount,
+            String status,
+            BigDecimal networkFee,
+            String txidFingerprint,
+            LocalDateTime createdAt,
+            Integer confirmations) {
+    }
+
+    public record CreatePaymentRequestReq(
+            @NotNull(message = "amount is required")
+            @DecimalMin(value = "0.00000001", message = "amount must be greater than zero")
+            @DecimalMax(value = "21000000.00000000", message = "amount exceeds the maximum supported BTC amount")
+            @Digits(integer = 8, fraction = 8, message = "amount must use BTC precision with at most 8 decimal places")
+            BigDecimal amount,
+            @NotBlank(message = "receiverWalletName is required")
+            String receiverWalletName) {
     }
 
     public record PayPaymentRequestReq(
+            @NotBlank(message = "idempotencyKey is required")
+            String idempotencyKey,
             String payerWalletName,
             String totpCode,
             String passkeyAssertionJson,
@@ -185,7 +235,7 @@ public class LedgerController {
 
     @PostMapping("/payment-request")
     public ResponseEntity<ApiResponse<InternalPaymentRequestDTO>> createPaymentRequest(
-            @RequestBody CreatePaymentRequestReq req) {
+            @Valid @RequestBody CreatePaymentRequestReq req) {
         Long userId = getAuthenticatedUserId();
         InternalPaymentRequestDTO dto = paymentRequestService.createRequest(userId, req.amount(),
                 req.receiverWalletName());
@@ -205,13 +255,14 @@ public class LedgerController {
 
     @PostMapping("/payment-request/{linkId}/pay")
     public ResponseEntity<ApiResponse<InternalPaymentRequestDTO>> payPaymentRequest(
-            @PathVariable String linkId, @RequestBody PayPaymentRequestReq req) {
+            @PathVariable String linkId, @Valid @RequestBody PayPaymentRequestReq req) {
         Long userId = getAuthenticatedUserId();
         enforceTxRateLimit(userId);
         InternalPaymentRequestDTO dto = paymentRequestService.payRequest(
                 linkId,
                 userId,
                 req.payerWalletName(),
+                req.idempotencyKey(),
                 req.totpCode(),
                 req.passkeyAssertionJson(),
                 req.confirmationPassphrase());

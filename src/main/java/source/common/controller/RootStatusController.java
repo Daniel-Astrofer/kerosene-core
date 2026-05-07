@@ -1,6 +1,7 @@
 package source.common.controller;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,7 +18,7 @@ public class RootStatusController {
         this.applicationName = applicationName;
     }
 
-    @GetMapping("/")
+    @GetMapping(value = "/", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> root() {
         return statusPayload();
     }
@@ -33,7 +34,8 @@ public class RootStatusController {
         payload.put("service", applicationName);
         payload.put("region", System.getenv().getOrDefault("REGION", "DEV"));
         payload.put("timestamp", Instant.now().toString());
-        payload.put("health", "/actuator/health");
+        payload.put("health", "/health/ready");
+        payload.put("liveness", "/health/live");
         payload.put("sovereignty", "/sovereignty/status");
         return payload;
     }

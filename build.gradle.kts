@@ -65,6 +65,9 @@ dependencies {
     implementation("com.bucket4j:bucket4j-core:8.7.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+    implementation("org.flywaydb:flyway-core")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.micrometer:micrometer-observation")
@@ -85,6 +88,19 @@ tasks.withType<Test> {
 	useJUnitPlatform()
 }
 
+tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+    val webAdminBuild = listOf(
+        file("web-admin-build"),
+        file("../../frontend/build/web"),
+    ).firstOrNull { it.resolve("index.html").exists() }
+
+    if (webAdminBuild != null) {
+        from(webAdminBuild) {
+            into("static")
+        }
+    }
+}
+
 // ─── OWASP Supply Chain Defense ─────────────────────────────────────────────
 // Executa com: ./gradlew dependencyCheckAnalyze
 // No CI/CD: adicionar ao pipeline antes do build de produção.
@@ -92,6 +108,10 @@ tasks.withType<Test> {
 dependencyCheck {
     // Falha a build se qualquer dependência tiver CVSS >= 7.0 (HIGH/CRITICAL)
     failBuildOnCVSS = 7.0f
+
+    nvd {
+        apiKey = System.getenv("NVD_API_KEY") ?: ""
+    }
 
     // Formatos do relatório: HTML legível + JSON para CI
     formats = listOf("HTML", "JSON")

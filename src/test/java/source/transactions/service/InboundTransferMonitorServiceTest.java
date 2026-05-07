@@ -15,6 +15,7 @@ import source.transactions.model.BlockchainAddressWatchEntity;
 import source.transactions.model.ExternalTransferEntity;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -122,5 +123,35 @@ class InboundTransferMonitorServiceTest {
         service.monitorInboundTransfers();
 
         verify(externalTransfersPort, never()).findInboundTransfersForMonitoring(any(Integer.class));
+    }
+
+    @Test
+    void expiresPendingLightningInvoiceWhenProviderIsUnavailable() {
+        InboundTransferMonitorService service = new InboundTransferMonitorService(
+                externalTransfersPort,
+                new ExternalPaymentsMath("testnet"),
+                blockchainClient,
+                custodyGateway,
+                vaultKeyProvider,
+                blockchainAddressWatchService,
+                networkTransferLifecycleService,
+                200);
+
+        ExternalTransferEntity transfer = new ExternalTransferEntity();
+        transfer.setId(UUID.randomUUID());
+        transfer.setUserId(11L);
+        transfer.setWalletId(19L);
+        transfer.setWalletNameSnapshot("MAIN");
+        transfer.setTransferType("INBOUND_INVOICE");
+        transfer.setStatus("PENDING");
+        transfer.setPaymentHash("hash-expired");
+        transfer.setExpiresAt(LocalDateTime.now().minusSeconds(1));
+
+        when(custodyGateway.isLive()).thenReturn(false);
+
+        service.monitorSingleTransfer(transfer);
+
+        verify(networkTransferLifecycleService).expireLightningInvoice(transfer, "INBOUND_MONITOR");
+        verify(custodyGateway, never()).getLightningInvoiceStatus(any());
     }
 }

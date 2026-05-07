@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import source.auth.model.entity.UserDataBase;
 import source.ledger.application.balance.LedgerBalanceConsensusPort;
 import source.ledger.application.balance.LedgerBalanceUpdate;
@@ -21,6 +23,7 @@ import source.ledger.dto.LedgerDTO;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.exceptions.LedgerExceptions;
 import source.ledger.repository.LedgerRepository;
+import source.treasury.service.FinancialAuditTrailService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
@@ -35,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,6 +63,9 @@ class LedgerServiceTest {
 
     @Mock
     private LedgerBalanceUpdatePort balanceUpdatePort;
+
+    @Mock
+    private FinancialAuditTrailService auditTrailService;
 
     @InjectMocks
     private LedgerService ledgerService;
@@ -175,6 +182,51 @@ class LedgerServiceTest {
         assertEquals(creditAmount, update.newBalance());
         assertEquals(creditAmount, update.amount());
         assertEquals("Credit transaction", update.context());
+        verify(auditTrailService).recordBestEffort(
+                eq("LEDGER_BALANCE_MUTATION"),
+                eq("LEDGER"),
+                anyString(),
+                eq(user.getId()),
+                eq("Credit transaction"),
+                any());
+    }
+
+    @Test
+    @DisplayName("Should publish balance update and audit only after commit when transaction synchronization is active")
+    void shouldPublishBalanceUpdateOnlyAfterCommitWhenSynchronizationActive() {
+        BigDecimal creditAmount = new BigDecimal("100.00");
+        when(ledgerRepository.findByWalletIdForUpdate(wallet.getId())).thenReturn(Optional.of(ledger));
+        when(ledgerHashService.generateHash(any(LedgerEntity.class))).thenReturn("new-hash");
+        when(ledgerHashService.generateBalanceSignature(any(LedgerEntity.class))).thenReturn("new-signature");
+        when(ledgerRepository.save(any(LedgerEntity.class))).thenReturn(ledger);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            ledgerService.updateBalance(wallet.getId(), creditAmount, "Credit transaction");
+
+            verify(balanceUpdatePort, never()).publishBalanceUpdated(any());
+            verify(auditTrailService, never()).recordBestEffort(
+                    anyString(),
+                    anyString(),
+                    anyString(),
+                    any(),
+                    anyString(),
+                    any());
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            verify(balanceUpdatePort).publishBalanceUpdated(any(LedgerBalanceUpdate.class));
+            verify(auditTrailService).recordBestEffort(
+                    eq("LEDGER_BALANCE_MUTATION"),
+                    eq("LEDGER"),
+                    anyString(),
+                    eq(user.getId()),
+                    eq("Credit transaction"),
+                    any());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -189,6 +241,24 @@ class LedgerServiceTest {
 
         verify(ledgerRepository).findByWalletIdForUpdate(wallet.getId());
         verify(ledgerRepository, never()).save(any(LedgerEntity.class));
+    }
+
+    @Test
+    @DisplayName("Should reject zero balance delta before locking ledger")
+    void shouldRejectZeroBalanceDelta() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ledgerService.updateBalance(wallet.getId(), BigDecimal.ZERO, "Zero transaction"));
+
+        verify(ledgerRepository, never()).findByWalletIdForUpdate(anyLong());
+    }
+
+    @Test
+    @DisplayName("Should reject balance delta with more than BTC precision")
+    void shouldRejectBalanceDeltaWithTooManyDecimalPlaces() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ledgerService.updateBalance(wallet.getId(), new BigDecimal("0.000000001"), "Invalid precision"));
+
+        verify(ledgerRepository, never()).findByWalletIdForUpdate(anyLong());
     }
 
     @Test

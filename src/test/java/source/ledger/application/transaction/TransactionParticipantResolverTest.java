@@ -6,17 +6,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import source.auth.AuthExceptions;
 import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
 import source.auth.model.entity.UserDataBase;
-import source.common.service.AddressDerivationService;
-import source.ledger.application.paymentrequest.PaymentRequestDestinationHashService;
+import source.ledger.exceptions.LedgerExceptions;
 import source.wallet.model.WalletEntity;
 import source.wallet.service.WalletContract;
 
-import java.util.List;
-
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,12 +37,6 @@ class TransactionParticipantResolverTest {
     @Mock
     private AccountActivationService accountActivationService;
 
-    @Mock
-    private PaymentRequestDestinationHashService destinationHashService;
-
-    @Mock
-    private AddressDerivationService addressDerivationService;
-
     private TransactionParticipantResolver resolver;
 
     @BeforeEach
@@ -46,9 +44,7 @@ class TransactionParticipantResolverTest {
         resolver = new TransactionParticipantResolver(
                 walletService,
                 userService,
-                accountActivationService,
-                destinationHashService,
-                addressDerivationService);
+                accountActivationService);
     }
 
     @Test
@@ -73,18 +69,18 @@ class TransactionParticipantResolverTest {
         WalletEntity wallet = wallet(102L, receiver, "HASH", "tb1qhash0000000000000000000000000000000000000");
         String destinationHash = "9f4a7b7bb6d8a1c0f1a3dcb54036bf2f3d4cf53d4c0f5cc7df0e8c1a9d1b2c3d";
 
-        when(walletService.findAll()).thenReturn(List.of(wallet));
-        when(destinationHashService.buildDestinationHash(wallet)).thenReturn(destinationHash);
+        when(walletService.findByDestinationHash(destinationHash)).thenReturn(wallet);
 
         WalletEntity resolved = resolver.resolveReceiverWallet(destinationHash);
 
         assertSame(wallet, resolved);
         verify(accountActivationService).assertInboundEnabled(receiver);
+        verify(walletService, never()).findAll();
     }
 
     @Test
-    @DisplayName("Should resolve receiver by derived blockchain address when no address is persisted")
-    void shouldResolveReceiverByDerivedBlockchainAddress() throws Exception {
+    @DisplayName("Should not scan all wallets to resolve derived blockchain address")
+    void shouldNotScanAllWalletsForDerivedBlockchainAddress() throws Exception {
         UserDataBase receiver = user(22L, "receiver-derived");
         WalletEntity wallet = wallet(103L, receiver, "DERIVED", null);
         wallet.setPassphraseHash("$argon2id$v=19$m=65536,t=3,p=4$receiver$hash");
@@ -92,13 +88,50 @@ class TransactionParticipantResolverTest {
         String derivedAddress = "tb1qderived00000000000000000000000000000000000";
 
         when(walletService.findByDepositAddress(derivedAddress)).thenReturn(null);
-        when(walletService.findAll()).thenReturn(List.of(wallet));
-        when(addressDerivationService.deriveAddress(103L, wallet.getPassphraseHash())).thenReturn(derivedAddress);
 
-        WalletEntity resolved = resolver.resolveReceiverWallet(derivedAddress);
+        assertThrows(LedgerExceptions.ReceiverNotFoundException.class,
+                () -> resolver.resolveReceiverWallet(derivedAddress));
 
-        assertSame(wallet, resolved);
-        verify(accountActivationService).assertInboundEnabled(receiver);
+        verify(walletService, never()).findAll();
+    }
+
+    @Test
+    @DisplayName("Should report receiver not ready when username exists without wallet")
+    void shouldReportReceiverNotReadyWhenUserHasNoWallet() throws Exception {
+        UserDataBase receiver = user(23L, "receiver-nowallet");
+
+        when(userService.findByUsername("receiver-nowallet")).thenReturn(receiver);
+        when(walletService.findPrimaryWallet(23L)).thenReturn(null);
+
+        LedgerExceptions.ReceiverNotReadyException exception = assertThrows(
+                LedgerExceptions.ReceiverNotReadyException.class,
+                () -> resolver.resolveReceiverWallet("receiver-nowallet"));
+
+        assertEquals(
+                "The destination user exists but does not yet have a wallet ready to receive funds.",
+                exception.getMessage());
+        assertEquals(LedgerExceptions.ReceiverNotReadyException.Reason.NO_RECEIVING_WALLET, exception.getReason());
+        verify(accountActivationService, never()).assertInboundEnabled(any(UserDataBase.class));
+    }
+
+    @Test
+    @DisplayName("Should report receiver not ready when destination exists but inbound is blocked")
+    void shouldReportReceiverNotReadyWhenDestinationInboundIsBlocked() throws Exception {
+        UserDataBase receiver = user(24L, "receiver-blocked");
+        WalletEntity wallet = wallet(104L, receiver, "BLOCKED", "tb1qblocked000000000000000000000000000000000");
+
+        when(walletService.findByDepositAddress(wallet.getDepositAddress())).thenReturn(wallet);
+        doThrow(new AuthExceptions.InboundReceivingBlockedException("blocked"))
+                .when(accountActivationService).assertInboundEnabled(eq(receiver));
+
+        LedgerExceptions.ReceiverNotReadyException exception = assertThrows(
+                LedgerExceptions.ReceiverNotReadyException.class,
+                () -> resolver.resolveReceiverWallet(wallet.getDepositAddress()));
+
+        assertEquals(
+                "The destination user exists but is not yet ready to receive funds.",
+                exception.getMessage());
+        assertEquals(LedgerExceptions.ReceiverNotReadyException.Reason.INBOUND_BLOCKED, exception.getReason());
     }
 
     private UserDataBase user(Long id, String username) throws Exception {

@@ -3,6 +3,7 @@ package source.auth.application.orchestrator.login;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,7 +27,7 @@ class IssueSessionTokenTest {
 
         UserDataBase user = new UserDataBase();
         ReflectionTestUtils.setField(user, "id", 7L);
-        when(jwtService.generateToken(7L)).thenReturn("jwt-token");
+        when(jwtService.generateToken(eq(7L), anyCollection())).thenReturn("jwt-token");
 
         String result = issueSessionToken.issue(user);
 

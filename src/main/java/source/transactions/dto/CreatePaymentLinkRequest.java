@@ -1,5 +1,10 @@
 package source.transactions.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotNull;
+
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -8,6 +13,10 @@ import java.util.Map;
  * Request DTO para criar um novo payment link
  */
 public class CreatePaymentLinkRequest {
+    @NotNull(message = "amount is required")
+    @DecimalMin(value = "0.00000001", message = "amount must be greater than zero")
+    @DecimalMax(value = "21000000.00000000", message = "amount exceeds the maximum supported BTC amount")
+    @Digits(integer = 8, fraction = 8, message = "amount must use BTC precision with at most 8 decimal places")
     private BigDecimal amount;
     private String description;
     private Integer expiresInMinutes;

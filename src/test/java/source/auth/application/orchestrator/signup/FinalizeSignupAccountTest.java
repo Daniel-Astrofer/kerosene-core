@@ -1,5 +1,6 @@
 package source.auth.application.orchestrator.signup;
 
+import org.bitcoinj.crypto.MnemonicCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,9 +19,11 @@ import source.auth.model.enums.AccountSecurityType;
 import source.security.VaultKeyProvider;
 import source.notification.model.UserNotificationPayload;
 import source.wallet.application.port.in.CreateWalletUseCase;
+import source.wallet.dto.WalletRequestDTO;
 import source.wallet.service.WalletContract;
 import source.ledger.service.LedgerContract;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -105,6 +108,16 @@ class FinalizeSignupAccountTest {
         verify(userNotifier).notify(eq(7L), notificationCaptor.capture());
         assertEquals("Conta criada", notificationCaptor.getValue().title());
         assertEquals("Sua conta foi criada com sucesso.", notificationCaptor.getValue().body());
+
+        ArgumentCaptor<WalletRequestDTO> walletRequestCaptor =
+                ArgumentCaptor.forClass(WalletRequestDTO.class);
+        verify(walletUseCase).createWallet(walletRequestCaptor.capture(), eq(7L));
+        WalletRequestDTO walletRequest = walletRequestCaptor.getValue();
+        assertEquals("ACCOUNT 01", walletRequest.name());
+        assertEquals("KEROSENE", walletRequest.walletMode());
+        assertNull(walletRequest.xpub());
+        assertFalse("hashed-password".equals(walletRequest.passphrase()));
+        assertValidBip39Mnemonic(walletRequest.passphrase());
     }
 
     @Test
@@ -143,6 +156,17 @@ class FinalizeSignupAccountTest {
         state.setPasskeyPublicKeyCose("cHVibGljLWtleQ==");
         state.setPasskeyDeviceName("Phone");
         return state;
+    }
+
+    private void assertValidBip39Mnemonic(String mnemonic) {
+        assertNotNull(mnemonic);
+        List<String> words = Arrays.asList(mnemonic.split(" "));
+        assertEquals(12, words.size());
+        try {
+            MnemonicCode.INSTANCE.check(words);
+        } catch (Exception exception) {
+            throw new AssertionError("Expected onboarding wallet mnemonic to be valid BIP39.", exception);
+        }
     }
 
     private void setUserId(UserDataBase user, Long id) {

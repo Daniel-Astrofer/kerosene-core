@@ -40,6 +40,12 @@ public class SignupState implements Serializable {
     private String passkeyDeviceName;
     private String passkeyRelyingPartyId;
     private String passkeyOriginHost;
+    private String passkeyBrand;
+    private String passkeyModel;
+    private String passkeySerialNumber;
+    private String passkeyDeviceInstallId;
+    private String passkeyPlatform;
+    private String passkeyBrowser;
     private String passkeyCredentialJson;
 
     /**
@@ -188,6 +194,54 @@ public class SignupState implements Serializable {
         this.passkeyOriginHost = passkeyOriginHost;
     }
 
+    public String getPasskeyBrand() {
+        return passkeyBrand;
+    }
+
+    public void setPasskeyBrand(String passkeyBrand) {
+        this.passkeyBrand = passkeyBrand;
+    }
+
+    public String getPasskeyModel() {
+        return passkeyModel;
+    }
+
+    public void setPasskeyModel(String passkeyModel) {
+        this.passkeyModel = passkeyModel;
+    }
+
+    public String getPasskeySerialNumber() {
+        return passkeySerialNumber;
+    }
+
+    public void setPasskeySerialNumber(String passkeySerialNumber) {
+        this.passkeySerialNumber = passkeySerialNumber;
+    }
+
+    public String getPasskeyDeviceInstallId() {
+        return passkeyDeviceInstallId;
+    }
+
+    public void setPasskeyDeviceInstallId(String passkeyDeviceInstallId) {
+        this.passkeyDeviceInstallId = passkeyDeviceInstallId;
+    }
+
+    public String getPasskeyPlatform() {
+        return passkeyPlatform;
+    }
+
+    public void setPasskeyPlatform(String passkeyPlatform) {
+        this.passkeyPlatform = passkeyPlatform;
+    }
+
+    public String getPasskeyBrowser() {
+        return passkeyBrowser;
+    }
+
+    public void setPasskeyBrowser(String passkeyBrowser) {
+        this.passkeyBrowser = passkeyBrowser;
+    }
+
     public String getPasskeyCredentialJson() {
         if (passkeyCredentialJson != null && !passkeyCredentialJson.isBlank()) {
             return passkeyCredentialJson;
@@ -200,7 +254,13 @@ public class SignupState implements Serializable {
                 + "\",\"userHandle\":\"" + nullToEmpty(passkeyUserHandle)
                 + "\",\"deviceName\":\"" + nullToEmpty(passkeyDeviceName)
                 + "\",\"relyingPartyId\":\"" + nullToEmpty(passkeyRelyingPartyId)
-                + "\",\"originHost\":\"" + nullToEmpty(passkeyOriginHost) + "\"}";
+                + "\",\"originHost\":\"" + nullToEmpty(passkeyOriginHost)
+                + "\",\"brand\":\"" + nullToEmpty(passkeyBrand)
+                + "\",\"model\":\"" + nullToEmpty(passkeyModel)
+                + "\",\"serialNumber\":\"" + nullToEmpty(passkeySerialNumber)
+                + "\",\"deviceInstallId\":\"" + nullToEmpty(passkeyDeviceInstallId)
+                + "\",\"platform\":\"" + nullToEmpty(passkeyPlatform)
+                + "\",\"browser\":\"" + nullToEmpty(passkeyBrowser) + "\"}";
     }
 
     public void setPasskeyCredentialJson(String passkeyCredentialJson) {

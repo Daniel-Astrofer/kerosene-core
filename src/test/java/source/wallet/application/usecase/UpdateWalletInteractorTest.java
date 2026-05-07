@@ -13,12 +13,12 @@ import source.wallet.application.handler.update.LoadWalletForUpdateHandler;
 import source.wallet.application.handler.update.PersistWalletUpdateHandler;
 import source.wallet.application.handler.update.ValidateUpdateWalletRequestHandler;
 import source.wallet.application.handler.update.VerifyWalletUpdatePassphraseHandler;
-import source.wallet.application.port.out.WalletAddressDerivationPort;
 import source.wallet.application.service.WalletPersistenceSupport;
 import source.wallet.application.service.WalletReader;
 import source.wallet.dto.WalletUpdateDTO;
 import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
+import source.wallet.model.WalletMode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -36,8 +36,6 @@ class UpdateWalletInteractorTest {
     private WalletReader walletReader;
     @Mock
     private WalletPersistenceSupport walletPersistenceSupport;
-    @Mock
-    private WalletAddressDerivationPort walletAddressDerivationPort;
 
     private UpdateWalletInteractor updateWalletInteractor;
 
@@ -49,7 +47,7 @@ class UpdateWalletInteractorTest {
                 new VerifyWalletUpdatePassphraseHandler(walletPersistenceSupport),
                 new EnsureWalletNameAvailabilityHandler(walletReader),
                 new ApplyWalletNameUpdateHandler(),
-                new ApplyWalletXpubUpdateHandler(walletAddressDerivationPort),
+                new ApplyWalletXpubUpdateHandler(),
                 new PersistWalletUpdateHandler(walletPersistenceSupport));
     }
 
@@ -57,20 +55,21 @@ class UpdateWalletInteractorTest {
     void updateWalletRenamesAndReconfiguresXpubThroughHandlerChain() {
         WalletEntity wallet = new WalletEntity();
         wallet.setName("TESTWALLET");
+        wallet.setWalletMode(WalletMode.KEROSENE);
 
         when(walletReader.findByNameAndUserId("TestWallet", 1L)).thenReturn(wallet);
         when(walletPersistenceSupport.matchesPassphrase("test-passphrase-bip39", wallet)).thenReturn(true);
         when(walletReader.existsByUserIdAndName(1L, "UPDATEDWALLET")).thenReturn(false);
-        when(walletAddressDerivationPort.deriveAddressFromXpub("xpub661Example", 0)).thenReturn("bc1qnewaddress");
 
         updateWalletInteractor.updateWallet(
-                new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", "UpdatedWallet", "xpub661Example"),
+                new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", "UpdatedWallet", "xpub661Example", "SELF_CUSTODY"),
                 1L);
 
         assertEquals("UPDATEDWALLET", wallet.getName());
+        assertEquals(WalletMode.SELF_CUSTODY, wallet.getWalletMode());
         assertEquals("xpub661Example", wallet.getXpub());
-        assertEquals("bc1qnewaddress", wallet.getDepositAddress());
-        assertEquals(0, wallet.getLastDerivedIndex());
+        assertNull(wallet.getDepositAddress());
+        assertEquals(-1, wallet.getLastDerivedIndex());
         verify(walletPersistenceSupport).persist(wallet);
     }
 
@@ -78,6 +77,7 @@ class UpdateWalletInteractorTest {
     void updateWalletClearsXpubStateWhenBlankXpubIsProvided() {
         WalletEntity wallet = new WalletEntity();
         wallet.setName("TESTWALLET");
+        wallet.setWalletMode(WalletMode.SELF_CUSTODY);
         wallet.setXpub("old-xpub");
         wallet.setDepositAddress("bc1qold");
         wallet.setLastDerivedIndex(9);
@@ -86,13 +86,13 @@ class UpdateWalletInteractorTest {
         when(walletPersistenceSupport.matchesPassphrase("test-passphrase-bip39", wallet)).thenReturn(true);
 
         updateWalletInteractor.updateWallet(
-                new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", null, "   "),
+                new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", null, "   ", "KEROSENE"),
                 1L);
 
+        assertEquals(WalletMode.KEROSENE, wallet.getWalletMode());
         assertNull(wallet.getXpub());
         assertNull(wallet.getDepositAddress());
         assertEquals(-1, wallet.getLastDerivedIndex());
-        verify(walletAddressDerivationPort, never()).deriveAddressFromXpub(any(), any(int.class));
         verify(walletPersistenceSupport).persist(wallet);
     }
 

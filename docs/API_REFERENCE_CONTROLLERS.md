@@ -15,8 +15,8 @@ Regras usadas nesta leitura:
 
 Cobertura verificada nesta revisao:
 
-- `20` classes com `@RestController` em `src/main/java/source/**`.
-- `76` metodos HTTP mapeados por `@GetMapping`, `@PostMapping`, `@PutMapping` ou `@DeleteMapping`.
+- `30` classes com `@RestController` em `src/main/java/source/**`.
+- `126` anotacoes HTTP mapeadas por `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping`, `@PatchMapping` ou `@RequestMapping`.
 - DTOs publicos sob `source.auth.dto`, `source.common.dto`, `source.ledger.dto`, `source.mining.dto`, `source.notification.dto`, `source.transactions.dto` e `source.wallet.dto`.
 
 Controllers cobertos:
@@ -25,21 +25,31 @@ Controllers cobertos:
 - `source.auth.controller.AccountActivationController`
 - `source.auth.controller.AccountSecurityController`
 - `source.auth.controller.AccountSecurityStatusController`
+- `source.auth.controller.AppPinController`
 - `source.auth.controller.BackupCodesController`
 - `source.auth.controller.EmergencyRecoveryController`
 - `source.auth.controller.MeController`
 - `source.auth.controller.PasskeyController`
 - `source.auth.controller.TotpController`
+- `source.common.admin.AdminOperationsController`
+- `source.common.admin.PublicSiteController`
+- `source.common.admin.SystemReleaseController`
+- `source.common.controller.HealthController`
+- `source.common.controller.RootStatusController`
+- `source.common.exception.GlobalExceptionHandler`
 - `source.ledger.controller.LedgerController`
 - `source.ledger.controller.LedgerAuditController`
 - `source.ledger.audit.MerkleAuditController`
 - `source.mining.controller.MiningController`
 - `source.notification.controller.NotificationController`
 - `source.security.SovereigntyStatusController`
+- `source.transactions.controller.BtcPayWebhookController`
+- `source.transactions.controller.DepositController`
 - `source.transactions.controller.TransactionController`
 - `source.transactions.controller.NetworkPaymentsController`
 - `source.transactions.controller.EconomyController`
 - `source.transactions.controller.OnrampController`
+- `source.treasury.controller.TreasuryController`
 - `source.wallet.controller.WalletController`
 
 Observacao: `Security.java` ainda libera `/voucher/**`, mas nao existe `VoucherController` ativo em `src/main/java/source/**` nesta revisao.
@@ -120,7 +130,8 @@ Observacoes:
 
 - Links de ativacao usam `PaymentLinkDescription.ACCOUNT_ACTIVATION`, ficam ligados ao `userId` autenticado e nao exigem wallet primaria do usuario.
 - A criacao do link de ativacao usa o endereco estatico/fallback de deposito do backend, porque o fluxo acontece antes de liberar recebimentos inbound.
-- Confirmar o link muda o payment link para `verifying_activation`; a conta so vira ativa quando `AccountActivationMonitorService` finaliza a confirmacao on-chain ou quando `voucher.mock.accept-any-txid=true` em ambiente local/teste.
+- O estado do payment link e persistido em Postgres (`financial.payment_links`); Redis nao deve ser tratado como fonte duravel.
+- Confirmar o link muda o payment link para `verifying_activation`; a conta so vira ativa quando `AccountActivationMonitorService` finaliza a confirmacao on-chain. A chave `voucher.mock.accept-any-txid=true` e restrita a ambientes local/teste e nao deve ser habilitada em producao.
 
 ### Auth: `PasskeyController`
 
@@ -181,8 +192,8 @@ Observacoes:
 
 | Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
 | --- | --- | --- | --- | --- | --- |
-| `POST /ledger/transaction` | JWT | body `TransactionDTO` | `200 ApiOk<InternalTransactionResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `409 LegacyErr` idempotency duplicada; `422 LegacyErr` replay/rate-limit | transacao interna processada |
-| `GET /ledger/history` | JWT | query `page:int=0`; `size:int=50` | `200 ApiOk<List<LedgerTransactionHistory>>` | - | historico paginado, `size` limitado a `100` |
+| `POST /ledger/transaction` | JWT | body `TransactionDTO` com `idempotencyKey` obrigatorio | `200 ApiOk<InternalTransactionResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `409 LegacyErr` idempotency duplicada; `422 LegacyErr` replay/rate-limit | transacao interna processada |
+| `GET /ledger/history` | JWT | query `page:int=0`; `size:int=50` | `200 ApiOk<List<LedgerSyncEventDTO>>` | - | sincronizacao efemera saneada, sem contraparte, contexto livre ou txid completo |
 | `GET /ledger/all` | JWT | sem body | `200 ApiOk<List<LedgerDTO>>` | - | todos os ledgers do usuario |
 | `GET /ledger/find` | JWT | query `walletName:string` | `200 ApiOk<LedgerDTO>` | `404 ApiErr` | ledger por nome da carteira |
 | `GET /ledger/balance` | JWT | query `walletName:string` | `200 ApiOk<BigDecimal>` | `404 ApiErr` | saldo do ledger em BTC |
@@ -215,28 +226,28 @@ Observacao:
 
 | Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
 | --- | --- | --- | --- | --- | --- |
-| `GET /transactions/deposit-address` | JWT | sem body | `200 ApiOk<String>` | `503 ApiErr` custody provider indisponivel; `500` se usuario nao tiver carteira primaria configurada | `data` = endereco on-chain custodial dedicado |
+| `GET /transactions/deposit-address` | JWT | query `expectedAmountBtc:decimal` | `200 ApiOk<String>` | `400 ApiErr`; `503 ApiErr` custody provider indisponivel; `500` se usuario nao tiver carteira primaria configurada | legado; `data` = endereco on-chain custodial dedicado |
 | `GET /transactions/estimate-fee` | JWT | query `amount:decimal` | `200 ApiOk<EstimatedFeeDTO>` | `400 SpringErr/ApiErr` | estimativa de fee |
 | `POST /transactions/create-unsigned` | JWT | body `TransactionRequestDTO` | `200 ApiOk<UnsignedTransactionDTO>` | `400 ApiErr` | transacao bruta nao assinada |
 | `GET /transactions/status` | JWT | query `txid:string` | `200 ApiOk<TransactionResponseDTO>` | `400 SpringErr/ApiErr` | status da transacao |
 | `POST /transactions/broadcast` | JWT | body `BroadcastTransactionDTO` | `200 ApiOk<TransactionResponseDTO>` | `400 ApiErr`; `502 ApiErr` broadcast falhou | transacao transmitida |
 | `POST /transactions/create-payment-link` | JWT | body `CreatePaymentLinkRequest` | `201 ApiOk<PaymentLinkDTO>` | `400 ApiErr` | payment link criado |
 | `GET /transactions/payment-link/{linkId}` | JWT | path `linkId:string` | `200 ApiOk<PaymentLinkDTO>` | `404 ApiErr` | payment link autenticado |
-| `POST /transactions/payment-link/{linkId}/confirm` | JWT | path `linkId:string`; body `ConfirmPaymentRequest` | `200 ApiOk<PaymentLinkDTO>` | `400 ApiErr`; `404 ApiErr`; `409 ApiErr`; `410 ApiErr` | payment link confirmado |
-| `POST /transactions/payment-link/{linkId}/complete` | JWT | path `linkId:string` | `200 ApiOk<PaymentLinkDTO>` | `404 ApiErr`; `409 ApiErr`; `410 ApiErr` | payment link concluido |
+| `POST /transactions/payment-link/{linkId}/confirm` | JWT | path `linkId:string`; body `ConfirmPaymentRequest` com `idempotencyKey` | `200 ApiOk<PaymentLinkDTO>` | `400 ApiErr`; `404 ApiErr`; `409 ApiErr`; `410 ApiErr` | payment link confirmado apos validar txid, endereco, valor e confirmacoes |
+| `POST /transactions/payment-link/{linkId}/complete` | JWT | path `linkId:string`; header `Idempotency-Key` | `200 ApiOk<PaymentLinkDTO>` | `400 ApiErr`; `404 ApiErr`; `409 ApiErr`; `410 ApiErr` | payment link concluido |
 | `GET /transactions/payment-links` | JWT | sem body | `200 ApiOk<List<PaymentLinkDTO>>` | - | links do usuario |
-| `POST /transactions/withdraw` | JWT | body `WithdrawRequestDTO` | `200 ApiOk<TransactionResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `502 ApiErr`; `503 ApiErr` | saque on-chain |
+| `POST /transactions/withdraw` | JWT | body `WithdrawRequestDTO` com `idempotencyKey` | `200 ApiOk<TransactionResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `502 ApiErr`; `503 ApiErr` | saque on-chain |
 
 ### Transactions: `NetworkPaymentsController`
 
 | Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
 | --- | --- | --- | --- | --- | --- |
-| `POST /transactions/network/onchain/address` | JWT | body `OnchainAddressRequestDTO` | `201 ApiOk<WalletNetworkAddressDTO>` | `404 ApiErr`; `503 ApiErr` | perfil de rede com endereco on-chain |
+| `POST /transactions/network/onchain/address` | JWT | body `OnchainAddressRequestDTO` com `expectedAmountBtc` | `201 ApiOk<OnchainAddressAllocationDTO>` | `400 ApiErr`; `404 ApiErr`; `503 ApiErr` | endereco on-chain dedicado para um deposito especifico |
 | `GET /transactions/network/wallet-profile` | JWT | query `walletName:string` | `200 ApiOk<WalletNetworkAddressDTO>` | `404 ApiErr` | perfil de rede da carteira |
-| `POST /transactions/network/onchain/send` | JWT | body `OnchainSendRequestDTO` | `200 ApiOk<ExternalTransferResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `503 ApiErr` | transferencia externa on-chain |
+| `POST /transactions/network/onchain/send` | JWT | body `OnchainSendRequestDTO` com `idempotencyKey` | `200 ApiOk<ExternalTransferResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `503 ApiErr` | transferencia externa on-chain |
 | `POST /transactions/network/lightning/invoice` | JWT | body `LightningInvoiceRequestDTO` | `201 ApiOk<LightningInvoiceResponseDTO>` | `400 ApiErr`; `404 ApiErr`; `503 ApiErr` | invoice Lightning criada |
 | `POST /transactions/network/transfers/{transferId}/cancel` | JWT | path `transferId:UUID` | `200 ApiOk<ExternalTransferResponseDTO>` | `404 ApiErr`; `409 ApiErr` | transferencia cancelada |
-| `POST /transactions/network/lightning/pay` | JWT | body `LightningPaymentRequestDTO` | `200 ApiOk<ExternalTransferResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `503 ApiErr` | pagamento Lightning enviado |
+| `POST /transactions/network/lightning/pay` | JWT | body `LightningPaymentRequestDTO` com `idempotencyKey` | `200 ApiOk<ExternalTransferResponseDTO>` | `400 ApiErr`; `402 ApiErr`; `404 ApiErr`; `503 ApiErr` | pagamento Lightning enviado |
 | `GET /transactions/network/transfers` | JWT | sem body | `200 ApiOk<List<ExternalTransferResponseDTO>>` | - | historico de transferencias externas |
 | `GET /transactions/network/transfers/{transferId}` | JWT | path `transferId:UUID` | `200 ApiOk<ExternalTransferResponseDTO>` | `404 ApiErr` | transferencia externa especifica |
 
@@ -269,18 +280,38 @@ Observacao:
 | --- | --- | --- | --- | --- | --- |
 | `POST /notifications/send` | JWT | body `NotificationSendRequest` | `200 ApiOk<String>` | `400 ApiErr` campos ausentes ou `userId` invalido | `data = null`; sucesso via `message` |
 
+### Common/Admin: `PublicSiteController`, `AdminOperationsController`, `SystemReleaseController`
+
+| Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
+| --- | --- | --- | --- | --- | --- |
+| `GET /api/public/mobile-download` | Publico | sem body | `200 Map` | - | links mobile, versao, changelog, hashes e assinatura |
+| `GET /system/release` | Publico operacional | sem body | `200 ReleaseSnapshot` | startup falha se manifesto/hash obrigatorio for invalido | versao, commit, build time, image digest e status do manifesto |
+| `GET /api/admin/operations/overview` | JWT/admin | sem body | `200 Map` | `401/403` via security | health, blockchain, Lightning, Vault Raft, release, mobile e metricas |
+| `GET /api/admin/operations/health` | JWT/admin | sem body | `200 OperationalHealthSnapshot` | `401/403` via security | readiness e dependencias |
+| `GET /api/admin/operations/blockchain` | JWT/admin | sem body | `200 Map` | `503` se Bitcoin Core RPC exigido estiver indisponivel | mainnet pruned: altura, hash, dificuldade, mempool, fees, sync e txs relevantes |
+| `GET /api/admin/operations/lightning` | JWT/admin | sem body | `200 Map` | `503` se LND exigido estiver indisponivel | LND gRPC: sync, altura, peers, canais e saldos |
+| `GET /api/admin/operations/vault-raft` | JWT/admin | sem body | `200 Map` | `503` se Vault Raft exigido estiver indisponivel | quorum, leader, followers e seal/unseal |
+| `GET /api/admin/operations/release` | JWT/admin | sem body | `200 ReleaseSnapshot` | `401/403` via security | manifesto e attestation local |
+| `GET /api/admin/operations/mobile` | JWT/admin | sem body | `200 Map` | `401/403` via security | metadados de release mobile |
+| `GET /api/admin/operations/logs` | JWT/admin | sem body | `200 List<Map>` | `401/403` via security | logs saneados sem segredo/token |
+
+Observacoes:
+
+- `/admin`, `/download` e `/status` sao rotas SPA encaminhadas por `WebAdminController`, nao contratos JSON.
+- `ReleaseAttestationFilter` pode exigir headers `X-Kerosene-Release-Digest`, `X-Kerosene-Release-Timestamp`, `X-Kerosene-Release-Proof` e `X-Kerosene-Service-Identity` em comunicacoes criticas.
+
 ### Sovereignty: `SovereigntyStatusController`
 
 | Endpoint | Auth | Entrada | Sucesso | Erros relevantes | Body de resposta |
 | --- | --- | --- | --- | --- | --- |
-| `GET /sovereignty/status` | JWT | sem body | `200 Map` | - | `SovereigntyStatusResponse` |
+| `GET /sovereignty/status` | Publico pela security atual | sem body | `200 Map` | - | `SovereigntyStatusResponse` |
 | `POST /sovereignty/reattest` | JWT + `X-Admin-Token` | header `X-Admin-Token:string` | `200 Map` | `403 Map` token invalido; `503 Map` token nao configurado | resposta simples de re-attestation |
 | `GET /sovereignty/telemetry` | JWT + `X-Admin-Token` | header `X-Admin-Token:string` | `200 Map` | `403 Map` token invalido | `TelemetrySnapshot` |
-| `GET /sovereignty/ping` | JWT | sem body | `200 text/html` | - | pagina HTML de health/ping |
+| `GET /sovereignty/ping` | Publico pela security atual | sem body | `200 text/html` | - | pagina HTML de health/ping |
 
 Observacao:
 
-- Os comentarios do controller descrevem `/sovereignty/**` como publico, mas a seguranca atual exige JWT para essas rotas.
+- `/sovereignty/status` e `/sovereignty/ping` estao liberados na security atual. `/sovereignty/telemetry` e `/sovereignty/reattest` continuam operacionais e exigem `X-Admin-Token`.
 
 ## Schemas de request e response
 
@@ -512,7 +543,6 @@ Observacao:
 | --- | --- | --- |
 | `id` | `long` | ID da carteira. |
 | `name` | `string` | Nome. |
-| `passphraseHash` | `string` | Hash persistido da passphrase; atualmente exposto pela API. |
 | `createdAt` | `datetime` | Data de criacao. |
 | `updatedAt` | `datetime` | Data de atualizacao. |
 | `isActive` | `boolean` | Carteira ativa. |
@@ -532,9 +562,9 @@ Observacao:
 | --- | --- | --- | --- |
 | `sender` | `string` | sim | Username, ID numerico de carteira ou endereco BTC. |
 | `receiver` | `string` | sim | Username, ID numerico de carteira ou endereco BTC. |
-| `amount` | `decimal` | sim | Valor da transacao interna. |
+| `amount` | `decimal` | sim | Valor da transacao interna; deve ser positivo, maior que zero e limitado a 8 casas decimais. |
 | `context` | `string` | nao | Contexto descritivo. |
-| `idempotencyKey` | `string` | nao | UUID do cliente para idempotencia. |
+| `idempotencyKey` | `string` | sim | Chave do cliente para idempotencia; obrigatoria em transacoes financeiras mutaveis. |
 | `requestTimestamp` | `long` | nao | Epoch ms para anti-replay. |
 | `passkeyAssertionJson` | `string` | condicional | Exigido quando transacoes usam passkey. |
 | `confirmationPassphrase` | `string` | condicional | Exigido em modos com coassinatura/confirmacao adicional. |
@@ -551,21 +581,16 @@ Observacao:
 | `receiver` | `string` |
 | `context` | `string` |
 
-#### `LedgerTransactionHistory`
+#### `LedgerSyncEventDTO`
 
 | Campo | Tipo | Observacao |
 | --- | --- | --- |
-| `id` | `UUID` | ID do historico. |
-| `senderIdentifier` | `string` | Remetente original. |
-| `senderUserId` | `long` | Usuario remetente. |
-| `receiverIdentifier` | `string` | Destinatario original. |
-| `receiverUserId` | `long` | Usuario destinatario. |
+| `id` | `UUID` | ID do evento efemero de sincronizacao. |
 | `transactionType` | `string` | Ex.: `INTERNAL`, `EXTERNAL_DEPOSIT`, `EXTERNAL_WITHDRAWAL`. |
 | `amount` | `decimal` | Valor. |
 | `status` | `string` | Ex.: `PENDING`, `CONCLUDED`, `CANCELED`. |
 | `networkFee` | `decimal` | Fee de rede. |
-| `blockchainTxid` | `string` | TXID on-chain, se houver. |
-| `context` | `string` | Contexto textual. |
+| `txidFingerprint` | `string` | Digest truncado do TXID, nunca o TXID completo. |
 | `createdAt` | `datetime` | Data de criacao. |
 | `confirmations` | `integer` | Confirmacoes blockchain. |
 
@@ -594,6 +619,7 @@ Observacao:
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
 | `payerWalletName` | `string` | sim | Carteira pagadora. |
+| `idempotencyKey` | `string` | sim | Chave de idempotencia do pagamento. |
 | `totpCode` | `string` | condicional | Fator adicional. |
 | `passkeyAssertionJson` | `string` | condicional | Prova WebAuthn. |
 | `confirmationPassphrase` | `string` | condicional | Confirmacao por passphrase. |
@@ -748,6 +774,7 @@ Observacao:
 
 | Campo | Tipo | Obrigatorio |
 | --- | --- | --- |
+| `idempotencyKey` | `string` | sim |
 | `txid` | `string` | sim |
 | `fromAddress` | `string` | sim |
 
@@ -776,6 +803,7 @@ Observacao:
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
 | `fromWalletName` | `string` | sim | Carteira de origem. |
+| `idempotencyKey` | `string` | sim | Chave de idempotencia do saque. |
 | `toAddress` | `string` | sim | Endereco externo. |
 | `amount` | `decimal` | sim | Valor do saque. |
 | `description` | `string` | nao | Contexto. |
@@ -789,7 +817,24 @@ Observacao:
 | Campo | Tipo | Obrigatorio |
 | --- | --- | --- |
 | `walletName` | `string` | sim |
-| `regenerate` | `boolean` | nao |
+| `expectedAmountBtc` | `decimal` | sim |
+
+#### `OnchainAddressAllocationDTO`
+
+| Campo | Tipo | Observacao |
+| --- | --- | --- |
+| `walletName` | `string` | Carteira Kerosene creditada. |
+| `onchainAddress` | `string` | Endereco dedicado para este deposito. |
+| `expectedAmountBtc` | `decimal` | Valor esperado informado pela UI. |
+| `network` | `string` | Rede Bitcoin configurada. |
+| `provider` | `string` | Fonte da alocacao/monitoramento. |
+| `externalWalletReference` | `string` | Referencia derivada/fingerprint operacional. |
+| `walletMode` | `string` | Deve ser `KEROSENE` para este fluxo. |
+| `transferId` | `UUID` | Evento rastreado em `network_transfers`. |
+| `transferStatus` | `string` | Status inicial/atual. |
+| `confirmations` | `integer` | Confirmacoes observadas. |
+| `requiredConfirmations` | `integer` | Minimo para liquidacao. |
+| `blockchainTxid` | `string` | Txid observado, quando houver. |
 
 #### `WalletNetworkAddressDTO`
 
@@ -806,6 +851,7 @@ Observacao:
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
 | `fromWalletName` | `string` | sim | Carteira de origem. |
+| `idempotencyKey` | `string` | sim | Chave de idempotencia do envio. |
 | `toAddress` | `string` | sim | Destino on-chain. |
 | `amount` | `decimal` | sim | Valor. |
 | `description` | `string` | nao | Contexto. |
@@ -841,6 +887,7 @@ Observacao:
 | Campo | Tipo | Obrigatorio | Observacao |
 | --- | --- | --- | --- |
 | `fromWalletName` | `string` | sim | Carteira pagadora. |
+| `idempotencyKey` | `string` | sim | Chave de idempotencia do pagamento. |
 | `paymentRequest` | `string` | sim | Invoice BOLT11. |
 | `amount` | `decimal` | nao | Alguns provedores permitem deducao do proprio invoice. |
 | `maxRoutingFeeBtc` | `decimal` | nao | Teto de fee. |
@@ -860,7 +907,8 @@ Observacao:
 | `provider` | `string` | Provedor custodial. |
 | `walletName` | `string` | Carteira relacionada. |
 | `destination` | `string` | Destino. |
-| `amountBtc` | `decimal` | Valor. |
+| `expectedAmountBtc` | `decimal` | Valor esperado no deposito on-chain quando aplicavel. |
+| `amountBtc` | `decimal` | Valor real observado/liquidado. |
 | `networkFeeBtc` | `decimal` | Fee de rede. |
 | `platformFeeBtc` | `decimal` | Fee da plataforma. |
 | `totalDebitedBtc` | `decimal` | Total debitado. |
@@ -1133,8 +1181,8 @@ Interface interna implementada por `UserDTO`; define getters/setters para `usern
 
 ## Inconsistencias encontradas durante a analise
 
-1. Comentarios de "rota publica" nao batem com a seguranca real.
-   `Security.java` libera explicitamente apenas `/auth/**` previstos, `/voucher/**` e Swagger. Portanto `/ledger/**`, `/transactions/**`, `/api/**`, `/audit/**`, `/v1/audit/**`, `/wallet/**`, `/mining/**`, `/notifications/**` e `/sovereignty/**` exigem JWT hoje.
+1. Comentarios de "rota publica" precisam ser conferidos contra `Security.java`.
+   A security libera explicitamente os assets da SPA, `/health/live`, `/health/ready`, `/api/public/**`, `/system/release`, rotas publicas de auth, webhook BTCPay, `/actuator/health/**`, `/sovereignty/status`, `/sovereignty/ping`, Swagger e `/ws/**`. Portanto `/ledger/**`, `/transactions/**`, `/audit/**`, `/v1/audit/**`, `/wallet/**`, `/mining/**`, `/notifications/**` e endpoints operacionais de `/sovereignty/**` continuam exigindo JWT/admin conforme o caso.
 
 2. `/voucher/**` esta liberado na security, mas nao ha `VoucherController` ativo em `src/main/java/source/**`.
    Na pratica, a rota fica sem contrato REST implementado nesta revisao.

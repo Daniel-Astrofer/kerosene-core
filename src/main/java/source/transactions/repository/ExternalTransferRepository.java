@@ -22,6 +22,8 @@ public interface ExternalTransferRepository extends JpaRepository<ExternalTransf
 
     Optional<ExternalTransferEntity> findByInvoiceId(String invoiceId);
 
+    Optional<ExternalTransferEntity> findByIdempotencyKey(String idempotencyKey);
+
     Optional<ExternalTransferEntity> findTopByBlockchainTxidOrderByCreatedAtDesc(String blockchainTxid);
 
     Optional<ExternalTransferEntity> findTopByPaymentHashOrderByCreatedAtDesc(String paymentHash);
@@ -34,6 +36,8 @@ public interface ExternalTransferRepository extends JpaRepository<ExternalTransf
             String network,
             Collection<String> statuses);
 
+    List<ExternalTransferEntity> findTop200ByStatusInOrderByUpdatedAtAsc(Collection<String> statuses);
+
     @Query("""
             select coalesce(sum(t.totalDebitedBtc), 0)
             from ExternalTransferEntity t
@@ -42,4 +46,44 @@ public interface ExternalTransferRepository extends JpaRepository<ExternalTransf
               and t.status in :statuses
             """)
     BigDecimal sumReservedOutboundByNetworkAndStatuses(String network, Collection<String> statuses);
+
+    @Query("""
+            select t.network as network,
+                   count(t) as eventCount,
+                   coalesce(sum(abs(t.amountBtc)), 0) as volumeBtc,
+                   coalesce(sum(t.networkFeeBtc), 0) as feeBtc,
+                   coalesce(sum(case when t.amountBtc > 0 then t.amountBtc else 0 end), 0) as inflowBtc,
+                   coalesce(sum(case when t.amountBtc < 0 then abs(t.amountBtc) else 0 end), 0) as outflowBtc
+            from ExternalTransferEntity t
+            group by t.network
+            """)
+    List<NetworkAggregate> aggregateOperationalMetricsByNetwork();
+
+    @Query("""
+            select t.status as status,
+                   count(t) as eventCount
+            from ExternalTransferEntity t
+            group by t.status
+            """)
+    List<StatusAggregate> aggregateOperationalMetricsByStatus();
+
+    interface NetworkAggregate {
+        String getNetwork();
+
+        long getEventCount();
+
+        BigDecimal getVolumeBtc();
+
+        BigDecimal getFeeBtc();
+
+        BigDecimal getInflowBtc();
+
+        BigDecimal getOutflowBtc();
+    }
+
+    interface StatusAggregate {
+        String getStatus();
+
+        long getEventCount();
+    }
 }

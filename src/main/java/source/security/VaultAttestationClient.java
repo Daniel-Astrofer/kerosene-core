@@ -12,12 +12,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Performs the node attestation exchange with Vault.
@@ -43,6 +43,9 @@ public class VaultAttestationClient {
     @Value("${vault.request-timeout-ms:75000}")
     private int vaultRequestTimeoutMs;
 
+    @Value("${shard.attestation.secret:}")
+    private String shardAttestationSecret;
+
     public VaultAttestationClient(ShardIdentityManager shardIdentityManager, ObjectMapper objectMapper) {
         this.shardIdentityManager = shardIdentityManager;
         this.objectMapper = objectMapper;
@@ -53,13 +56,14 @@ public class VaultAttestationClient {
 
     public VaultAttestationSession attest(String resolvedVaultUrl) throws IOException, InterruptedException {
         String nodeId = shardIdentityManager.getStableNodeId();
-        String tpmQuote = obtainTpmPcrQuote();
-        logger.info("[VaultAttestationClient] TPM Quote obtained. Node: {}. Attesting...", nodeId);
+        String publicKeyBase64 = shardIdentityManager.getPublicKeyBase64();
+        String tpmQuote = obtainContainerAttestationQuote(nodeId, publicKeyBase64);
+        logger.info("[VaultAttestationClient] Container attestation quote prepared. Node: {}. Attesting...", nodeId);
 
         String attestBody = objectMapper.writeValueAsString(Map.of(
                 "tpm_quote", tpmQuote,
                 "node_id", nodeId,
-                "public_key", shardIdentityManager.getPublicKeyBase64()));
+                "public_key", publicKeyBase64));
 
         String sessionToken;
         if (proxyPath != null && !proxyPath.isBlank()) {
@@ -126,16 +130,34 @@ public class VaultAttestationClient {
         }
     }
 
-    private String obtainTpmPcrQuote() {
-        try {
-            byte[] nonce = new byte[32];
-            new SecureRandom().nextBytes(nonce);
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            digest.update("TPM_PCR_STATE".getBytes(StandardCharsets.UTF_8));
-            digest.update(nonce);
-            return Base64.getEncoder().encodeToString(digest.digest());
-        } catch (Exception e) {
-            throw new VaultAttestationException("Failed to obtain TPM PCR Quote: " + e.getMessage(), e);
+    private String obtainContainerAttestationQuote(String nodeId, String publicKeyBase64) {
+        if (shardAttestationSecret == null || shardAttestationSecret.isBlank()) {
+            throw new VaultAttestationException(
+                    "shard.attestation.secret is required for container attestation.");
         }
+        try {
+            byte[] secret = Base64.getDecoder().decode(shardAttestationSecret);
+            if (secret.length < 32) {
+                throw new VaultAttestationException("shard.attestation.secret must decode to at least 32 bytes.");
+            }
+            try {
+                Mac mac = Mac.getInstance("HmacSHA256");
+                mac.init(new SecretKeySpec(secret, "HmacSHA256"));
+                byte[] digest = mac.doFinal(attestationMessage(nodeId, publicKeyBase64)
+                        .getBytes(StandardCharsets.UTF_8));
+                return "v1:" + Base64.getEncoder().encodeToString(digest);
+            } finally {
+                java.util.Arrays.fill(secret, (byte) 0);
+            }
+        } catch (Exception e) {
+            if (e instanceof VaultAttestationException vaultException) {
+                throw vaultException;
+            }
+            throw new VaultAttestationException("Failed to obtain container attestation quote: " + e.getMessage(), e);
+        }
+    }
+
+    private String attestationMessage(String nodeId, String publicKeyBase64) {
+        return "shard-attest:v1:" + nodeId + ":" + publicKeyBase64;
     }
 }

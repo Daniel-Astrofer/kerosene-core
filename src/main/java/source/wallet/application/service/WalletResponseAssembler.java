@@ -24,7 +24,6 @@ public class WalletResponseAssembler {
         return new WalletResponseDTO(
                 entity.getId(),
                 entity.getName(),
-                null,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getIsActive(),

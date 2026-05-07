@@ -1,6 +1,7 @@
 package source.auth.application.service.passkey;
 
 import org.springframework.stereotype.Service;
+import source.auth.application.infra.persistence.jpa.PasskeyInventoryProjection;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.dto.PasskeyActionRequiredDTO;
 import source.auth.dto.PasskeyDeviceDTO;
@@ -8,8 +9,8 @@ import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 
-import java.util.Base64;
 import java.util.List;
+import source.common.infra.logging.LogSanitizer;
 
 @Service
 public class PasskeyInventoryService {
@@ -25,7 +26,7 @@ public class PasskeyInventoryService {
     }
 
     public PasskeyInventoryDTO inventoryFor(UserDataBase user) {
-        List<PasskeyCredential> credentials = passkeyCredentialRepository.findByUserId(user.getId());
+        List<PasskeyInventoryProjection> credentials = passkeyCredentialRepository.findInventoryByUserId(user.getId());
         String currentRpId = passkeyService.resolveCurrentRelyingPartyId();
         String currentHost = passkeyService.resolveCurrentRequestHost();
 
@@ -53,7 +54,16 @@ public class PasskeyInventoryService {
 
     public boolean isKnownIncompatibleForCurrentLogin(PasskeyCredential credential) {
         return compatibilityOf(
-                credential,
+                credential.getRelyingPartyId(),
+                credential.getOriginHost(),
+                passkeyService.resolveCurrentRelyingPartyId(),
+                passkeyService.resolveCurrentRequestHost()) == CompatibilityStatus.INCOMPATIBLE;
+    }
+
+    public boolean isKnownIncompatibleForCurrentLogin(String relyingPartyId, String originHost) {
+        return compatibilityOf(
+                relyingPartyId,
+                originHost,
                 passkeyService.resolveCurrentRelyingPartyId(),
                 passkeyService.resolveCurrentRequestHost()) == CompatibilityStatus.INCOMPATIBLE;
     }
@@ -84,39 +94,53 @@ public class PasskeyInventoryService {
                 inventory);
     }
 
-    private PasskeyDeviceDTO toDevice(PasskeyCredential credential, String currentRpId, String currentHost) {
-        CompatibilityStatus compatibility = compatibilityOf(credential, currentRpId, currentHost);
-        String deviceName = hasText(credential.getDeviceName()) ? credential.getDeviceName() : "Passkey sem nome";
-        String credentialId = credential.getCredentialId() == null
+    private PasskeyDeviceDTO toDevice(PasskeyInventoryProjection credential, String currentRpId, String currentHost) {
+        CompatibilityStatus compatibility = compatibilityOf(
+                credential.relyingPartyId(),
+                credential.originHost(),
+                currentRpId,
+                currentHost);
+        String deviceName = hasText(credential.deviceName()) ? credential.deviceName() : "Passkey sem nome";
+        String credentialRef = credential.credentialId() == null
                 ? null
-                : Base64.getUrlEncoder().withoutPadding().encodeToString(credential.getCredentialId());
+                : LogSanitizer.fingerprint(credential.credentialId());
 
         return new PasskeyDeviceDTO(
-                credentialId,
+                credentialRef,
                 deviceName,
-                credential.getRelyingPartyId(),
-                credential.getOriginHost(),
+                credential.brand(),
+                credential.model(),
+                credential.serialNumber(),
+                credential.deviceInstallId(),
+                credential.platform(),
+                credential.browser(),
+                credential.firstAccessAt(),
+                credential.lastAccessAt(),
+                credential.status(),
+                credential.relyingPartyId(),
+                credential.originHost(),
                 compatibility.name(),
                 compatibility == CompatibilityStatus.COMPATIBLE);
     }
 
     private CompatibilityStatus compatibilityOf(
-            PasskeyCredential credential,
+            String relyingPartyId,
+            String originHost,
             String currentRpId,
             String currentHost) {
         if (!hasText(currentRpId) && !hasText(currentHost)) {
             return CompatibilityStatus.UNKNOWN;
         }
 
-        boolean hasRpIdMetadata = hasText(credential.getRelyingPartyId());
-        boolean hasOriginMetadata = hasText(credential.getOriginHost());
+        boolean hasRpIdMetadata = hasText(relyingPartyId);
+        boolean hasOriginMetadata = hasText(originHost);
         if (!hasRpIdMetadata && !hasOriginMetadata) {
             return CompatibilityStatus.UNKNOWN;
         }
 
-        if (matches(credential.getRelyingPartyId(), currentRpId)
-                || matches(credential.getRelyingPartyId(), currentHost)
-                || matches(credential.getOriginHost(), currentHost)) {
+        if (matches(relyingPartyId, currentRpId)
+                || matches(relyingPartyId, currentHost)
+                || matches(originHost, currentHost)) {
             return CompatibilityStatus.COMPATIBLE;
         }
 

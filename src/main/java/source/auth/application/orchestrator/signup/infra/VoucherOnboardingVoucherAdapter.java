@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import source.auth.application.orchestrator.signup.port.OnboardingVoucherPort;
+import source.common.infra.logging.LogSanitizer;
 
 @Component
 public class VoucherOnboardingVoucherAdapter implements OnboardingVoucherPort {
@@ -15,7 +16,7 @@ public class VoucherOnboardingVoucherAdapter implements OnboardingVoucherPort {
 
     @Override
     public void createAndClaim(Long userId, String txid, BigDecimal amountPaid) {
-        log.info("[VoucherOnboardingVoucherAdapter] Voucher flow is disabled. Skipping onboarding voucher for user {} txid={}",
-                userId, txid);
+        log.info("[VoucherOnboardingVoucherAdapter] Voucher flow is disabled. Skipping onboarding voucher for userId={} txRef={}",
+                userId, LogSanitizer.fingerprint(txid));
     }
 }

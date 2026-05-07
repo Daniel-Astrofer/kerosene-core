@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@Component
+@Component("configurableCustodyGateway")
 @ConditionalOnMissingBean(BitcoinNodeService.class)
 public class ConfigurableCustodyGateway implements CustodyGateway {
 
@@ -164,6 +164,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
                 "destinationAddress", command.destinationAddress(),
                 "amountSats", command.amountSats(),
                 "description", safeText(command.description()),
+                "idempotencyKey", safeText(command.idempotencyKey()),
                 "authorizationProof", safeText(command.authorizationProof())));
 
         return new PaymentResult(
@@ -187,6 +188,7 @@ public class ConfigurableCustodyGateway implements CustodyGateway {
                 "amountSats", command.amountSats(),
                 "maxFeeSats", command.maxFeeSats(),
                 "description", safeText(command.description()),
+                "idempotencyKey", safeText(command.idempotencyKey()),
                 "authorizationProof", safeText(command.authorizationProof())));
 
         return new PaymentResult(

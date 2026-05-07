@@ -37,7 +37,7 @@ Use Cases / Application Services / Orchestrators
                  +--> PostgreSQL (JPA entities + repositories)
                  +--> Redis (state, cache, throttling, idempotency)
                  +--> Vault / MPC sidecar
-                 +--> Custody, Lightning, Onramp, Esplora
+                 +--> Bitcoin Core RPC/ZMQ, LND gRPC, Custody, Onramp
                  +--> WebSocket push channels
 ```
 
@@ -193,6 +193,10 @@ O estado duravel e modelado por entidades JPA, entre elas:
 - wallets
 - ledgers, entries, transacoes e historico
 - auditoria Merkle
+- payment links em `financial.payment_links`
+- outbox de provider externo em `financial.external_provider_outbox`
+- trilha imutavel de auditoria financeira em `financial.financial_audit_events`
+- runs e issues de reconciliacao financeira em `financial.financial_reconciliation_runs` e `financial.financial_reconciliation_issues`
 - depositos e transferencias externas
 - rigs e alocacoes de mineracao
 - receita/configuracao de tesouraria
@@ -205,6 +209,8 @@ O Redis sustenta estado operacional e efemero, incluindo:
 - sessoes de signup/login/recovery
 - idempotencia e caches operacionais
 - stores temporarios usados por flows de payment request e onboarding
+
+Payment links nao dependem mais de Redis como fonte duravel. Redis continua valido para estado operacional efemero, caches e throttling, mas a fonte de verdade dos links criados pelo backend passa a ser Postgres.
 
 ## Jobs agendados
 

@@ -3,6 +3,7 @@ package source.wallet.application.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.wallet.application.port.out.WalletPersistencePort;
+import source.wallet.domain.WalletDestinationHash;
 import source.wallet.domain.WalletNamingPolicy;
 import source.wallet.model.WalletEntity;
 
@@ -41,6 +42,14 @@ public class WalletReader {
 
     public WalletEntity findByDepositAddress(String depositAddress) {
         return walletPersistencePort.findByDepositAddress(depositAddress).orElse(null);
+    }
+
+    public WalletEntity findByDestinationHash(String destinationHash) {
+        String normalized = WalletDestinationHash.normalize(destinationHash);
+        if (normalized == null) {
+            return null;
+        }
+        return walletPersistencePort.findByDestinationHash(normalized).orElse(null);
     }
 
     public WalletEntity findByLightningAddress(String lightningAddress) {

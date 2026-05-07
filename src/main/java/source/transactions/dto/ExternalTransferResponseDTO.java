@@ -16,6 +16,7 @@ public record ExternalTransferResponseDTO(
         String blockchainTxid,
         String paymentHash,
         String invoiceData,
+        BigDecimal expectedAmountBtc,
         BigDecimal amountBtc,
         BigDecimal networkFeeBtc,
         BigDecimal platformFeeBtc,

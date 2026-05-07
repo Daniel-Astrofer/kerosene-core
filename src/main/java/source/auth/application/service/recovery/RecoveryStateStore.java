@@ -1,6 +1,7 @@
 package source.auth.application.service.recovery;
 
 import java.security.SecureRandom;
+import java.util.HexFormat;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +17,7 @@ public class RecoveryStateStore {
 
     private final RedisContract redisContract;
     private final SecureRandom secureRandom = new SecureRandom();
+    private static final HexFormat HEX = HexFormat.of();
 
     @Value("${auth.recovery.session-ttl-minutes:10}")
     private long recoverySessionTtlMinutes;
@@ -53,11 +55,7 @@ public class RecoveryStateStore {
     private String generateRecoveryChallenge() {
         byte[] challenge = new byte[32];
         secureRandom.nextBytes(challenge);
-        StringBuilder sb = new StringBuilder();
-        for (byte b : challenge) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
+        return HEX.formatHex(challenge);
     }
 
     public record StoredRecoverySession(String sessionId, String passkeyChallenge, long expiresInSeconds) {

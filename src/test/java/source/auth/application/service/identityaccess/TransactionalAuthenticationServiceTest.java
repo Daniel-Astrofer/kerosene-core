@@ -8,12 +8,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import source.auth.AuthExceptions;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import source.auth.application.service.cripto.contracts.Hasher;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 
@@ -109,9 +109,19 @@ class TransactionalAuthenticationServiceTest {
     @Test
     void passkeyAssertionUsesCredentialRepositoryAndRedisChallenge() {
         UserDataBase user = user(AccountSecurityType.PASSKEY);
-        PasskeyCredential credential = new PasskeyCredential();
-        credential.setPublicKeyCose(new byte[] { 1, 2, 3 });
+        byte[] publicKey = new byte[] { 1, 2, 3 };
+        byte[] credentialIdBytes = new byte[] { 9, 8, 7 };
         String credentialId = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[] { 9, 8, 7 });
+        PasskeyVerificationProjection credential = new PasskeyVerificationProjection(
+                credentialIdBytes,
+                publicKey,
+                0L,
+                "ACTIVE",
+                "localhost",
+                "localhost",
+                1L,
+                "alice",
+                true);
         String assertionJson = """
                 {
                   "signature": "signature",
@@ -121,18 +131,19 @@ class TransactionalAuthenticationServiceTest {
                 }
                 """.formatted(credentialId);
 
-        when(passkeyCredentialRepository.findByCredentialIdAndUserId(any(byte[].class), eq(1L)))
+        when(passkeyCredentialRepository.findVerificationByCredentialIdAndUserId(any(byte[].class), eq(1L)))
                 .thenReturn(Optional.of(credential));
         when(passkeyService.consumeChallengeFromRedis("alice")).thenReturn("challenge");
-        when(passkeyService.verifySignature(
+        when(passkeyService.verifyAuthenticationAssertion(
                 eq("alice"),
                 eq("challenge"),
                 eq("signature"),
-                eq(credential.getPublicKeyCose()),
+                eq(publicKey),
                 eq("auth-data"),
                 eq("client-data")))
-                .thenReturn(true);
-        when(passkeyService.extractSignatureCount("auth-data")).thenReturn(1L);
+                .thenReturn(new PasskeyService.PasskeyVerificationResult(true, 1L));
+        when(passkeyCredentialRepository.advanceSignatureCount(eq(credentialIdBytes), eq(1L), eq(1L)))
+                .thenReturn(1);
 
         assertDoesNotThrow(() -> service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
                 user,
@@ -141,7 +152,7 @@ class TransactionalAuthenticationServiceTest {
                 null)));
 
         verify(passkeyService).consumeChallengeFromRedis("alice");
-        verify(passkeyCredentialRepository).save(credential);
+        verify(passkeyCredentialRepository).advanceSignatureCount(eq(credentialIdBytes), eq(1L), eq(1L));
     }
 
     private UserDataBase user(AccountSecurityType securityType) {

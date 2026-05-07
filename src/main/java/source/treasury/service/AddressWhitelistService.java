@@ -3,6 +3,7 @@ package source.treasury.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import source.common.infra.logging.LogSanitizer;
 import source.treasury.application.port.out.AuditAddressPort;
 
 import java.util.List;
@@ -44,7 +45,7 @@ public class AddressWhitelistService implements AuditAddressPort {
             // Panic Mode trigger?
             return "PANIC_RECOVERY_ADDRESS_PLACEHOLDER";
         }
-        log.info("[Whitelist] Address consumed for audit: {}", address);
+        log.info("[Whitelist] Address consumed for audit: addressRef={}", LogSanitizer.fingerprint(address));
         return address;
     }
 

@@ -96,10 +96,19 @@ message GetInfoRequest {
 message GetInfoResponse {
     string identity_pubkey = 1;
     string alias = 2;
+    uint32 num_pending_channels = 3;
+    uint32 num_active_channels = 4;
+    uint32 num_peers = 5;
     uint32 block_height = 6;
+    string block_hash = 8;
     bool synced_to_chain = 9;
+    bool testnet = 10;
+    repeated string uris = 12;
     int64 best_header_timestamp = 13;
     string version = 14;
+    uint32 num_inactive_channels = 15;
+    string color = 17;
+    bool synced_to_graph = 18;
 }
 
 message Invoice {

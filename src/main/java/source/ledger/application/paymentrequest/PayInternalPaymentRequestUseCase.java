@@ -38,6 +38,7 @@ public class PayInternalPaymentRequestUseCase {
             String linkId,
             Long payerUserId,
             String payerWalletName,
+            String idempotencyKey,
             String totpCode,
             String passkeyAssertionJson,
             String confirmationPassphrase) {
@@ -73,6 +74,8 @@ public class PayInternalPaymentRequestUseCase {
         transaction.setReceiver(receiverWallet.getId().toString());
         transaction.setAmount(request.getAmount());
         transaction.setContext("Payment Link " + linkId);
+        transaction.setIdempotencyKey(idempotencyKey);
+        transaction.setRequestTimestamp(System.currentTimeMillis());
         transaction.setTotpCode(totpCode);
         transaction.setPasskeyAssertionJson(passkeyAssertionJson);
         transaction.setConfirmationPassphrase(confirmationPassphrase);

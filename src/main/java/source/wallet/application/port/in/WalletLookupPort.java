@@ -19,6 +19,8 @@ public interface WalletLookupPort {
 
     WalletEntity findByDepositAddress(String depositAddress);
 
+    WalletEntity findByDestinationHash(String destinationHash);
+
     WalletEntity findByLightningAddress(String lightningAddress);
 
     boolean existsByUserIdAndName(Long userId, String name);

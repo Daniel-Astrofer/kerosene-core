@@ -35,7 +35,7 @@ public class BitcoinjUnsignedTransactionBuilderAdapter implements UnsignedTransa
 
     public BitcoinjUnsignedTransactionBuilderAdapter(
             BlockchainClient blockchainClient,
-            @Value("${bitcoin.network:testnet}") String bitcoinNetwork) {
+            @Value("${bitcoin.network:mainnet}") String bitcoinNetwork) {
         this.blockchainClient = blockchainClient;
         this.networkParameters = resolveNetworkParameters(bitcoinNetwork);
     }
@@ -171,6 +171,8 @@ public class BitcoinjUnsignedTransactionBuilderAdapter implements UnsignedTransa
 
     private NetworkParameters resolveNetworkParameters(String bitcoinNetwork) {
         String normalized = bitcoinNetwork != null ? bitcoinNetwork.toLowerCase(Locale.ROOT) : "";
-        return "mainnet".equals(normalized) ? MainNetParams.get() : TestNet3Params.get();
+        return ("mainnet".equals(normalized) || "main".equals(normalized))
+                ? MainNetParams.get()
+                : TestNet3Params.get();
     }
 }

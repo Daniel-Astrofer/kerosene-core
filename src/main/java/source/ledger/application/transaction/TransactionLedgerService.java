@@ -1,6 +1,7 @@
 package source.ledger.application.transaction;
 
 import org.springframework.stereotype.Service;
+import source.common.validation.FinancialAmountValidator;
 import source.ledger.service.LedgerContract;
 
 import java.math.BigDecimal;
@@ -15,6 +16,7 @@ public class TransactionLedgerService {
     }
 
     public void executeInternalTransfer(TransactionContext context) {
+        FinancialAmountValidator.requirePositiveBtc(context.getTransaction().getAmount(), "amount");
         String effectiveContext = buildContext(context);
         context.setEffectiveContext(effectiveContext);
 

@@ -2,18 +2,24 @@ package source.common.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import jakarta.validation.ConstraintViolationException;
 import source.auth.AuthExceptions;
 import source.common.dto.ApiResponse;
+import source.common.observability.FinancialOperationsMetrics;
 import source.ledger.exceptions.LedgerExceptions;
 import source.mining.exception.MiningExceptions;
+import source.payments.exception.PaymentException;
 import source.transactions.exception.ExternalPaymentsExceptions;
 import source.transactions.exception.PaymentLinkExceptions;
 import source.transactions.exception.TransactionExceptions;
 import source.wallet.exceptions.WalletExceptions;
 
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Global centralized component to intercept all exceptions and return standard
@@ -27,6 +33,20 @@ public class GlobalExceptionHandler {
         private static final String INVALID_ARGUMENTS_MESSAGE = "The request contained invalid arguments.";
         private static final Pattern TECHNICAL_MESSAGE_PATTERN = Pattern.compile(
                         "(?i)(exception|stacktrace|sql|jdbc|hibernate|database|nullpointer|select\\s|insert\\s|update\\s|delete\\s|org\\.|java\\.|source\\.|\\bat\\s+[a-z0-9_$.]+\\(|\\{.*\\}|\\[.*\\])");
+
+        private FinancialOperationsMetrics financialMetrics;
+
+        public GlobalExceptionHandler() {
+        }
+
+        public GlobalExceptionHandler(FinancialOperationsMetrics financialMetrics) {
+                this.financialMetrics = financialMetrics;
+        }
+
+        @Autowired(required = false)
+        public void setFinancialMetrics(FinancialOperationsMetrics financialMetrics) {
+                this.financialMetrics = financialMetrics;
+        }
 
         // ============================================
         // AUTH EXCEPTIONS
@@ -177,6 +197,16 @@ public class GlobalExceptionHandler {
                                 "ERR_LEDGER_RECEIVER_NOT_FOUND");
         }
 
+        @ExceptionHandler(LedgerExceptions.ReceiverNotReadyException.class)
+        public ResponseEntity<ApiResponse<Object>> handleReceiverNotReady(
+                        LedgerExceptions.ReceiverNotReadyException ex) {
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_LEDGER_RECEIVER_NOT_READY",
+                                java.util.Map.of("reason", ex.getReason().name()));
+        }
+
         @ExceptionHandler(LedgerExceptions.LedgerAlreadyExistsException.class)
         public ResponseEntity<ApiResponse<Void>> handleLedgerAlreadyExists(
                         LedgerExceptions.LedgerAlreadyExistsException ex) {
@@ -198,10 +228,41 @@ public class GlobalExceptionHandler {
         @ExceptionHandler(LedgerExceptions.InvalidLedgerOperationException.class)
         public ResponseEntity<ApiResponse<Void>> handleInvalidLedgerOperation(
                         LedgerExceptions.InvalidLedgerOperationException ex) {
+                incrementFinancialMetric("validation_rejected", "rejected", "ledger_invalid_operation");
                 return buildErrorResponse(
                                 HttpStatus.BAD_REQUEST,
                                 "Transaction Failed: You attempted an invalid ledger operation (e.g., negative amount). Review the transaction details.",
                                 "ERR_LEDGER_INVALID_OPERATION");
+        }
+
+        @ExceptionHandler(LedgerExceptions.InvalidAmountException.class)
+        public ResponseEntity<ApiResponse<Void>> handleInvalidLedgerAmount(
+                        LedgerExceptions.InvalidAmountException ex) {
+                incrementFinancialMetric("validation_rejected", "rejected", "invalid_amount");
+                return buildErrorResponse(
+                                HttpStatus.BAD_REQUEST,
+                                ex.getMessage(),
+                                "ERR_LEDGER_INVALID_AMOUNT");
+        }
+
+        @ExceptionHandler(LedgerExceptions.DuplicateTransactionException.class)
+        public ResponseEntity<ApiResponse<Void>> handleDuplicateLedgerTransaction(
+                        LedgerExceptions.DuplicateTransactionException ex) {
+                incrementFinancialMetric("idempotency_reused", "duplicate", "ledger");
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_LEDGER_DUPLICATE_TRANSACTION");
+        }
+
+        @ExceptionHandler(LedgerExceptions.TransactionReplayException.class)
+        public ResponseEntity<ApiResponse<Void>> handleLedgerReplay(
+                        LedgerExceptions.TransactionReplayException ex) {
+                incrementFinancialMetric("idempotency_rejected", "rejected", "ledger");
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_LEDGER_REPLAY_DETECTED");
         }
 
         @ExceptionHandler(LedgerExceptions.LedgerException.class)
@@ -316,6 +377,15 @@ public class GlobalExceptionHandler {
                                 "ERR_NETWORK_TRANSFER_CANCEL_NOT_ALLOWED");
         }
 
+        @ExceptionHandler(ExternalPaymentsExceptions.DuplicateExternalPayment.class)
+        public ResponseEntity<ApiResponse<Void>> handleDuplicateExternalPayment(
+                        ExternalPaymentsExceptions.DuplicateExternalPayment ex) {
+                return buildErrorResponse(
+                                HttpStatus.CONFLICT,
+                                ex.getMessage(),
+                                "ERR_EXTERNAL_PAYMENT_DUPLICATE");
+        }
+
         @ExceptionHandler(TransactionExceptions.TransactionBroadcastFailed.class)
         public ResponseEntity<ApiResponse<Void>> handleTransactionBroadcastFailed(
                         TransactionExceptions.TransactionBroadcastFailed ex) {
@@ -413,6 +483,15 @@ public class GlobalExceptionHandler {
                                 "ERR_MINING_ALLOCATION_STATE");
         }
 
+        @ExceptionHandler(PaymentException.class)
+        public ResponseEntity<ApiResponse<Void>> handlePaymentException(PaymentException ex) {
+                incrementFinancialMetric("payment_error", ex.getErrorCode(), "payment");
+                return buildErrorResponse(
+                                ex.getStatus(),
+                                sanitizeMessage(ex.getMessage(), "Não foi possível concluir esta solicitação agora."),
+                                ex.getErrorCode());
+        }
+
         // ============================================
         // FALLBACK FOR UNEXPECTED ERRORS
         // ============================================
@@ -425,9 +504,32 @@ public class GlobalExceptionHandler {
                                         "Authentication Failed: The user associated with this session no longer exists. Please log in again.",
                                         ErrorCodes.AUTH_INVALID_CREDENTIALS);
                 }
+                incrementFinancialMetric("validation_rejected", "rejected", "illegal_argument");
                 return buildErrorResponse(
                                 HttpStatus.BAD_REQUEST,
                                 sanitizeMessage(ex.getMessage(), INVALID_ARGUMENTS_MESSAGE),
+                                ErrorCodes.SYS_INVALID_ARGUMENTS);
+        }
+
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
+                incrementFinancialMetric("validation_rejected", "rejected", "bean_validation");
+                String message = ex.getBindingResult().getFieldErrors().stream()
+                                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                                .distinct()
+                                .collect(Collectors.joining("; "));
+                return buildErrorResponse(
+                                HttpStatus.BAD_REQUEST,
+                                sanitizeMessage(message, INVALID_ARGUMENTS_MESSAGE),
+                                ErrorCodes.SYS_INVALID_ARGUMENTS);
+        }
+
+        @ExceptionHandler(ConstraintViolationException.class)
+        public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+                incrementFinancialMetric("validation_rejected", "rejected", "constraint_violation");
+                return buildErrorResponse(
+                                HttpStatus.BAD_REQUEST,
+                                INVALID_ARGUMENTS_MESSAGE,
                                 ErrorCodes.SYS_INVALID_ARGUMENTS);
         }
 
@@ -449,6 +551,18 @@ public class GlobalExceptionHandler {
         private <T> ResponseEntity<ApiResponse<T>> buildErrorResponse(HttpStatus status, String message,
                         String errorCode, T data) {
                 return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
+        }
+
+        private void incrementFinancialMetric(String name, String outcome, String type) {
+                if (financialMetrics == null) {
+                        return;
+                }
+                try {
+                        financialMetrics.increment(name, outcome, type);
+                } catch (RuntimeException exception) {
+                        log.warn("[GlobalExceptionHandler] Failed to increment financial metric {}: {}", name,
+                                        exception.getMessage());
+                }
         }
 
         private String sanitizeMessage(String rawMessage, String fallbackMessage) {

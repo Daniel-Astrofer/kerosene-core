@@ -1,12 +1,14 @@
 package source.transactions.application.externalpayments;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.exception.ExternalPaymentsExceptions;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.CustodyGateway;
+import source.transactions.infra.LightningInvoiceGateway;
 import source.transactions.model.BlockchainAddressWatchEntity;
 import source.transactions.model.ExternalTransferEntity;
 import source.transactions.service.BlockchainAddressWatchService;
@@ -24,7 +26,7 @@ public class CancelInboundTransferUseCase {
 
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalTransferFactory externalTransferFactory;
-    private final CustodyGateway custodyGateway;
+    private final LightningInvoiceGateway lightningInvoiceGateway;
     private final BlockchainClient blockchainClient;
     private final BlockchainAddressWatchService blockchainAddressWatchService;
     private final NetworkTransferLifecycleService networkTransferLifecycleService;
@@ -33,14 +35,15 @@ public class CancelInboundTransferUseCase {
     public CancelInboundTransferUseCase(
             ExternalTransfersPort externalTransfersPort,
             ExternalTransferFactory externalTransferFactory,
-            CustodyGateway custodyGateway,
+            @Qualifier("externalLightningInvoiceGateway")
+            LightningInvoiceGateway lightningInvoiceGateway,
             BlockchainClient blockchainClient,
             BlockchainAddressWatchService blockchainAddressWatchService,
             NetworkTransferLifecycleService networkTransferLifecycleService,
             WalletRepository walletRepository) {
         this.externalTransfersPort = externalTransfersPort;
         this.externalTransferFactory = externalTransferFactory;
-        this.custodyGateway = custodyGateway;
+        this.lightningInvoiceGateway = lightningInvoiceGateway;
         this.blockchainClient = blockchainClient;
         this.blockchainAddressWatchService = blockchainAddressWatchService;
         this.networkTransferLifecycleService = networkTransferLifecycleService;
@@ -73,7 +76,7 @@ public class CancelInboundTransferUseCase {
 
         if ("INBOUND_INVOICE".equalsIgnoreCase(transfer.getTransferType())) {
             assertLightningInvoiceStillPending(transfer);
-            boolean cancelled = custodyGateway.cancelLightningInvoice(
+            boolean cancelled = lightningInvoiceGateway.cancelLightningInvoice(
                     new CustodyGateway.LightningInvoiceCancellationCommand(
                             transfer.getUserId(),
                             transfer.getWalletId(),
@@ -165,7 +168,7 @@ public class CancelInboundTransferUseCase {
     }
 
     private void assertLightningInvoiceStillPending(ExternalTransferEntity transfer) {
-        CustodyGateway.IncomingLightningInvoiceStatus status = custodyGateway.getLightningInvoiceStatus(
+        CustodyGateway.IncomingLightningInvoiceStatus status = lightningInvoiceGateway.getLightningInvoiceStatus(
                 new CustodyGateway.LightningInvoiceStatusCommand(
                         transfer.getUserId(),
                         transfer.getWalletId(),

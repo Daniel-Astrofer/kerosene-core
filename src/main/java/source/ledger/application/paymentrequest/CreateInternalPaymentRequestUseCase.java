@@ -3,6 +3,7 @@ package source.ledger.application.paymentrequest;
 import org.springframework.stereotype.Service;
 import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
+import source.common.validation.FinancialAmountValidator;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.exceptions.LedgerExceptions;
 import source.wallet.application.port.in.WalletLookupPort;
@@ -44,7 +45,9 @@ public class CreateInternalPaymentRequestUseCase {
     }
 
     public InternalPaymentRequestDTO create(Long requesterUserId, BigDecimal amount, String receiverWalletName) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+        try {
+            FinancialAmountValidator.requirePositiveBtc(amount, "amount");
+        } catch (IllegalArgumentException ex) {
             throw new LedgerExceptions.InvalidAmountException(
                     "O valor da solicitação de pagamento deve ser maior que zero.");
         }

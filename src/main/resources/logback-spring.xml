@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="kerosene"/>
+    <springProperty scope="context" name="region" source="REGION" defaultValue="DEV"/>
+
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"${serviceName}","region":"${region}"}</customFields>
+            <includeContext>false</includeContext>
+            <includeMdc>true</includeMdc>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>4096</maxLength>
+                <shortenedClassNameLength>40</shortenedClassNameLength>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <logger name="org.springframework.web" level="WARN"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="org.springframework.messaging" level="WARN"/>
+    <logger name="org.springframework.web.socket" level="WARN"/>
+
+    <root level="${LOGGING_LEVEL_ROOT:-INFO}">
+        <appender-ref ref="JSON_CONSOLE"/>
+    </root>
+</configuration>

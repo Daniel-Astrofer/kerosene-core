@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import source.auth.application.service.cache.contracts.RedisServicer;
+import source.common.infra.logging.LogSanitizer;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -24,23 +25,67 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
 public class PasskeyService {
 
     private static final Logger log = LoggerFactory.getLogger(PasskeyService.class);
+    private static final Base64.Decoder B64_URL_DECODER = Base64.getUrlDecoder();
+    private static final Base64.Encoder B64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    private static final HexFormat HEX = HexFormat.of();
+    private static final byte[] ED25519_X509_PREFIX = new byte[] {
+            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
+    };
+    private static final int PUBLIC_KEY_CACHE_MAX_SIZE = 4096;
+    private static final int RP_ID_HASH_CACHE_MAX_SIZE = 1024;
+    private static final ThreadLocal<MessageDigest> SHA_256 = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 algorithm is not available.", e);
+        }
+    });
+    private static final ThreadLocal<KeyFactory> ED25519_KEY_FACTORY = ThreadLocal.withInitial(() -> {
+        try {
+            return KeyFactory.getInstance("Ed25519");
+        } catch (Exception e) {
+            try {
+                return KeyFactory.getInstance("EdDSA");
+            } catch (Exception fallback) {
+                throw new IllegalStateException("Ed25519 KeyFactory is not available.", fallback);
+            }
+        }
+    });
+    private static final ThreadLocal<Signature> ED25519_SIGNATURE = ThreadLocal.withInitial(() -> {
+        try {
+            return Signature.getInstance("Ed25519");
+        } catch (Exception e) {
+            try {
+                return Signature.getInstance("EdDSA");
+            } catch (Exception fallback) {
+                throw new IllegalStateException("Ed25519 Signature is not available.", fallback);
+            }
+        }
+    });
     private final RedisServicer redisService;
     private final SecureRandom secureRandom = new SecureRandom();
     private static final String CHALLENGE_PREFIX = "passkey_challenge:";
     private final Set<String> allowedOrigins;
     private final String relyingPartyId;
+    private final ConcurrentHashMap<String, PublicKey> publicKeyCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, byte[]> rpIdHashCache = new ConcurrentHashMap<>();
 
     private final ObjectMapper jsonMapper;
     private final ObjectMapper cborMapper;
+
+    @Value("${webauthn.challenge-ttl-seconds:90}")
+    private long challengeTtlSeconds = 90L;
 
     public PasskeyService(
             RedisServicer redisService,
@@ -63,14 +108,25 @@ public class PasskeyService {
     public String generateChallenge(String username) {
         byte[] challenge = new byte[32];
         secureRandom.nextBytes(challenge);
-        String challengeHex = bytesToHex(challenge);
+        String challengeHex = HEX.formatHex(challenge);
 
-        redisService.setValue(CHALLENGE_PREFIX + username, challengeHex, 60);
+        redisService.setValue(
+                CHALLENGE_PREFIX + normalizeChallengeSubject(username),
+                challengeHex,
+                effectiveChallengeTtlSeconds());
         return challengeHex;
     }
 
     public String consumeChallengeFromRedis(String username) {
-        return redisService.getAndDeleteValue(CHALLENGE_PREFIX + username);
+        return redisService.getAndDeleteValue(CHALLENGE_PREFIX + normalizeChallengeSubject(username));
+    }
+
+    public String getChallengeFromRedis(String username) {
+        return redisService.getValue(CHALLENGE_PREFIX + normalizeChallengeSubject(username));
+    }
+
+    public void deleteChallengeFromRedis(String username) {
+        redisService.deleteValue(CHALLENGE_PREFIX + normalizeChallengeSubject(username));
     }
 
     /**
@@ -84,18 +140,76 @@ public class PasskeyService {
      */
     public boolean verifySignature(String username, String expectedChallengeHex, String signatureB64Url, byte[] publicKeyBytes,
                                    String authDataB64Url, String clientDataJsonB64Url) {
+        return verifySignatureInternal(
+                username,
+                expectedChallengeHex,
+                signatureB64Url,
+                publicKeyBytes,
+                authDataB64Url,
+                clientDataJsonB64Url,
+                Set.of("webauthn.get", "webauthn.create"));
+    }
+
+    public boolean verifyAuthenticationSignature(String username, String expectedChallengeHex, String signatureB64Url,
+            byte[] publicKeyBytes, String authDataB64Url, String clientDataJsonB64Url) {
+        return verifySignatureInternal(
+                username,
+                expectedChallengeHex,
+                signatureB64Url,
+                publicKeyBytes,
+                authDataB64Url,
+                clientDataJsonB64Url,
+                Set.of("webauthn.get"));
+    }
+
+    public PasskeyVerificationResult verifyAuthenticationAssertion(String username, String expectedChallengeHex,
+            String signatureB64Url, byte[] publicKeyBytes, String authDataB64Url, String clientDataJsonB64Url) {
+        return verifyAssertionInternal(
+                username,
+                expectedChallengeHex,
+                signatureB64Url,
+                publicKeyBytes,
+                authDataB64Url,
+                clientDataJsonB64Url,
+                Set.of("webauthn.get"));
+    }
+
+    public boolean verifyRegistrationSignature(String username, String expectedChallengeHex, String signatureB64Url,
+            byte[] publicKeyBytes, String authDataB64Url, String clientDataJsonB64Url) {
+        return verifySignatureInternal(
+                username,
+                expectedChallengeHex,
+                signatureB64Url,
+                publicKeyBytes,
+                authDataB64Url,
+                clientDataJsonB64Url,
+                Set.of("webauthn.create"));
+    }
+
+    private boolean verifySignatureInternal(String username, String expectedChallengeHex, String signatureB64Url,
+            byte[] publicKeyBytes, String authDataB64Url, String clientDataJsonB64Url, Set<String> expectedTypes) {
+        return verifyAssertionInternal(
+                username,
+                expectedChallengeHex,
+                signatureB64Url,
+                publicKeyBytes,
+                authDataB64Url,
+                clientDataJsonB64Url,
+                expectedTypes).verified();
+    }
+
+    private PasskeyVerificationResult verifyAssertionInternal(String username, String expectedChallengeHex,
+            String signatureB64Url, byte[] publicKeyBytes, String authDataB64Url, String clientDataJsonB64Url,
+            Set<String> expectedTypes) {
         try {
             if (expectedChallengeHex == null) {
-                log.warn("Challenge is null for user: {}", username);
-                return false;
+                log.warn("Passkey challenge is missing for userRef={}", LogSanitizer.fingerprint(username));
+                return PasskeyVerificationResult.failed();
             }
 
-            // O WebAuthn usa Base64URL (sem padding na maioria das vezes)
-            Base64.Decoder b64UrlDecoder = Base64.getUrlDecoder();
-
-            byte[] signatureBytes = b64UrlDecoder.decode(signatureB64Url);
-            byte[] authDataBytes = b64UrlDecoder.decode(authDataB64Url);
-            byte[] clientDataBytes = b64UrlDecoder.decode(clientDataJsonB64Url);
+            byte[] signatureBytes = B64_URL_DECODER.decode(signatureB64Url);
+            byte[] authDataBytes = B64_URL_DECODER.decode(authDataB64Url);
+            byte[] clientDataBytes = B64_URL_DECODER.decode(clientDataJsonB64Url);
 
             // 1. Structural JSON Validation: Challenge, Origin, and Type
             JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
@@ -104,71 +218,65 @@ public class PasskeyService {
             String originInClientData = clientDataNode.path("origin").asText(null);
 
             byte[] expectedChallengeBytes = hexToBytes(expectedChallengeHex);
-            String expectedChallengeB64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(expectedChallengeBytes);
+            String expectedChallengeB64Url = B64_URL_ENCODER.encodeToString(expectedChallengeBytes);
 
             if (!expectedChallengeB64Url.equals(challengeInClientData)) {
-                log.error("Possible Replay Attack! Challenge mismatch. Expected: {}, Got: {}", expectedChallengeB64Url, challengeInClientData);
-                return false;
+                log.error("Possible passkey replay attempt: challenge mismatch for userRef={}",
+                        LogSanitizer.fingerprint(username));
+                return PasskeyVerificationResult.failed();
             }
 
             if (!isAllowedOrigin(originInClientData)) {
-                log.error("Invalid WebAuthn origin for user {}: {}", username, originInClientData);
-                return false;
+                log.error("Invalid WebAuthn origin for userRef={} originRef={}",
+                        LogSanitizer.fingerprint(username),
+                        LogSanitizer.fingerprint(originInClientData));
+                return PasskeyVerificationResult.failed();
             }
 
-            if (!"webauthn.get".equals(typeInClientData) && !"webauthn.create".equals(typeInClientData)) {
-                log.error("Invalid WebAuthn operation type: {}", typeInClientData);
-                return false;
+            if (!expectedTypes.contains(typeInClientData)) {
+                log.error("Invalid WebAuthn operation type for userRef={}: {}",
+                        LogSanitizer.fingerprint(username), typeInClientData);
+                return PasskeyVerificationResult.failed();
             }
 
             String expectedRpId = resolveExpectedRelyingPartyId(originInClientData);
             if (!validateAuthenticatorData(authDataBytes, expectedRpId)) {
-                return false;
+                return PasskeyVerificationResult.failed();
             }
 
-            // 2. Hash do clientDataJSON (SHA-256)
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] clientDataHash = digest.digest(clientDataBytes);
+            byte[] clientDataHash = sha256(clientDataBytes);
 
             // 3. Concatenação: authenticatorData + SHA256(clientDataJSON)
             byte[] signedData = new byte[authDataBytes.length + clientDataHash.length];
             System.arraycopy(authDataBytes, 0, signedData, 0, authDataBytes.length);
             System.arraycopy(clientDataHash, 0, signedData, authDataBytes.length, clientDataHash.length);
 
-            // 4. Configurar a chave pública Ed25519 (Extraída do mapa COSE/CBOR)
-            Signature ed25519 = Signature.getInstance("EdDSA"); // Java 15+ supports EdDSA/Ed25519
-            PublicKey publicKey;
-            try {
-                // If the frontend sends the raw key (32 bytes), wrap it.
-                publicKey = loadRawEd25519PublicKey(publicKeyBytes);
-            } catch (Exception e) {
-                // Try parsing as COSE/CBOR
-                try {
-                    byte[] rawPublicKey = extractRawKeyFromCOSE(publicKeyBytes);
-                    publicKey = loadRawEd25519PublicKey(rawPublicKey);
-                } catch (Exception e2) {
-                    log.error("Failed to parse public key as raw or COSE/CBOR: {}", e2.getMessage());
-                    return false;
-                }
-            }
+            PublicKey publicKey = loadEd25519PublicKey(publicKeyBytes);
 
             // 5. Verificar a assinatura contra os dados concatenados
+            Signature ed25519 = ED25519_SIGNATURE.get();
             ed25519.initVerify(publicKey);
             ed25519.update(signedData);
 
             boolean verified = ed25519.verify(signatureBytes);
-            log.info("Signature verification result for {}: {}", username, verified);
+            log.debug("Passkey signature verification completed for userRef={} verified={}",
+                    LogSanitizer.fingerprint(username), verified);
 
-            return verified;
+            return new PasskeyVerificationResult(verified, verified ? extractSignatureCount(authDataBytes) : -1L);
 
         } catch (Exception e) {
-            log.error("Passkey signature verification failed for user {}: {}", username, e.getMessage());
-            return false;
+            log.error("Passkey signature verification failed for userRef={}: {}",
+                    LogSanitizer.fingerprint(username), e.getMessage());
+            return PasskeyVerificationResult.failed();
         }
     }
 
     public long extractSignatureCount(String authDataB64Url) {
-        byte[] authDataBytes = Base64.getUrlDecoder().decode(authDataB64Url);
+        byte[] authDataBytes = B64_URL_DECODER.decode(authDataB64Url);
+        return extractSignatureCount(authDataBytes);
+    }
+
+    private long extractSignatureCount(byte[] authDataBytes) {
         if (authDataBytes.length < 37) {
             throw new IllegalArgumentException("authenticatorData must be at least 37 bytes.");
         }
@@ -176,6 +284,12 @@ public class PasskeyService {
                 | ((long) authDataBytes[34] & 0xff) << 16
                 | ((long) authDataBytes[35] & 0xff) << 8
                 | ((long) authDataBytes[36] & 0xff);
+    }
+
+    public record PasskeyVerificationResult(boolean verified, long signatureCount) {
+        private static PasskeyVerificationResult failed() {
+            return new PasskeyVerificationResult(false, -1L);
+        }
     }
 
     public String resolveCurrentRequestHost() {
@@ -195,7 +309,7 @@ public class PasskeyService {
 
     public String extractOriginHostFromClientData(String clientDataJsonB64Url) {
         try {
-            byte[] clientDataBytes = Base64.getUrlDecoder().decode(clientDataJsonB64Url);
+            byte[] clientDataBytes = B64_URL_DECODER.decode(clientDataJsonB64Url);
             JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
             return extractOriginHost(clientDataNode.path("origin").asText(null));
         } catch (Exception e) {
@@ -203,9 +317,23 @@ public class PasskeyService {
         }
     }
 
+    public String extractOriginFromClientData(String clientDataJsonB64Url) {
+        try {
+            byte[] clientDataBytes = B64_URL_DECODER.decode(clientDataJsonB64Url);
+            JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
+            return clientDataNode.path("origin").asText(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public boolean isClientDataOriginAllowed(String clientDataJsonB64Url) {
+        return isAllowedOrigin(extractOriginFromClientData(clientDataJsonB64Url));
+    }
+
     public String resolveRelyingPartyIdFromClientData(String clientDataJsonB64Url) {
         try {
-            byte[] clientDataBytes = Base64.getUrlDecoder().decode(clientDataJsonB64Url);
+            byte[] clientDataBytes = B64_URL_DECODER.decode(clientDataJsonB64Url);
             JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
             return resolveExpectedRelyingPartyId(clientDataNode.path("origin").asText(null));
         } catch (Exception e) {
@@ -213,19 +341,39 @@ public class PasskeyService {
         }
     }
 
-    private java.security.PublicKey loadRawEd25519PublicKey(byte[] rawKey) throws Exception {
+    private PublicKey loadEd25519PublicKey(byte[] publicKeyBytes) throws Exception {
+        String cacheKey = HEX.formatHex(sha256(publicKeyBytes));
+        PublicKey cached = publicKeyCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        PublicKey parsed;
+        try {
+            parsed = loadRawEd25519PublicKey(publicKeyBytes);
+        } catch (Exception e) {
+            try {
+                parsed = loadRawEd25519PublicKey(extractRawKeyFromCOSE(publicKeyBytes));
+            } catch (Exception e2) {
+                log.error("Failed to parse public key as raw or COSE/CBOR: {}", e2.getMessage());
+                throw e2;
+            }
+        }
+
+        evictOneIfOversized(publicKeyCache, PUBLIC_KEY_CACHE_MAX_SIZE);
+        PublicKey existing = publicKeyCache.putIfAbsent(cacheKey, parsed);
+        return existing != null ? existing : parsed;
+    }
+
+    private PublicKey loadRawEd25519PublicKey(byte[] rawKey) throws Exception {
         if (rawKey.length != 32) {
             throw new IllegalArgumentException("Ed25519 public key must be exactly 32 bytes.");
         }
-        byte[] x509Prefix = new byte[] {
-                0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
-        };
-        byte[] x509Key = new byte[x509Prefix.length + rawKey.length];
-        System.arraycopy(x509Prefix, 0, x509Key, 0, x509Prefix.length);
-        System.arraycopy(rawKey, 0, x509Key, x509Prefix.length, rawKey.length);
+        byte[] x509Key = new byte[ED25519_X509_PREFIX.length + rawKey.length];
+        System.arraycopy(ED25519_X509_PREFIX, 0, x509Key, 0, ED25519_X509_PREFIX.length);
+        System.arraycopy(rawKey, 0, x509Key, ED25519_X509_PREFIX.length, rawKey.length);
 
-        java.security.KeyFactory kf = java.security.KeyFactory.getInstance("EdDSA");
-        return kf.generatePublic(new java.security.spec.X509EncodedKeySpec(x509Key));
+        return ED25519_KEY_FACTORY.get().generatePublic(new X509EncodedKeySpec(x509Key));
     }
 
     private byte[] extractRawKeyFromCOSE(byte[] coseCbor) throws Exception {
@@ -252,7 +400,7 @@ public class PasskeyService {
         if (xObj instanceof byte[]) {
             rawKey = (byte[]) xObj;
         } else if (xObj instanceof String) {
-            rawKey = Base64.getUrlDecoder().decode((String) xObj);
+            rawKey = B64_URL_DECODER.decode((String) xObj);
         } else {
             throw new IllegalArgumentException("Could not find raw public key (x) in COSE map");
         }
@@ -270,8 +418,7 @@ public class PasskeyService {
             return false;
         }
 
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] expectedRpIdHash = digest.digest(expectedRpId.getBytes(StandardCharsets.UTF_8));
+        byte[] expectedRpIdHash = rpIdHash(expectedRpId);
         byte[] suppliedRpIdHash = Arrays.copyOfRange(authDataBytes, 0, 32);
         if (!MessageDigest.isEqual(expectedRpIdHash, suppliedRpIdHash)) {
             log.error("Invalid authenticatorData rpIdHash for rpId {}", expectedRpId);
@@ -293,7 +440,7 @@ public class PasskeyService {
         if (originInClientData == null || originInClientData.isBlank()) {
             return false;
         }
-        if (allowedOrigins.isEmpty() || allowedOrigins.contains(originInClientData)) {
+        if (allowedOrigins.contains(originInClientData)) {
             return true;
         }
 
@@ -393,21 +540,39 @@ public class PasskeyService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
+    private byte[] hexToBytes(String hex) {
+        return HEX.parseHex(hex);
     }
 
-    private byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-                    + Character.digit(hex.charAt(i + 1), 16));
+    private String normalizeChallengeSubject(String username) {
+        return username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private long effectiveChallengeTtlSeconds() {
+        return challengeTtlSeconds > 0 ? challengeTtlSeconds : 90L;
+    }
+
+    private byte[] sha256(byte[] input) {
+        MessageDigest digest = SHA_256.get();
+        digest.reset();
+        return digest.digest(input);
+    }
+
+    private byte[] rpIdHash(String rpId) {
+        byte[] cached = rpIdHashCache.get(rpId);
+        if (cached != null) {
+            return cached;
         }
-        return data;
+        byte[] computed = sha256(rpId.getBytes(StandardCharsets.UTF_8));
+        evictOneIfOversized(rpIdHashCache, RP_ID_HASH_CACHE_MAX_SIZE);
+        byte[] existing = rpIdHashCache.putIfAbsent(rpId, computed);
+        return existing != null ? existing : computed;
+    }
+
+    private <T> void evictOneIfOversized(ConcurrentHashMap<String, T> cache, int maxSize) {
+        if (cache.size() < maxSize) {
+            return;
+        }
+        cache.keySet().stream().findAny().ifPresent(cache::remove);
     }
 }

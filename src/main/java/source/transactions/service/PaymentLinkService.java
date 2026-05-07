@@ -64,23 +64,23 @@ public class PaymentLinkService {
         if (paymentLink == null) {
             throw new PaymentLinkExceptions.PaymentLinkNotFound("Onboarding payment link nao encontrado");
         }
-        return confirmPayment(linkId, txid, fromAddress);
+        return confirmPayment(linkId, txid, fromAddress, "public-onboarding:" + linkId + ":" + txid);
     }
 
     public PaymentLinkDTO getPaymentLink(String linkId) {
         return paymentLinkReader.getPaymentLink(linkId);
     }
 
-    public PaymentLinkDTO confirmPayment(String linkId, String txid, String fromAddress) {
-        return paymentLinkConfirmer.confirmPayment(linkId, txid, fromAddress);
+    public PaymentLinkDTO confirmPayment(String linkId, String txid, String fromAddress, String idempotencyKey) {
+        return paymentLinkConfirmer.confirmPayment(linkId, txid, fromAddress, idempotencyKey);
     }
 
     public boolean isOnboardingPaymentLink(PaymentLinkDTO paymentLink) {
         return paymentLinkReader.isOnboardingPaymentLink(paymentLink);
     }
 
-    public PaymentLinkDTO completePayment(String linkId) {
-        return paymentLinkCompleter.completePayment(linkId);
+    public PaymentLinkDTO completePayment(String linkId, String idempotencyKey) {
+        return paymentLinkCompleter.completePayment(linkId, idempotencyKey);
     }
 
     public PaymentLinkDTO cancelPayment(String linkId, String reason) {
@@ -91,7 +91,7 @@ public class PaymentLinkService {
         return paymentLinkReader.getUserPaymentLinks(userId);
     }
 
-    public void removeFromRedis(String linkId) {
+    public void removePaymentLink(String linkId) {
         paymentLinkStore.delete(linkId);
     }
 }

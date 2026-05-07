@@ -3,6 +3,7 @@ package source.transactions.application.paymentlink;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.common.validation.FinancialAmountValidator;
 import source.transactions.dto.CreatePaymentLinkRequest;
 import source.transactions.dto.PaymentLinkDTO;
 import source.wallet.model.WalletEntity;
@@ -76,7 +77,7 @@ public class PaymentLinkCreator {
                 PaymentLinkDescription.ACCOUNT_ACTIVATION,
                 null,
                 PaymentLinkVisibility.PRIVATE,
-                PaymentLinkConfirmationMode.MANUAL_REVIEW,
+                PaymentLinkConfirmationMode.USER_ACTION_REQUIRED,
                 true,
                 "ACTIVATION",
                 Map.of("flow", "activation"));
@@ -92,7 +93,7 @@ public class PaymentLinkCreator {
                 description,
                 null,
                 PaymentLinkVisibility.PRIVATE,
-                PaymentLinkConfirmationMode.MANUAL_REVIEW,
+                PaymentLinkConfirmationMode.USER_ACTION_REQUIRED,
                 true,
                 "ONBOARDING",
                 Map.of("flow", "onboarding"));
@@ -152,10 +153,10 @@ public class PaymentLinkCreator {
     }
 
     private String resolveConfirmationMode(String raw) {
-        String normalized = raw != null ? raw.trim().toUpperCase() : PaymentLinkConfirmationMode.MANUAL_REVIEW;
+        String normalized = raw != null ? raw.trim().toUpperCase() : PaymentLinkConfirmationMode.USER_ACTION_REQUIRED;
         return PaymentLinkConfirmationMode.AUTO_COMPLETE.equals(normalized)
                 ? PaymentLinkConfirmationMode.AUTO_COMPLETE
-                : PaymentLinkConfirmationMode.MANUAL_REVIEW;
+                : PaymentLinkConfirmationMode.USER_ACTION_REQUIRED;
     }
 
     private String normalizeReferenceLabel(String referenceLabel) {
@@ -189,8 +190,6 @@ public class PaymentLinkCreator {
     }
 
     private void validateAmount(BigDecimal amountBtc) {
-        if (amountBtc == null || amountBtc.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Payment link amount must be greater than zero.");
-        }
+        FinancialAmountValidator.requirePositiveBtc(amountBtc, "Payment link amount");
     }
 }

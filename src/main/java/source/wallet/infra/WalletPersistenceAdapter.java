@@ -73,6 +73,16 @@ public class WalletPersistenceAdapter implements WalletPersistencePort {
     }
 
     @Override
+    public Optional<WalletEntity> findByDestinationHash(String destinationHash) {
+        return walletRepository.findByDestinationHash(destinationHash);
+    }
+
+    @Override
+    public List<WalletEntity> findTop500ByDestinationHashIsNullOrderByIdAsc() {
+        return walletRepository.findTop500ByDestinationHashIsNullOrderByIdAsc();
+    }
+
+    @Override
     public Optional<WalletEntity> findByLightningAddress(String lightningAddress) {
         return walletRepository.findByLightningAddress(lightningAddress);
     }

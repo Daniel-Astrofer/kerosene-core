@@ -46,15 +46,10 @@ public class TickerService {
 
     @PostConstruct
     void initializeFallbackCache() {
-        try {
-            ensurePricePresent("usd", FALLBACK_USD);
-            ensurePricePresent("brl", FALLBACK_BRL);
-        } catch (Exception e) {
-            log.warn("[Ticker] Redis cache bootstrap unavailable. Falling back to in-memory defaults: {}", e.getMessage());
-        }
         if (!coingeckoEnabled) {
             log.info("[Ticker] CoinGecko polling disabled for this profile. Using cached/fallback prices.");
         }
+        log.info("[Ticker] Startup does not require Redis price cache warmup. In-memory fallback prices are available.");
     }
 
     /**
@@ -89,9 +84,17 @@ public class TickerService {
 
             log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
         } catch (Exception e) {
+            seedFallbackCacheIfReachable();
+            log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
+        }
+    }
+
+    private void seedFallbackCacheIfReachable() {
+        try {
             ensurePricePresent("usd", FALLBACK_USD);
             ensurePricePresent("brl", FALLBACK_BRL);
-            log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
+        } catch (Exception e) {
+            log.warn("[Ticker] Redis fallback cache refresh unavailable. Using in-memory defaults: {}", e.getMessage());
         }
     }
 

@@ -1,18 +1,16 @@
 package source.ledger.application.transaction;
 
 import org.springframework.stereotype.Service;
+import source.auth.AuthExceptions;
 import source.auth.application.service.account.AccountActivationService;
 import source.auth.application.service.user.UserService;
 import source.auth.model.entity.UserDataBase;
-import source.common.service.AddressDerivationService;
-import source.ledger.application.paymentrequest.PaymentRequestDestinationHashService;
 import source.ledger.dto.TransactionDTO;
 import source.ledger.exceptions.LedgerExceptions;
 import source.wallet.application.port.in.WalletLookupPort;
 import source.wallet.model.WalletEntity;
 
 import java.util.List;
-import java.util.Locale;
 
 @Service
 public class TransactionParticipantResolver {
@@ -20,20 +18,14 @@ public class TransactionParticipantResolver {
     private final WalletLookupPort walletLookupPort;
     private final UserService userService;
     private final AccountActivationService accountActivationService;
-    private final PaymentRequestDestinationHashService destinationHashService;
-    private final AddressDerivationService addressDerivationService;
 
     public TransactionParticipantResolver(
             WalletLookupPort walletLookupPort,
             UserService userService,
-            AccountActivationService accountActivationService,
-            PaymentRequestDestinationHashService destinationHashService,
-            AddressDerivationService addressDerivationService) {
+            AccountActivationService accountActivationService) {
         this.walletLookupPort = walletLookupPort;
         this.userService = userService;
         this.accountActivationService = accountActivationService;
-        this.destinationHashService = destinationHashService;
-        this.addressDerivationService = addressDerivationService;
     }
 
     public UserDataBase resolveAuthenticatedSender(Long senderUserId) {
@@ -104,8 +96,7 @@ public class TransactionParticipantResolver {
                 long walletId = Long.parseLong(receiverIdentifier);
                 WalletEntity wallet = walletLookupPort.findById(walletId);
                 if (wallet != null) {
-                    accountActivationService.assertInboundEnabled(wallet.getUser());
-                    return wallet;
+                    return requireReadyReceiverWallet(wallet);
                 }
             } catch (NumberFormatException ignored) {
                 // Already guarded by isNumericId, kept defensive for malformed data.
@@ -114,8 +105,7 @@ public class TransactionParticipantResolver {
 
         WalletEntity wallet = resolveReceiverByPublicIdentifier(receiverIdentifier);
         if (wallet != null) {
-            accountActivationService.assertInboundEnabled(wallet.getUser());
-            return wallet;
+            return requireReadyReceiverWallet(wallet);
         }
         if (looksLikePublicWalletIdentifier(receiverIdentifier)) {
             throw new LedgerExceptions.ReceiverNotFoundException(
@@ -127,14 +117,13 @@ public class TransactionParticipantResolver {
             throw new LedgerExceptions.ReceiverNotFoundException(
                     "Receiver username '" + receiverIdentifier + "' not found");
         }
-        accountActivationService.assertInboundEnabled(receiver);
 
         WalletEntity receiverWallet = walletLookupPort.findPrimaryWallet(receiver.getId());
         if (receiverWallet == null) {
-            throw new LedgerExceptions.ReceiverNotFoundException(
-                    "Receiver wallet not found for user '" + receiverIdentifier + "'");
+            throw LedgerExceptions.ReceiverNotReadyException.noReceivingWallet();
         }
 
+        assertReceiverInboundEnabled(receiver);
         return receiverWallet;
     }
 
@@ -144,7 +133,7 @@ public class TransactionParticipantResolver {
             if (wallet != null) {
                 return wallet;
             }
-            return findWalletByDerivedBlockchainAddress(receiverIdentifier);
+            return null;
         }
 
         if (looksLikeArgon2Hash(receiverIdentifier)) {
@@ -168,44 +157,25 @@ public class TransactionParticipantResolver {
         return null;
     }
 
-    private WalletEntity findWalletByDerivedBlockchainAddress(String receiverIdentifier) {
-        for (WalletEntity wallet : walletLookupPort.findAll()) {
-            if (wallet == null || wallet.getId() == null || !canDeriveStaticBlockchainAddress(wallet)) {
-                continue;
-            }
-
-            String derivedAddress = addressDerivationService.deriveAddress(wallet.getId(), wallet.getPassphraseHash());
-            if (receiverIdentifier.equals(derivedAddress)) {
-                return wallet;
-            }
-        }
-        return null;
-    }
-
     private WalletEntity findWalletByDestinationHash(String receiverIdentifier) {
-        String normalizedIdentifier = receiverIdentifier.toLowerCase(Locale.ROOT);
-        for (WalletEntity wallet : walletLookupPort.findAll()) {
-            if (wallet == null) {
-                continue;
-            }
-
-            String destinationHash = destinationHashService.buildDestinationHash(wallet);
-            if (destinationHash != null && destinationHash.equalsIgnoreCase(normalizedIdentifier)) {
-                return wallet;
-            }
-        }
-        return null;
-    }
-
-    private boolean canDeriveStaticBlockchainAddress(WalletEntity wallet) {
-        return wallet.getPassphraseHash() != null
-                && !wallet.getPassphraseHash().isBlank()
-                && (wallet.getDepositAddress() == null || wallet.getDepositAddress().isBlank())
-                && (wallet.getXpub() == null || wallet.getXpub().isBlank());
+        return walletLookupPort.findByDestinationHash(receiverIdentifier);
     }
 
     private boolean looksLikeArgon2Hash(String identifier) {
         return identifier != null && identifier.startsWith("$argon2");
+    }
+
+    private WalletEntity requireReadyReceiverWallet(WalletEntity wallet) {
+        assertReceiverInboundEnabled(wallet.getUser());
+        return wallet;
+    }
+
+    private void assertReceiverInboundEnabled(UserDataBase receiver) {
+        try {
+            accountActivationService.assertInboundEnabled(receiver);
+        } catch (AuthExceptions.InboundReceivingBlockedException ex) {
+            throw LedgerExceptions.ReceiverNotReadyException.inboundBlocked();
+        }
     }
 
     private boolean isDestinationHash(String identifier) {

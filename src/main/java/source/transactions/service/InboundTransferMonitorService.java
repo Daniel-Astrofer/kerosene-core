@@ -3,6 +3,7 @@ package source.transactions.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -11,12 +12,14 @@ import source.transactions.application.externalpayments.ExternalPaymentsMath;
 import source.transactions.application.externalpayments.ExternalTransfersPort;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.CustodyGateway;
+import source.transactions.infra.LightningInvoiceGateway;
 import source.transactions.model.BlockchainAddressWatchEntity;
 import source.transactions.model.ExternalTransferEntity;
 import source.security.VaultKeyProvider;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,7 +32,7 @@ public class InboundTransferMonitorService {
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalPaymentsMath externalPaymentsMath;
     private final BlockchainClient blockchainClient;
-    private final CustodyGateway custodyGateway;
+    private final LightningInvoiceGateway lightningInvoiceGateway;
     private final VaultKeyProvider vaultKeyProvider;
     private final BlockchainAddressWatchService blockchainAddressWatchService;
     private final NetworkTransferLifecycleService networkTransferLifecycleService;
@@ -40,7 +43,8 @@ public class InboundTransferMonitorService {
             ExternalTransfersPort externalTransfersPort,
             ExternalPaymentsMath externalPaymentsMath,
             BlockchainClient blockchainClient,
-            CustodyGateway custodyGateway,
+            @Qualifier("externalLightningInvoiceGateway")
+            LightningInvoiceGateway lightningInvoiceGateway,
             VaultKeyProvider vaultKeyProvider,
             BlockchainAddressWatchService blockchainAddressWatchService,
             NetworkTransferLifecycleService networkTransferLifecycleService,
@@ -48,7 +52,7 @@ public class InboundTransferMonitorService {
         this.externalTransfersPort = externalTransfersPort;
         this.externalPaymentsMath = externalPaymentsMath;
         this.blockchainClient = blockchainClient;
-        this.custodyGateway = custodyGateway;
+        this.lightningInvoiceGateway = lightningInvoiceGateway;
         this.vaultKeyProvider = vaultKeyProvider;
         this.blockchainAddressWatchService = blockchainAddressWatchService;
         this.networkTransferLifecycleService = networkTransferLifecycleService;
@@ -277,7 +281,11 @@ public class InboundTransferMonitorService {
     }
 
     private void inspectLightningInvoice(ExternalTransferEntity transfer) {
-        if (!custodyGateway.isLive()) {
+        if (!lightningInvoiceGateway.isLive()) {
+            if (isExpiredPendingLightningInvoice(transfer)) {
+                networkTransferLifecycleService.expireLightningInvoice(transfer, "INBOUND_MONITOR");
+                return;
+            }
             if (lightningProviderUnavailableLogged.compareAndSet(false, true)) {
                 log.warn("[InboundMonitor] Skipping Lightning invoice polling because no live custody provider is configured. "
                         + "Pending Lightning transfers will only advance via a real provider callback/webhook after BTCPay/LND is enabled.");
@@ -285,7 +293,7 @@ public class InboundTransferMonitorService {
             return;
         }
 
-        CustodyGateway.IncomingLightningInvoiceStatus status = custodyGateway.getLightningInvoiceStatus(
+        CustodyGateway.IncomingLightningInvoiceStatus status = lightningInvoiceGateway.getLightningInvoiceStatus(
                 new CustodyGateway.LightningInvoiceStatusCommand(
                         transfer.getUserId(),
                         transfer.getWalletId(),
@@ -295,6 +303,10 @@ public class InboundTransferMonitorService {
                         transfer.getInvoiceData()));
 
         String normalizedStatus = normalize(status.status());
+        if (isExpiredPendingLightningInvoice(transfer) && !isSettledStatus(normalizedStatus) && !isTerminalStatus(normalizedStatus)) {
+            networkTransferLifecycleService.expireLightningInvoice(transfer, "INBOUND_MONITOR");
+            return;
+        }
         long receivedSats = status.receivedSats() != null
                 ? status.receivedSats()
                 : 0L;
@@ -318,6 +330,25 @@ public class InboundTransferMonitorService {
                 || "PAID".equals(status)
                 || "COMPLETED".equals(status)
                 || "CONFIRMED".equals(status);
+    }
+
+    private boolean isTerminalStatus(String status) {
+        return "EXPIRED".equals(status)
+                || "INVALID".equals(status)
+                || "CANCELLED".equals(status)
+                || "FAILED".equals(status);
+    }
+
+    private boolean isExpiredPendingLightningInvoice(ExternalTransferEntity transfer) {
+        String currentStatus = normalize(transfer != null ? transfer.getStatus() : null);
+        return transfer != null
+                && transfer.getExpiresAt() != null
+                && transfer.getExpiresAt().isBefore(LocalDateTime.now())
+                && !isSettledStatus(currentStatus)
+                && !"COMPLETED".equals(currentStatus)
+                && !"EXPIRED".equals(currentStatus)
+                && !"CANCELLED".equals(currentStatus)
+                && !"AUTO_RESOLUTION_PENDING".equals(currentStatus);
     }
 
     private String normalize(String value) {

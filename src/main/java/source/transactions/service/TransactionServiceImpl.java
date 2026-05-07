@@ -73,6 +73,7 @@ public class TransactionServiceImpl implements TransactionService {
         ExternalTransferResponseDTO transfer = externalPaymentsService.sendOnchain(
                 userId,
                 new source.transactions.dto.OnchainSendRequestDTO(
+                        request.getIdempotencyKey(),
                         request.getFromWalletName(),
                         request.getToAddress(),
                         request.getAmount(),

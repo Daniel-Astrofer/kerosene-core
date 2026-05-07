@@ -111,7 +111,7 @@ class MonitorPendingTransactionUseCaseTest {
     }
 
     @Test
-    void checkReturnsConfirmedTransactionToPendingWhenConfirmationDepthDrops() {
+    void checkMovesSettledRegressionToAutoResolutionPendingWhenConfirmationDepthDrops() {
         PendingTransaction transaction = pendingTransaction(validTxid());
         transaction.setStatus("CONFIRMED");
         transaction.setConfirmedAt(java.time.LocalDateTime.now().minusMinutes(5));
@@ -120,9 +120,12 @@ class MonitorPendingTransactionUseCaseTest {
 
         useCase.check(transaction);
 
-        assertEquals("PENDING", transaction.getStatus());
+        assertEquals("AUTO_RESOLUTION_PENDING", transaction.getStatus());
         assertEquals(1, transaction.getConfirmations());
         assertNull(transaction.getConfirmedAt());
+        assertEquals(
+                "Confirmation depth dropped below 3; possible reorg after settlement. Funds stay protected while automatic reconciliation runs.",
+                transaction.getErrorMessage());
         verify(observationPort).syncConfirmations(transaction.getTxid(), 1);
         verify(pendingPort).save(transaction);
         verifyNoInteractions(settlementPort);

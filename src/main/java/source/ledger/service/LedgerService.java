@@ -4,6 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import source.common.validation.FinancialAmountValidator;
 import source.ledger.application.balance.LedgerBalanceConsensusPort;
 import source.ledger.application.balance.LedgerBalanceUpdate;
 import source.ledger.application.balance.LedgerBalanceUpdatePort;
@@ -13,10 +16,12 @@ import source.ledger.dto.LedgerDTO;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.exceptions.LedgerExceptions;
 import source.ledger.repository.LedgerRepository;
+import source.treasury.service.FinancialAuditTrailService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,17 +34,20 @@ public class LedgerService implements LedgerContract {
     private final LedgerIntegrityService ledgerIntegrityService;
     private final LedgerBalanceConsensusPort balanceConsensusPort;
     private final LedgerBalanceUpdatePort balanceUpdatePort;
+    private final FinancialAuditTrailService auditTrailService;
 
     public LedgerService(LedgerRepository ledgerRepository,
             LedgerHashService ledgerHashService,
             LedgerIntegrityService ledgerIntegrityService,
             LedgerBalanceConsensusPort balanceConsensusPort,
-            LedgerBalanceUpdatePort balanceUpdatePort) {
+            LedgerBalanceUpdatePort balanceUpdatePort,
+            FinancialAuditTrailService auditTrailService) {
         this.ledgerRepository = ledgerRepository;
         this.ledgerHashService = ledgerHashService;
         this.ledgerIntegrityService = ledgerIntegrityService;
         this.balanceConsensusPort = balanceConsensusPort;
         this.balanceUpdatePort = balanceUpdatePort;
+        this.auditTrailService = auditTrailService;
     }
 
     @Override
@@ -83,6 +91,7 @@ public class LedgerService implements LedgerContract {
     @Override
     @Transactional
     public LedgerEntity updateBalance(Long walletId, BigDecimal amount, String context) {
+        FinancialAmountValidator.requireNonZeroBtcDelta(amount, "amount");
         LedgerEntity ledger = ledgerRepository.findByWalletIdForUpdate(walletId)
                 .orElseThrow(() -> new LedgerExceptions.LedgerNotFoundException(
                         "Ledger not found for wallet ID: " + walletId));
@@ -115,16 +124,45 @@ public class LedgerService implements LedgerContract {
         }
 
         LedgerEntity saved = ledgerRepository.save(ledger);
-
-        balanceUpdatePort.publishBalanceUpdated(new LedgerBalanceUpdate(
+        Long userId = saved.getWallet() != null && saved.getWallet().getUser() != null
+                ? saved.getWallet().getUser().getId()
+                : null;
+        LedgerBalanceUpdate balanceUpdate = new LedgerBalanceUpdate(
                 ledger.getWallet().getId(),
                 ledger.getWallet().getName(),
                 ledger.getWallet().getUser().getId(),
                 ledger.getBalance(),
                 amount,
-                context));
+                context);
+        afterCommit(() -> {
+            auditTrailService.recordBestEffort(
+                    "LEDGER_BALANCE_MUTATION",
+                    "LEDGER",
+                    saved.getId() != null ? saved.getId().toString() : String.valueOf(walletId),
+                    userId,
+                    context,
+                    Map.of(
+                            "walletId", walletId,
+                            "amount", amount.toPlainString(),
+                            "balance", saved.getBalance().toPlainString(),
+                            "nonce", saved.getNonce() != null ? saved.getNonce() : 0));
+            balanceUpdatePort.publishBalanceUpdated(balanceUpdate);
+        });
 
         return saved;
+    }
+
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     private record LedgerSnapshot(

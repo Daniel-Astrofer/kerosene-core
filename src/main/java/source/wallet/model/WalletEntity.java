@@ -1,6 +1,7 @@
 package source.wallet.model;
 
 import source.auth.model.entity.UserDataBase;
+import source.wallet.domain.WalletDestinationHash;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -48,6 +49,9 @@ public class WalletEntity {
     @Column(name = "deposit_address", length = 100)
     private String depositAddress;
 
+    @Column(name = "destination_hash", length = 64)
+    private String destinationHash;
+
     @Column(name = "lightning_address", length = 255)
     private String lightningAddress;
 
@@ -88,6 +92,7 @@ public class WalletEntity {
 
     public void setId(Long id) {
         this.id = id;
+        refreshDestinationHash();
     }
 
     public String getName() {
@@ -116,6 +121,7 @@ public class WalletEntity {
 
     public void setPassphraseHash(String passphraseHash) {
         this.passphraseHash = passphraseHash;
+        refreshDestinationHash();
     }
 
     public LocalDateTime getCreatedAt() {
@@ -156,6 +162,21 @@ public class WalletEntity {
 
     public void setDepositAddress(String depositAddress) {
         this.depositAddress = depositAddress;
+        refreshDestinationHash();
+    }
+
+    public String getDestinationHash() {
+        return destinationHash;
+    }
+
+    public void setDestinationHash(String destinationHash) {
+        this.destinationHash = WalletDestinationHash.normalize(destinationHash);
+    }
+
+    @PrePersist
+    @PreUpdate
+    public void refreshDestinationHash() {
+        this.destinationHash = WalletDestinationHash.fromParts(depositAddress, passphraseHash, id);
     }
 
     public String getLightningAddress() {
