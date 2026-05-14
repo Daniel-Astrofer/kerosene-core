@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -121,6 +122,82 @@ class PasskeyServiceTest {
                 assertion.challengeHex(),
                 assertion.signatureB64Url(),
                 assertion.rawPublicKey(),
+                assertion.authDataB64Url(),
+                assertion.clientDataJsonB64Url()));
+    }
+
+    @Test
+    void verifySignatureUsesAppScopedRpIdForConfiguredAppOrigin() throws Exception {
+        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setServerName(onionHost);
+        request.addHeader("Host", onionHost);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        PasskeyService service = new PasskeyService(
+                mock(RedisServicer.class),
+                new ObjectMapper(),
+                new ObjectMapper(),
+                "android:apk-key-hash:kerosene,http://localhost:3000,http://localhost:8080",
+                "kerosene-device");
+
+        AssertionFixture assertion = createAssertion(
+                "kerosene-device",
+                "android:apk-key-hash:kerosene",
+                HexFormat.of().formatHex(new byte[] {
+                        5, 5, 5, 5, 5, 5, 5, 5,
+                        5, 5, 5, 5, 5, 5, 5, 5,
+                        5, 5, 5, 5, 5, 5, 5, 5,
+                        5, 5, 5, 5, 5, 5, 5, 5
+                }));
+
+        assertEquals("kerosene-device", service.resolveCurrentRelyingPartyId());
+        assertEquals("kerosene-device", service.resolveRelyingPartyIdFromClientData(assertion.clientDataJsonB64Url()));
+        assertTrue(service.verifySignature(
+                "alice",
+                assertion.challengeHex(),
+                assertion.signatureB64Url(),
+                assertion.rawPublicKey(),
+                assertion.authDataB64Url(),
+                assertion.clientDataJsonB64Url()));
+    }
+
+    @Test
+    void verifySignatureAcceptsLegacyDynamicRpIdHashForConfiguredAppOrigin() throws Exception {
+        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setServerName(onionHost);
+        request.addHeader("Host", onionHost);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        PasskeyService service = new PasskeyService(
+                mock(RedisServicer.class),
+                new ObjectMapper(),
+                new ObjectMapper(),
+                "android:apk-key-hash:kerosene,http://localhost:3000,http://localhost:8080",
+                "kerosene-device");
+
+        AssertionFixture assertion = createAssertion(
+                onionHost,
+                "android:apk-key-hash:kerosene",
+                HexFormat.of().formatHex(new byte[] {
+                        6, 6, 6, 6, 6, 6, 6, 6,
+                        6, 6, 6, 6, 6, 6, 6, 6,
+                        6, 6, 6, 6, 6, 6, 6, 6,
+                        6, 6, 6, 6, 6, 6, 6, 6
+                }));
+
+        PasskeyService.PasskeyVerificationResult verification = service.verifyAuthenticationAssertion(
+                "alice",
+                assertion.challengeHex(),
+                assertion.signatureB64Url(),
+                assertion.rawPublicKey(),
+                assertion.authDataB64Url(),
+                assertion.clientDataJsonB64Url());
+
+        assertTrue(verification.verified());
+        assertEquals(onionHost, verification.relyingPartyId());
+        assertEquals(onionHost, service.resolveRelyingPartyIdFromAuthenticatorData(
                 assertion.authDataB64Url(),
                 assertion.clientDataJsonB64Url()));
     }

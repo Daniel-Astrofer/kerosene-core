@@ -123,6 +123,18 @@ public class HardeningStressTest {
     }
 
     @Test
+    public void testLockedLightningWalletDisablesDepositsWithoutSchedulerFailure() {
+        Mockito.when(lightningClient.getLocalBalance())
+                .thenThrow(new RuntimeException("UNKNOWN: wallet locked, unlock it to enable full RPC access"));
+
+        assertDoesNotThrow(() -> liquidityMonitor.checkLiquidityHealth());
+
+        assertEquals("ENABLED", redisTemplate.opsForValue().get("system:status:withdrawals"));
+        assertEquals("DISABLED_UNHEALTHY_NODE", redisTemplate.opsForValue().get("system:status:deposits"));
+        assertEquals("CRITICAL", redisTemplate.opsForValue().get("system:health:lightning"));
+    }
+
+    @Test
     public void testHmacTamperingDetection() {
         // Simulation: Hacker modifies balance via direct SQL (psql)
         UserDataBase user = new UserDataBase();

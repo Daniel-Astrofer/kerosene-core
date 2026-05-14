@@ -2,25 +2,34 @@ package source.transactions.application.externalpayments;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import source.transactions.dto.OnchainAddressAllocationDTO;
 import source.transactions.dto.OnchainAddressRequestDTO;
 import source.transactions.model.ExternalTransferEntity;
 import source.transactions.service.BlockchainAddressWatchService;
 import source.transactions.service.CustodialAddressAllocator;
+import source.transactions.service.NetworkTransferLifecycleService;
 import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 public class IssueOnchainAddressUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(IssueOnchainAddressUseCase.class);
+    private static final BigDecimal SATOSHIS_PER_BTC = new BigDecimal("100000000");
 
     private final ExternalPaymentsWalletPort walletPort;
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalTransferFactory externalTransferFactory;
     private final CustodialAddressAllocator custodialAddressAllocator;
     private final BlockchainAddressWatchService blockchainAddressWatchService;
+    private final NetworkTransferLifecycleService networkTransferLifecycleService;
     private final String bitcoinNetwork;
     private final int minimumConfirmations;
+    private final boolean instantSettlementTestModeEnabled;
 
     public IssueOnchainAddressUseCase(
             ExternalPaymentsWalletPort walletPort,
@@ -28,15 +37,19 @@ public class IssueOnchainAddressUseCase {
             ExternalTransferFactory externalTransferFactory,
             CustodialAddressAllocator custodialAddressAllocator,
             BlockchainAddressWatchService blockchainAddressWatchService,
+            NetworkTransferLifecycleService networkTransferLifecycleService,
             @org.springframework.beans.factory.annotation.Value("${bitcoin.network:mainnet}") String bitcoinNetwork,
-            @org.springframework.beans.factory.annotation.Value("${bitcoin.min-confirmations:3}") int minimumConfirmations) {
+            @org.springframework.beans.factory.annotation.Value("${bitcoin.min-confirmations:3}") int minimumConfirmations,
+            @org.springframework.beans.factory.annotation.Value("${transactions.onchain.test-instant-settlement-enabled:false}") boolean instantSettlementTestModeEnabled) {
         this.walletPort = walletPort;
         this.externalTransfersPort = externalTransfersPort;
         this.externalTransferFactory = externalTransferFactory;
         this.custodialAddressAllocator = custodialAddressAllocator;
         this.blockchainAddressWatchService = blockchainAddressWatchService;
+        this.networkTransferLifecycleService = networkTransferLifecycleService;
         this.bitcoinNetwork = normalizeNetwork(bitcoinNetwork);
         this.minimumConfirmations = Math.max(1, minimumConfirmations);
+        this.instantSettlementTestModeEnabled = instantSettlementTestModeEnabled;
     }
 
     @Transactional
@@ -72,10 +85,17 @@ public class IssueOnchainAddressUseCase {
                 null,
                 null,
                 "On-chain deposit address issued for wallet " + wallet.getName()
-                        + " expected=" + expectedAmountBtc.toPlainString() + " BTC");
+                        + " expected=" + expectedAmountBtc.toPlainString() + " BTC"
+                        + (instantSettlementTestModeEnabled
+                                ? " | LOCAL TEST: credited without blockchain observation"
+                                : ""));
         transfer.setExpectedAmountBtc(expectedAmountBtc);
         transfer = externalTransfersPort.save(transfer);
-        blockchainAddressWatchService.register(transfer, allocation.address(), "deposit:" + wallet.getName());
+        if (instantSettlementTestModeEnabled) {
+            transfer = settleImmediatelyForLocalTest(transfer, expectedAmountBtc);
+        } else {
+            blockchainAddressWatchService.register(transfer, allocation.address(), "deposit:" + wallet.getName());
+        }
 
         return new OnchainAddressAllocationDTO(
                 wallet.getName(),
@@ -90,6 +110,25 @@ public class IssueOnchainAddressUseCase {
                 transfer.getConfirmations(),
                 minimumConfirmations,
                 transfer.getBlockchainTxid());
+    }
+
+    private ExternalTransferEntity settleImmediatelyForLocalTest(
+            ExternalTransferEntity transfer,
+            BigDecimal expectedAmountBtc) {
+        long amountSats = expectedAmountBtc.multiply(SATOSHIS_PER_BTC)
+                .setScale(0, RoundingMode.DOWN)
+                .longValue();
+        String syntheticTxid = "local-onchain-test-" + transfer.getId();
+        log.warn("[OnchainDepositTestMode] Crediting transfer {} without blockchain observation. "
+                        + "This must stay disabled outside local app testing.",
+                transfer.getId());
+        ExternalTransferEntity settled = networkTransferLifecycleService.reconcileOnchainSettlement(
+                transfer,
+                amountSats,
+                syntheticTxid,
+                minimumConfirmations,
+                "ONCHAIN_TEST_INSTANT_SETTLEMENT");
+        return settled != null ? settled : transfer;
     }
 
     private BigDecimal normalizeExpectedAmount(BigDecimal value) {

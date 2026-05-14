@@ -25,6 +25,7 @@ class ProductionMockProfileConditionTest {
         environment.setActiveProfiles("prod");
         environment.setProperty("bitcoin.mock-mode", "true");
         environment.setProperty("treasury.siphon.manual-settlement-enabled", "true");
+        environment.setProperty("transactions.onchain.test-instant-settlement-enabled", "true");
         environment.setProperty("vault.enabled", "false");
         environment.setProperty("mpc.sidecar.tls.enabled", "false");
         environment.setProperty("app.cors.allowed-origins", "*");
@@ -44,6 +45,7 @@ class ProductionMockProfileConditionTest {
                 "bean " + ForbiddenMockService.class.getName() + " is not allowed in prod"));
         assertTrue(exception.getMessage().contains("bitcoin.mock-mode=true"));
         assertTrue(exception.getMessage().contains("treasury.siphon.manual-settlement-enabled=true"));
+        assertTrue(exception.getMessage().contains("transactions.onchain.test-instant-settlement-enabled=true"));
         assertTrue(exception.getMessage().contains("vault.enabled must be true"));
         assertTrue(exception.getMessage().contains("vault.raft.required must be true"));
         assertTrue(exception.getMessage().contains("mpc.sidecar.tls.enabled must be true"));

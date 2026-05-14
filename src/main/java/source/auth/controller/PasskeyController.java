@@ -166,7 +166,7 @@ public class PasskeyController {
             }
 
             credential.setDeviceName(request.getDeviceName());
-            applyPasskeyContextMetadata(credential, request.getClientDataJSON());
+            applyPasskeyContextMetadata(credential, request);
             applyPasskeyDeviceMetadata(credential, request);
             credential.setUser(user);
             credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
@@ -414,7 +414,7 @@ public class PasskeyController {
         state.setPasskeyCredentialId(request.getCredentialId());
         state.setPasskeyUserHandle(request.getUserHandle());
         state.setPasskeyPublicKeyCose(request.getPublicKeyCose());
-        state.setPasskeyRelyingPartyId(passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON()));
+        state.setPasskeyRelyingPartyId(resolveRelyingPartyIdFromProof(request));
         state.setPasskeyOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
         state.setPasskeyBrand(request.getBrand());
         state.setPasskeyModel(request.getModel());
@@ -506,9 +506,18 @@ public class PasskeyController {
         return ResponseEntity.ok(ApiResponse.success(message, passkeyInventoryService.inventoryFor(user)));
     }
 
-    private void applyPasskeyContextMetadata(PasskeyCredential credential, String clientDataJSON) {
-        credential.setRelyingPartyId(passkeyService.resolveRelyingPartyIdFromClientData(clientDataJSON));
-        credential.setOriginHost(passkeyService.extractOriginHostFromClientData(clientDataJSON));
+    private void applyPasskeyContextMetadata(PasskeyCredential credential, PasskeyRegistrationRequest request) {
+        credential.setRelyingPartyId(resolveRelyingPartyIdFromProof(request));
+        credential.setOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
+    }
+
+    private String resolveRelyingPartyIdFromProof(PasskeyRegistrationRequest request) {
+        String matchedRpId = passkeyService.resolveRelyingPartyIdFromAuthenticatorData(
+                request.getAuthData(),
+                request.getClientDataJSON());
+        return firstNonBlank(
+                matchedRpId,
+                passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON()));
     }
 
     private void applyPasskeyDeviceMetadata(PasskeyCredential credential, PasskeyRegistrationRequest request) {

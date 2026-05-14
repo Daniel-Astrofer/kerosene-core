@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +45,7 @@ public class PasskeyService {
     };
     private static final int PUBLIC_KEY_CACHE_MAX_SIZE = 4096;
     private static final int RP_ID_HASH_CACHE_MAX_SIZE = 1024;
+    private static final String DEFAULT_RELYING_PARTY_ID = "kerosene-device";
     private static final ThreadLocal<MessageDigest> SHA_256 = ThreadLocal.withInitial(() -> {
         try {
             return MessageDigest.getInstance("SHA-256");
@@ -92,7 +94,7 @@ public class PasskeyService {
             ObjectMapper jsonMapper,
             @Qualifier("cborObjectMapper") ObjectMapper cborMapper,
             @Value("${webauthn.origins:}") String allowedOrigins,
-            @Value("${webauthn.relying-party-id:localhost}") String relyingPartyId) {
+            @Value("${webauthn.relying-party-id:kerosene-device}") String relyingPartyId) {
         this.redisService = redisService;
         this.jsonMapper = jsonMapper;
         this.cborMapper = cborMapper;
@@ -101,7 +103,7 @@ public class PasskeyService {
                 .filter(origin -> !origin.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
         this.relyingPartyId = relyingPartyId == null || relyingPartyId.isBlank()
-                ? "localhost"
+                ? DEFAULT_RELYING_PARTY_ID
                 : relyingPartyId.trim();
     }
 
@@ -239,8 +241,8 @@ public class PasskeyService {
                 return PasskeyVerificationResult.failed();
             }
 
-            String expectedRpId = resolveExpectedRelyingPartyId(originInClientData);
-            if (!validateAuthenticatorData(authDataBytes, expectedRpId)) {
+            String matchedRpId = validateAuthenticatorData(authDataBytes, originInClientData);
+            if (matchedRpId == null) {
                 return PasskeyVerificationResult.failed();
             }
 
@@ -262,7 +264,10 @@ public class PasskeyService {
             log.debug("Passkey signature verification completed for userRef={} verified={}",
                     LogSanitizer.fingerprint(username), verified);
 
-            return new PasskeyVerificationResult(verified, verified ? extractSignatureCount(authDataBytes) : -1L);
+            return new PasskeyVerificationResult(
+                    verified,
+                    verified ? extractSignatureCount(authDataBytes) : -1L,
+                    verified ? matchedRpId : null);
 
         } catch (Exception e) {
             log.error("Passkey signature verification failed for userRef={}: {}",
@@ -286,9 +291,13 @@ public class PasskeyService {
                 | ((long) authDataBytes[36] & 0xff);
     }
 
-    public record PasskeyVerificationResult(boolean verified, long signatureCount) {
+    public record PasskeyVerificationResult(boolean verified, long signatureCount, String relyingPartyId) {
+        public PasskeyVerificationResult(boolean verified, long signatureCount) {
+            this(verified, signatureCount, null);
+        }
+
         private static PasskeyVerificationResult failed() {
-            return new PasskeyVerificationResult(false, -1L);
+            return new PasskeyVerificationResult(false, -1L, null);
         }
     }
 
@@ -297,6 +306,10 @@ public class PasskeyService {
     }
 
     public String resolveCurrentRelyingPartyId() {
+        if (isApplicationScopedRelyingPartyId()) {
+            return relyingPartyId;
+        }
+
         String requestHost = currentRequestHost();
         if (hostMatchesConfiguredRpId(requestHost)) {
             return relyingPartyId;
@@ -338,6 +351,24 @@ public class PasskeyService {
             return resolveExpectedRelyingPartyId(clientDataNode.path("origin").asText(null));
         } catch (Exception e) {
             return resolveCurrentRelyingPartyId();
+        }
+    }
+
+    public String resolveRelyingPartyIdFromAuthenticatorData(String authDataB64Url, String clientDataJsonB64Url) {
+        try {
+            byte[] authDataBytes = B64_URL_DECODER.decode(authDataB64Url);
+            if (authDataBytes.length < 32) {
+                return resolveRelyingPartyIdFromClientData(clientDataJsonB64Url);
+            }
+
+            byte[] clientDataBytes = B64_URL_DECODER.decode(clientDataJsonB64Url);
+            JsonNode clientDataNode = jsonMapper.readTree(clientDataBytes);
+            String originInClientData = clientDataNode.path("origin").asText(null);
+            byte[] suppliedRpIdHash = Arrays.copyOfRange(authDataBytes, 0, 32);
+            String matchedRpId = matchingRelyingPartyId(suppliedRpIdHash, originInClientData);
+            return matchedRpId == null ? resolveExpectedRelyingPartyId(originInClientData) : matchedRpId;
+        } catch (Exception e) {
+            return resolveRelyingPartyIdFromClientData(clientDataJsonB64Url);
         }
     }
 
@@ -412,17 +443,17 @@ public class PasskeyService {
         return rawKey;
     }
 
-    private boolean validateAuthenticatorData(byte[] authDataBytes, String expectedRpId) throws Exception {
+    private String validateAuthenticatorData(byte[] authDataBytes, String originInClientData) throws Exception {
         if (authDataBytes == null || authDataBytes.length < 37) {
             log.error("Invalid authenticatorData length: {}", authDataBytes == null ? "null" : authDataBytes.length);
-            return false;
+            return null;
         }
 
-        byte[] expectedRpIdHash = rpIdHash(expectedRpId);
         byte[] suppliedRpIdHash = Arrays.copyOfRange(authDataBytes, 0, 32);
-        if (!MessageDigest.isEqual(expectedRpIdHash, suppliedRpIdHash)) {
-            log.error("Invalid authenticatorData rpIdHash for rpId {}", expectedRpId);
-            return false;
+        String matchedRpId = matchingRelyingPartyId(suppliedRpIdHash, originInClientData);
+        if (matchedRpId == null) {
+            log.error("Invalid authenticatorData rpIdHash for rpId {}", resolveExpectedRelyingPartyId(originInClientData));
+            return null;
         }
 
         int flags = authDataBytes[32] & 0xff;
@@ -430,10 +461,43 @@ public class PasskeyService {
         boolean userVerified = (flags & 0x04) != 0;
         if (!userPresent || !userVerified) {
             log.error("Authenticator did not assert both user presence and verification. flags={}", flags);
-            return false;
+            return null;
         }
 
-        return true;
+        return matchedRpId;
+    }
+
+    private String matchingRelyingPartyId(byte[] suppliedRpIdHash, String originInClientData) throws Exception {
+        for (String candidateRpId : candidateRelyingPartyIds(originInClientData)) {
+            if (MessageDigest.isEqual(rpIdHash(candidateRpId), suppliedRpIdHash)) {
+                return candidateRpId;
+            }
+        }
+        return null;
+    }
+
+    private Set<String> candidateRelyingPartyIds(String originInClientData) {
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        addRelyingPartyIdCandidate(candidates, resolveExpectedRelyingPartyId(originInClientData));
+        addRelyingPartyIdCandidate(candidates, relyingPartyId);
+
+        String requestHost = currentRequestHost();
+        if (requestHost != null && isDynamicHostAllowed(requestHost)) {
+            addRelyingPartyIdCandidate(candidates, requestHost);
+        }
+
+        String originHost = extractOriginHost(originInClientData);
+        if (originHost != null && isDynamicHostAllowed(originHost)) {
+            addRelyingPartyIdCandidate(candidates, originHost);
+        }
+
+        return candidates;
+    }
+
+    private void addRelyingPartyIdCandidate(Set<String> candidates, String value) {
+        if (value != null && !value.isBlank()) {
+            candidates.add(value.trim());
+        }
     }
 
     private boolean isAllowedOrigin(String originInClientData) {
@@ -456,6 +520,9 @@ public class PasskeyService {
         String requestHost = currentRequestHost();
         String originHost = extractOriginHost(originInClientData);
 
+        if (isApplicationScopedRelyingPartyId() && isAllowedOrigin(originInClientData)) {
+            return relyingPartyId;
+        }
         if (hostMatchesConfiguredRpId(requestHost) || hostMatchesConfiguredRpId(originHost)) {
             return relyingPartyId;
         }
@@ -481,6 +548,13 @@ public class PasskeyService {
                 || "localhost".equals(host)
                 || "127.0.0.1".equals(host)
                 || "::1".equals(host);
+    }
+
+    private boolean isApplicationScopedRelyingPartyId() {
+        String normalized = relyingPartyId == null ? "" : relyingPartyId.trim().toLowerCase(Locale.ROOT);
+        return !normalized.isBlank()
+                && !normalized.contains(".")
+                && !isDynamicHostAllowed(normalized);
     }
 
     private String currentRequestHost() {

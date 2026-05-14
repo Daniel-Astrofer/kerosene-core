@@ -128,7 +128,7 @@ public class RecoveryCredentialRotator {
         credential.setDeviceName(request.getDeviceName());
         credential.setPublicKeyCose(publicKeyBytes);
         credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
-        credential.setRelyingPartyId(passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON()));
+        credential.setRelyingPartyId(resolveRelyingPartyIdFromProof(request));
         credential.setOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
 
         Base64.Decoder decoder = Base64.getDecoder();
@@ -167,6 +167,16 @@ public class RecoveryCredentialRotator {
         } catch (IllegalArgumentException e) {
             return Base64.getUrlDecoder().decode(keyToDecode);
         }
+    }
+
+    private String resolveRelyingPartyIdFromProof(EmergencyRecoveryFinishRequest request) {
+        String matchedRpId = passkeyService.resolveRelyingPartyIdFromAuthenticatorData(
+                request.getAuthData(),
+                request.getClientDataJSON());
+        if (matchedRpId != null && !matchedRpId.isBlank()) {
+            return matchedRpId;
+        }
+        return passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON());
     }
 
     public record RotationResult(String username, List<String> newBackupCodes) {

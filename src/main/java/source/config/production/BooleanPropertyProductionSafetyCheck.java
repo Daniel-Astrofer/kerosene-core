@@ -9,7 +9,8 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
             "custody.mock-mode",
             "app.dev.inject-test-balance",
             "quorum.allow-local-simulation",
-            "treasury.siphon.manual-settlement-enabled");
+            "treasury.siphon.manual-settlement-enabled",
+            "transactions.onchain.test-instant-settlement-enabled");
 
     public BooleanPropertyProductionSafetyCheck(ProductionSafetyCheck next) {
         super(next);

@@ -36,6 +36,7 @@ public class BitcoinNodeSubscriptionService {
     private volatile boolean running = true;
     private volatile long lastInvoiceAddIndex;
     private volatile long lastInvoiceSettleIndex;
+    private volatile long lastLockedWalletWarningMs;
 
     public BitcoinNodeSubscriptionService(
             BitcoinNodeService bitcoinNodeService,
@@ -74,8 +75,7 @@ public class BitcoinNodeSubscriptionService {
                     processTransaction(stream.next());
                 }
             } catch (Exception ex) {
-                log.warn("[BitcoinNodeSubscription] Transaction stream interrupted: {}", ex.getMessage());
-                sleepBeforeReconnect();
+                sleepBeforeReconnect("Transaction", ex);
             }
         }
     }
@@ -129,8 +129,7 @@ public class BitcoinNodeSubscriptionService {
                     processInvoice(stream.next());
                 }
             } catch (Exception ex) {
-                log.warn("[BitcoinNodeSubscription] Invoice stream interrupted: {}", ex.getMessage());
-                sleepBeforeReconnect();
+                sleepBeforeReconnect("Invoice", ex);
             }
         }
     }
@@ -156,11 +155,38 @@ public class BitcoinNodeSubscriptionService {
                 "LND_SUBSCRIBE_INVOICES");
     }
 
-    private void sleepBeforeReconnect() {
+    private void sleepBeforeReconnect(String streamName, Exception ex) {
+        boolean walletLocked = isWalletLocked(ex);
+        if (walletLocked) {
+            long now = System.currentTimeMillis();
+            if (now - lastLockedWalletWarningMs >= TimeUnit.MINUTES.toMillis(1)) {
+                lastLockedWalletWarningMs = now;
+                log.warn("[BitcoinNodeSubscription] LND wallet is locked; {} stream paused until wallet unlocks.",
+                        streamName);
+            } else {
+                log.debug("[BitcoinNodeSubscription] LND wallet still locked; {} stream remains paused.",
+                        streamName);
+            }
+        } else {
+            log.warn("[BitcoinNodeSubscription] {} stream interrupted: {}", streamName, ex.getMessage());
+        }
+
         try {
-            TimeUnit.SECONDS.sleep(3);
+            TimeUnit.SECONDS.sleep(walletLocked ? 30 : 3);
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private boolean isWalletLocked(Exception ex) {
+        Throwable cursor = ex;
+        while (cursor != null) {
+            String message = cursor.getMessage();
+            if (message != null && message.toLowerCase(java.util.Locale.ROOT).contains("wallet locked")) {
+                return true;
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
     }
 }

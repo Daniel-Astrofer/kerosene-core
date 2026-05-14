@@ -12,6 +12,7 @@ import source.transactions.dto.OnchainAddressRequestDTO;
 import source.transactions.model.ExternalTransferEntity;
 import source.transactions.service.BlockchainAddressWatchService;
 import source.transactions.service.CustodialAddressAllocator;
+import source.transactions.service.NetworkTransferLifecycleService;
 import source.wallet.model.WalletEntity;
 import source.wallet.model.WalletMode;
 
@@ -42,6 +43,9 @@ class IssueOnchainAddressUseCaseTest {
     private BlockchainAddressWatchService blockchainAddressWatchService;
 
     @Mock
+    private NetworkTransferLifecycleService networkTransferLifecycleService;
+
+    @Mock
     private UserDataBase user;
 
     private IssueOnchainAddressUseCase useCase;
@@ -55,8 +59,10 @@ class IssueOnchainAddressUseCaseTest {
                 new ExternalTransferFactory(new ExternalPaymentsMath("mainnet")),
                 custodialAddressAllocator,
                 blockchainAddressWatchService,
+                networkTransferLifecycleService,
                 "mainnet",
-                3);
+                3,
+                false);
 
         wallet = new WalletEntity();
         wallet.setId(42L);
@@ -99,6 +105,62 @@ class IssueOnchainAddressUseCaseTest {
                 eq(saved),
                 eq("bc1qdedicateddeposit000000000000000000000000"),
                 eq("deposit:MAIN"));
+        verifyNoInteractions(networkTransferLifecycleService);
+    }
+
+    @Test
+    void instantSettlementTestModeCreditsExpectedAmountWithoutRegisteringBlockchainWatch() {
+        IssueOnchainAddressUseCase localTestUseCase = new IssueOnchainAddressUseCase(
+                walletPort,
+                externalTransfersPort,
+                new ExternalTransferFactory(new ExternalPaymentsMath("mainnet")),
+                custodialAddressAllocator,
+                blockchainAddressWatchService,
+                networkTransferLifecycleService,
+                "mainnet",
+                3,
+                true);
+
+        when(user.getId()).thenReturn(7L);
+        when(walletPort.requireWallet(7L, "MAIN")).thenReturn(wallet);
+        when(custodialAddressAllocator.allocate(7L, wallet, "deposit:MAIN", true))
+                .thenReturn(new CustodialAddressAllocator.Allocation(
+                        "bc1qdedicateddeposit000000000000000000000000",
+                        "KEROSENE_QUORUM_BIP84_EXTERNAL_8",
+                        "KEROSENE_LOCAL",
+                        false));
+        when(externalTransfersPort.save(any(ExternalTransferEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(networkTransferLifecycleService.reconcileOnchainSettlement(
+                any(ExternalTransferEntity.class),
+                eq(1_000_000L),
+                any(String.class),
+                eq(3),
+                eq("ONCHAIN_TEST_INSTANT_SETTLEMENT")))
+                .thenAnswer(invocation -> {
+                    ExternalTransferEntity transfer = invocation.getArgument(0);
+                    transfer.setStatus("COMPLETED");
+                    transfer.setAmountBtc(new BigDecimal("0.01000000"));
+                    transfer.setConfirmations(3);
+                    transfer.setBlockchainTxid(invocation.getArgument(2));
+                    return transfer;
+                });
+
+        OnchainAddressAllocationDTO response = localTestUseCase.issue(
+                7L,
+                new OnchainAddressRequestDTO("MAIN", new BigDecimal("0.01000000")));
+
+        assertEquals("COMPLETED", response.transferStatus());
+        assertEquals(3, response.confirmations());
+        assertEquals(new BigDecimal("0.01000000"), response.expectedAmountBtc());
+
+        verify(networkTransferLifecycleService).reconcileOnchainSettlement(
+                any(ExternalTransferEntity.class),
+                eq(1_000_000L),
+                any(String.class),
+                eq(3),
+                eq("ONCHAIN_TEST_INSTANT_SETTLEMENT"));
+        verifyNoInteractions(blockchainAddressWatchService);
     }
 
     @Test
@@ -110,6 +172,10 @@ class IssueOnchainAddressUseCaseTest {
                 IllegalArgumentException.class,
                 () -> useCase.issue(7L, new OnchainAddressRequestDTO("MAIN", new BigDecimal("0.01000000"))));
 
-        verifyNoInteractions(custodialAddressAllocator, externalTransfersPort, blockchainAddressWatchService);
+        verifyNoInteractions(
+                custodialAddressAllocator,
+                externalTransfersPort,
+                blockchainAddressWatchService,
+                networkTransferLifecycleService);
     }
 }
