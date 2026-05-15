@@ -2,17 +2,12 @@ package source.ledger.dto;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import java.math.BigDecimal;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("TransactionDTO Tests")
 class TransactionDTOTest {
-
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
     @DisplayName("Should create TransactionDTO with default constructor")
@@ -89,59 +84,11 @@ class TransactionDTOTest {
         dto.setSender("sender123");
         dto.setReceiver("receiver456");
         dto.setAmount(new BigDecimal("250.75"));
-        dto.setIdempotencyKey("idem-complete");
         dto.setContext("Monthly payment");
         
         assertEquals("sender123", dto.getSender());
         assertEquals("receiver456", dto.getReceiver());
         assertEquals(new BigDecimal("250.75"), dto.getAmount());
-        assertEquals("idem-complete", dto.getIdempotencyKey());
         assertEquals("Monthly payment", dto.getContext());
-    }
-
-    @Test
-    @DisplayName("Should reject null, zero and negative amounts")
-    void shouldRejectInvalidAmounts() {
-        assertAmountInvalid(null);
-        assertAmountInvalid(BigDecimal.ZERO);
-        assertAmountInvalid(new BigDecimal("-0.00000001"));
-    }
-
-    @Test
-    @DisplayName("Should reject amounts with more than BTC precision")
-    void shouldRejectTooManyDecimalPlaces() {
-        TransactionDTO dto = validTransaction();
-        dto.setAmount(new BigDecimal("0.000000001"));
-
-        assertFalse(validator.validate(dto).isEmpty());
-    }
-
-    @Test
-    @DisplayName("Should require sender receiver and idempotency key")
-    void shouldRequireCriticalFields() {
-        TransactionDTO dto = validTransaction();
-        dto.setSender(" ");
-        dto.setReceiver(null);
-        dto.setIdempotencyKey("");
-
-        Set<?> violations = validator.validate(dto);
-
-        assertEquals(3, violations.size());
-    }
-
-    private void assertAmountInvalid(BigDecimal amount) {
-        TransactionDTO dto = validTransaction();
-        dto.setAmount(amount);
-
-        assertFalse(validator.validate(dto).isEmpty());
-    }
-
-    private TransactionDTO validTransaction() {
-        TransactionDTO dto = new TransactionDTO();
-        dto.setSender("sender123");
-        dto.setReceiver("receiver456");
-        dto.setAmount(new BigDecimal("0.01000000"));
-        dto.setIdempotencyKey("idem-valid");
-        return dto;
     }
 }

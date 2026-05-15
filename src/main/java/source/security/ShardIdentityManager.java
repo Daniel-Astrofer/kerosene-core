@@ -17,8 +17,8 @@ import java.util.Base64;
 
 /**
  * Manages the Ed25519 identity of this specific Shard.
- * On first boot, generates a key pair at the configured identity path.
- * Production should point the path at a persistent UID 65532-writable mount.
+ * On first boot, generates a persistent key pair used to sign heartbeats
+ * and authenticate against the Vault.
  */
 @Component
 public class ShardIdentityManager {
@@ -79,13 +79,12 @@ public class ShardIdentityManager {
     }
 
     public String getPublicKeyBase64() {
-        KeyPair identity = requireKeyPair();
-        return Base64.getEncoder().encodeToString(identity.getPublic().getEncoded());
+        return Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
     }
 
     /**
-     * Stable node identifier derived from the configured Ed25519 public key.
-     * This remains stable across restarts only when the identity path is persistent.
+     * Stable node identifier derived from the persistent Ed25519 public key.
+     * This must remain stable across container restarts, unlike Docker hostnames.
      */
     public String getStableNodeId() {
         try {
@@ -106,22 +105,12 @@ public class ShardIdentityManager {
      */
     public String sign(String message) {
         try {
-            KeyPair identity = requireKeyPair();
             Signature sig = Signature.getInstance("Ed25519");
-            sig.initSign(identity.getPrivate());
+            sig.initSign(keyPair.getPrivate());
             sig.update(message.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(sig.sign());
         } catch (Exception e) {
             throw new RuntimeException("Failed to sign message with Shard identity", e);
         }
-    }
-
-    private KeyPair requireKeyPair() {
-        if (keyPair == null) {
-            throw new IllegalStateException(
-                    "[Shard Identity] Identity is not initialized. Check shard.identity.path write permissions: "
-                            + identityPath);
-        }
-        return keyPair;
     }
 }

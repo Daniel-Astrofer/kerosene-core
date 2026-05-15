@@ -1,8 +1,6 @@
 package source.ledger.audit;
 
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.ledger.entity.LedgerEntity;
@@ -33,8 +31,6 @@ import java.util.Optional;
 @Service
 public class MerkleAuditService {
 
-    private static final int AUDIT_BATCH_SIZE = 500;
-
     private final LedgerRepository ledgerRepository;
     private final MerkleAuditRepository auditRepository;
 
@@ -51,7 +47,7 @@ public class MerkleAuditService {
      */
     @Transactional
     public MerkleAuditEntity computeAndPersist() {
-        List<LedgerEntity> ledgers = loadLedgersForAudit();
+        List<LedgerEntity> ledgers = ledgerRepository.findAll();
 
         if (ledgers.isEmpty()) {
             // Nothing to audit yet; persist a sentinel root
@@ -70,22 +66,6 @@ public class MerkleAuditService {
 
         MerkleAuditEntity checkpoint = new MerkleAuditEntity(merkleRoot, (long) ledgers.size());
         return auditRepository.save(checkpoint);
-    }
-
-    private List<LedgerEntity> loadLedgersForAudit() {
-        List<LedgerEntity> ledgers = new ArrayList<>();
-        int pageNumber = 0;
-        Page<LedgerEntity> page;
-
-        do {
-            page = ledgerRepository.findAll(PageRequest.of(
-                    pageNumber++,
-                    AUDIT_BATCH_SIZE,
-                    Sort.by(Sort.Direction.ASC, "wallet.id")));
-            ledgers.addAll(page.getContent());
-        } while (page.hasNext());
-
-        return ledgers;
     }
 
     /**

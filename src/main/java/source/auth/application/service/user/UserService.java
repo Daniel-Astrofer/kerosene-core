@@ -1,6 +1,6 @@
 package source.auth.application.service.user;
 
-import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.dto.UserDTO;
 import source.auth.model.entity.UserDataBase;
@@ -43,7 +43,7 @@ public class UserService implements UserServiceContract {
 
     public UserDataBase fromDTO(UserDTO userDTO) {
         UserDataBase user = new UserDataBase();
-        user.setPasswordHash(new String(userDTO.getPassword()));
+        user.setPassphrase(new String(userDTO.getPassphrase()));
         user.setUsername(userDTO.getUsername());
         user.setTOTPSecret(userDTO.getTotpSecret());
 

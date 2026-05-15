@@ -1,7 +1,6 @@
 package source.wallet.model;
 
 import source.auth.model.entity.UserDataBase;
-import source.wallet.domain.WalletDestinationHash;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -49,50 +48,15 @@ public class WalletEntity {
     @Column(name = "deposit_address", length = 100)
     private String depositAddress;
 
-    @Column(name = "destination_hash", length = 64)
-    private String destinationHash;
-
-    @Column(name = "lightning_address", length = 255)
-    private String lightningAddress;
-
-    @Column(name = "external_wallet_reference", length = 255)
-    private String externalWalletReference;
-
     @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "xpub", columnDefinition = "TEXT")
     private String xpub;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "wallet_mode", nullable = false, length = 32)
-    private WalletMode walletMode = WalletMode.KEROSENE;
-
     @Column(name = "last_derived_index", nullable = false, columnDefinition = "integer default -1")
     private Integer lastDerivedIndex = -1;
 
-    @Column(name = "card_number_suffix", length = 4)
-    private String cardNumberSuffix;
-
-    @Column(name = "card_issued_at")
-    private LocalDateTime cardIssuedAt;
-
-    @Column(name = "card_expires_at")
-    private LocalDateTime cardExpiresAt;
-
-    @Column(name = "card_last_rotated_at")
-    private LocalDateTime cardLastRotatedAt;
-
-    @Column(name = "card_sequence", nullable = false, columnDefinition = "integer default 1")
-    private Integer cardSequence = 1;
-
-    @Column(name = "previous_card_number_suffix", length = 4)
-    private String previousCardNumberSuffix;
-
-    @Column(name = "previous_card_expires_at")
-    private LocalDateTime previousCardExpiresAt;
-
     public void setId(Long id) {
         this.id = id;
-        refreshDestinationHash();
     }
 
     public String getName() {
@@ -121,7 +85,6 @@ public class WalletEntity {
 
     public void setPassphraseHash(String passphraseHash) {
         this.passphraseHash = passphraseHash;
-        refreshDestinationHash();
     }
 
     public LocalDateTime getCreatedAt() {
@@ -162,37 +125,6 @@ public class WalletEntity {
 
     public void setDepositAddress(String depositAddress) {
         this.depositAddress = depositAddress;
-        refreshDestinationHash();
-    }
-
-    public String getDestinationHash() {
-        return destinationHash;
-    }
-
-    public void setDestinationHash(String destinationHash) {
-        this.destinationHash = WalletDestinationHash.normalize(destinationHash);
-    }
-
-    @PrePersist
-    @PreUpdate
-    public void refreshDestinationHash() {
-        this.destinationHash = WalletDestinationHash.fromParts(depositAddress, passphraseHash, id);
-    }
-
-    public String getLightningAddress() {
-        return lightningAddress;
-    }
-
-    public void setLightningAddress(String lightningAddress) {
-        this.lightningAddress = lightningAddress;
-    }
-
-    public String getExternalWalletReference() {
-        return externalWalletReference;
-    }
-
-    public void setExternalWalletReference(String externalWalletReference) {
-        this.externalWalletReference = externalWalletReference;
     }
 
     public String getXpub() {
@@ -203,83 +135,11 @@ public class WalletEntity {
         this.xpub = xpub;
     }
 
-    public WalletMode getWalletMode() {
-        return walletMode != null ? walletMode : WalletMode.KEROSENE;
-    }
-
-    public void setWalletMode(WalletMode walletMode) {
-        this.walletMode = walletMode != null ? walletMode : WalletMode.KEROSENE;
-    }
-
-    public boolean isSelfCustodyMode() {
-        return getWalletMode().isSelfCustody();
-    }
-
-    public boolean isKeroseneCustodyMode() {
-        return getWalletMode().isKerosene();
-    }
-
     public Integer getLastDerivedIndex() {
         return lastDerivedIndex;
     }
 
     public void setLastDerivedIndex(Integer lastDerivedIndex) {
         this.lastDerivedIndex = lastDerivedIndex;
-    }
-
-    public String getCardNumberSuffix() {
-        return cardNumberSuffix;
-    }
-
-    public void setCardNumberSuffix(String cardNumberSuffix) {
-        this.cardNumberSuffix = cardNumberSuffix;
-    }
-
-    public LocalDateTime getCardIssuedAt() {
-        return cardIssuedAt;
-    }
-
-    public void setCardIssuedAt(LocalDateTime cardIssuedAt) {
-        this.cardIssuedAt = cardIssuedAt;
-    }
-
-    public LocalDateTime getCardExpiresAt() {
-        return cardExpiresAt;
-    }
-
-    public void setCardExpiresAt(LocalDateTime cardExpiresAt) {
-        this.cardExpiresAt = cardExpiresAt;
-    }
-
-    public LocalDateTime getCardLastRotatedAt() {
-        return cardLastRotatedAt;
-    }
-
-    public void setCardLastRotatedAt(LocalDateTime cardLastRotatedAt) {
-        this.cardLastRotatedAt = cardLastRotatedAt;
-    }
-
-    public Integer getCardSequence() {
-        return cardSequence;
-    }
-
-    public void setCardSequence(Integer cardSequence) {
-        this.cardSequence = cardSequence;
-    }
-
-    public String getPreviousCardNumberSuffix() {
-        return previousCardNumberSuffix;
-    }
-
-    public void setPreviousCardNumberSuffix(String previousCardNumberSuffix) {
-        this.previousCardNumberSuffix = previousCardNumberSuffix;
-    }
-
-    public LocalDateTime getPreviousCardExpiresAt() {
-        return previousCardExpiresAt;
-    }
-
-    public void setPreviousCardExpiresAt(LocalDateTime previousCardExpiresAt) {
-        this.previousCardExpiresAt = previousCardExpiresAt;
     }
 }

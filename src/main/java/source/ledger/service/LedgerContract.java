@@ -13,8 +13,6 @@ public interface LedgerContract {
 
     LedgerEntity findByWalletId(Long walletId);
 
-    boolean existsByWalletId(Long walletId);
-
     List<LedgerEntity> findByUserId(Long userId);
 
     LedgerEntity updateBalance(Long walletId, BigDecimal amount, String context);

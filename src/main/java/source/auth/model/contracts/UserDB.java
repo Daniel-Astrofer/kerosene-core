@@ -5,9 +5,4 @@ public interface UserDB extends User {
 
     void setTOTPSecret(String totpSecret);
 
-    default boolean hasTotpEnabled() {
-        String secret = getTOTPSecret();
-        return secret != null && !secret.isBlank();
-    }
-
 }

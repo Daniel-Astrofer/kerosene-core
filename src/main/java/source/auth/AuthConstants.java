@@ -13,8 +13,7 @@ public final class AuthConstants {
     public static final int USERNAME_MAX_LENGTH = 50;
 
 
-    public static final int PASSWORD_MAX_LENGTH = 128;
-    public static final int PASSWORD_MIN_LENGTH = 12;
+    public static final int PASSPHRASE_MAX_LENGTH = 161;
 
 
     public static final String USERNAME_PATTERN = "^[a-zA-Z0-9_]+$";
@@ -27,13 +26,14 @@ public final class AuthConstants {
     public static final String ERR_USERNAME_ALREADY_EXISTS = "Username is already taken";
 
 
-    public static final String ERR_PASSWORD_NULL = "Password cannot be null";
-    public static final String ERR_PASSWORD_TOO_LONG = "Password exceeds maximum length of " + PASSWORD_MAX_LENGTH + " characters";
-    public static final String ERR_PASSWORD_TOO_SHORT = "Password must have at least " + PASSWORD_MIN_LENGTH + " characters";
-    public static final String ERR_PASSWORD_WEAK = "Password must include upper, lower, number, and symbol characters";
+    public static final String ERR_PASSPHRASE_NULL = "Passphrase cannot be null";
+    public static final String ERR_PASSPHRASE_TOO_LONG = "Passphrase exceeds maximum length of " + PASSPHRASE_MAX_LENGTH + " characters";
+    public static final String ERR_PASSPHRASE_INVALID_WORD = "Passphrase contains unrecognized BIP39 word";
+    public static final String ERR_PASSPHRASE_INVALID_LENGTH = "Passphrase length is incompatible with BIP39 standard";
+    public static final String ERR_PASSPHRASE_INVALID = "Invalid passphrase format";
 
 
-    public static final String ERR_INVALID_CREDENTIALS = "Invalid username or password";
+    public static final String ERR_INVALID_CREDENTIALS = "Invalid username or passphrase";
     public static final String ERR_USER_NOT_FOUND = "User not found";
     public static final String ERR_DEVICE_NOT_RECOGNIZED = "Device not recognized. Please login from a recognized device";
 

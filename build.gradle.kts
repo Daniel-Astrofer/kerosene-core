@@ -5,7 +5,6 @@ plugins {
     id("io.spring.dependency-management") version "1.1.6"
     // Supply Chain Defense: varre CVEs conhecidos em todas as dependências (NVD)
     id("org.owasp.dependencycheck") version "10.0.4"
-    id("com.google.protobuf") version "0.9.4"
 }
 
 
@@ -19,24 +18,6 @@ java {
 
 repositories {
 	mavenCentral()
-}
-
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:3.25.3"
-    }
-    plugins {
-        create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.62.2"
-        }
-    }
-    generateProtoTasks {
-        all().forEach {
-            it.plugins {
-                create("grpc")
-            }
-        }
-    }
 }
 
 dependencies {
@@ -58,22 +39,17 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.postgresql:postgresql:42.7.7")
-    implementation("org.zeromq:jeromq:0.6.0")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.17.2")
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("com.bucket4j:bucket4j-core:8.7.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("io.micrometer:micrometer-registry-prometheus")
-    implementation("org.flywaydb:flyway-core")
-    runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.micrometer:micrometer-observation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // gRPC for MPC Sidecar
     implementation("io.grpc:grpc-netty-shaded:1.62.2")
@@ -81,24 +57,10 @@ dependencies {
     implementation("io.grpc:grpc-stub:1.62.2")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     compileOnly("jakarta.annotation:jakarta.annotation-api:2.1.1")
-    compileOnly("javax.annotation:javax.annotation-api:1.3.2")
 }
 
 tasks.withType<Test> {
 	useJUnitPlatform()
-}
-
-tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
-    val webAdminBuild = listOf(
-        file("web-admin-build"),
-        file("../../frontend/build/web"),
-    ).firstOrNull { it.resolve("index.html").exists() }
-
-    if (webAdminBuild != null) {
-        from(webAdminBuild) {
-            into("static")
-        }
-    }
 }
 
 // ─── OWASP Supply Chain Defense ─────────────────────────────────────────────
@@ -108,10 +70,6 @@ tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") 
 dependencyCheck {
     // Falha a build se qualquer dependência tiver CVSS >= 7.0 (HIGH/CRITICAL)
     failBuildOnCVSS = 7.0f
-
-    nvd {
-        apiKey = System.getenv("NVD_API_KEY") ?: ""
-    }
 
     // Formatos do relatório: HTML legível + JSON para CI
     formats = listOf("HTML", "JSON")

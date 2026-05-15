@@ -42,10 +42,6 @@ public class ApiResponse<T> {
         return new ApiResponse<>(false, message, null, errorCode);
     }
 
-    public static <T> ApiResponse<T> error(String message, String errorCode, T data) {
-        return new ApiResponse<>(false, message, data, errorCode);
-    }
-
     // Getters and Setters
 
     public boolean isSuccess() {

@@ -2,10 +2,10 @@
 
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.infra.persistance.jpa.UserRepository;
 import source.auth.application.orchestrator.login.LoginUseCase;
 import source.auth.application.service.authentication.LoginValidator;
-import source.auth.application.service.cripto.hasher.BcryptHasher;
+import source.auth.application.service.cripto.hasher.BcriptHasher;
 import source.auth.application.service.device.UserDeviceService;
 import source.auth.application.service.validation.ip_handler.contracts.IP;
 import source.auth.model.entity.UserDataBase;
@@ -35,7 +35,7 @@ public class LoginValidatorTest {
     private UserRepository repository;
 
     @Mock
-    private BcryptHasher hash;
+    private BcriptHasher hash;
 
     @Mock
     private IP ip;

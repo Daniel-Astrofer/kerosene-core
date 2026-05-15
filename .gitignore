@@ -46,9 +46,3 @@ google-services.json
 
 # Tor hidden service private key — NEVER commit this
 tor/kerosene_service/
-
-# Generated Flutter web admin bundle copied by scripts/start-local.sh and
-# scripts/build-web-admin-backend.sh before packaging the Spring Boot jar.
-web-admin-build/*
-!web-admin-build/.gitkeep
-web-admin-build.stale-*/

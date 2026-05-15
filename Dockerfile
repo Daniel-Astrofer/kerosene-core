@@ -3,7 +3,7 @@
 # Alpine (musl libc) binaries are ABI-incompatible with glibc — this causes
 # silent crashes or memory corruption when native libraries (IPC_LOCK, TPM JNI,
 # mlock syscalls) are invoked in the runtime stage.
-FROM docker.io/library/eclipse-temurin:21-jdk-jammy AS builder
+FROM eclipse-temurin:21-jdk-jammy AS builder
 
 WORKDIR /workspace
 
@@ -18,10 +18,7 @@ RUN ./gradlew dependencies --no-daemon --quiet || true
 
 # Copy sources and build
 COPY src src
-COPY docker docker
-COPY web-admin-build web-admin-build
 RUN ./gradlew bootJar --no-daemon -x test
-RUN javac docker/Healthcheck.java -d /workspace/healthcheck
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 FROM gcr.io/distroless/java21-debian12 AS runtime
@@ -31,7 +28,6 @@ WORKDIR /app
 # The distroless image doesn't have chown/adduser. We copy with explicit ownership.
 # UID 65532 is the Google Distroless standard 'nonroot' user.
 COPY --chown=65532:65532 --from=builder /workspace/build/libs/*.jar /app/app.jar
-COPY --chown=65532:65532 --from=builder /workspace/healthcheck /app/healthcheck
 
 # Run as UID 65532 (Distroless nonroot) to match the Tor 'kerosene' user.
 # This ensures access to shared volumes (like /vault-onion) where Tor enforces 0700.
@@ -42,9 +38,6 @@ USER 65532:65532
 EXPOSE 8080
 
 ENV SPRING_PROFILES_ACTIVE=docker
-
-HEALTHCHECK --interval=10s --timeout=4s --start-period=180s --retries=12 \
-  CMD ["java", "-cp", "/app/healthcheck", "Healthcheck", "http://127.0.0.1:8080/health/ready"]
 
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \

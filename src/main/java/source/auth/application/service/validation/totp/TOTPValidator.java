@@ -3,7 +3,7 @@ package source.auth.application.service.validation.totp;
 import source.auth.AuthExceptions;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.cripto.contracts.Cryptography;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import source.auth.application.service.validation.totp.contratcs.TOTPVerifier;
 import source.security.VaultKeyProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;

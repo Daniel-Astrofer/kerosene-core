@@ -3,10 +3,7 @@ package source.common.service;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -31,25 +28,18 @@ public class TickerService {
     private static final BigDecimal FALLBACK_USD = new BigDecimal("65000");
     private static final BigDecimal FALLBACK_BRL = new BigDecimal("325000");
 
-    @Value("${ticker.coingecko.enabled:true}")
-    private boolean coingeckoEnabled;
-
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
 
-    public TickerService(
-            StringRedisTemplate redisTemplate,
-            @Qualifier("tickerRestTemplate") RestTemplate restTemplate) {
+    public TickerService(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
-        this.restTemplate = restTemplate;
+        this.restTemplate = new RestTemplate();
     }
 
     @PostConstruct
     void initializeFallbackCache() {
-        if (!coingeckoEnabled) {
-            log.info("[Ticker] CoinGecko polling disabled for this profile. Using cached/fallback prices.");
-        }
-        log.info("[Ticker] Startup does not require Redis price cache warmup. In-memory fallback prices are available.");
+        ensurePricePresent("usd", FALLBACK_USD);
+        ensurePricePresent("brl", FALLBACK_BRL);
     }
 
     /**
@@ -57,10 +47,6 @@ public class TickerService {
      */
     @Scheduled(fixedRate = 300000)
     public void updatePrices() {
-        if (!coingeckoEnabled) {
-            return;
-        }
-
         try {
             log.info("[Ticker] Fetching BTC prices from CoinGecko...");
             Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
@@ -84,43 +70,23 @@ public class TickerService {
 
             log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
         } catch (Exception e) {
-            seedFallbackCacheIfReachable();
+            ensurePricePresent("usd", FALLBACK_USD);
+            ensurePricePresent("brl", FALLBACK_BRL);
             log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
         }
     }
 
-    private void seedFallbackCacheIfReachable() {
-        try {
-            ensurePricePresent("usd", FALLBACK_USD);
-            ensurePricePresent("brl", FALLBACK_BRL);
-        } catch (Exception e) {
-            log.warn("[Ticker] Redis fallback cache refresh unavailable. Using in-memory defaults: {}", e.getMessage());
-        }
-    }
-
     private void savePrice(String currency, BigDecimal value) {
-        ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-        if (valueOperations == null) {
-            log.warn("[Ticker] Redis ValueOperations unavailable. Skipping cache write for {}.", currency);
-            return;
-        }
-
-        valueOperations.set(
-                REDIS_PRICE_KEY_PREFIX + currency,
-                value.toPlainString(),
-                15,
-                TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(
+            REDIS_PRICE_KEY_PREFIX + currency,
+            value.toPlainString(),
+            15, TimeUnit.MINUTES
+        );
     }
 
     private void ensurePricePresent(String currency, BigDecimal fallbackValue) {
         String key = REDIS_PRICE_KEY_PREFIX + currency;
-        ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-        if (valueOperations == null) {
-            log.warn("[Ticker] Redis ValueOperations unavailable. Using fallback price for {}.", currency);
-            return;
-        }
-
-        String existing = valueOperations.get(key);
+        String existing = redisTemplate.opsForValue().get(key);
         if (existing == null || existing.isBlank()) {
             savePrice(currency, fallbackValue);
         }
@@ -137,24 +103,12 @@ public class TickerService {
     }
 
     public BigDecimal getPrice(String currency) {
-        try {
-            ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-            String val = valueOperations != null
-                    ? valueOperations.get(REDIS_PRICE_KEY_PREFIX + currency.toLowerCase())
-                    : null;
-            if (val != null) {
-                return new BigDecimal(val);
-            }
-        } catch (Exception e) {
-            log.warn("[Ticker] Redis read failed for {}: {}", currency, e.getMessage());
-        }
-
-        if ("usd".equalsIgnoreCase(currency)) {
+        String val = redisTemplate.opsForValue().get(REDIS_PRICE_KEY_PREFIX + currency.toLowerCase());
+        if (val == null) {
             log.warn("[Ticker] Price not found in Redis for {}, using fallback", currency);
-            return FALLBACK_USD;
+            return "usd".equalsIgnoreCase(currency) ? FALLBACK_USD : FALLBACK_BRL;
         }
-        log.warn("[Ticker] Price not found in Redis for {}, using fallback", currency);
-        return FALLBACK_BRL;
+        return new BigDecimal(val);
     }
 
     public BigDecimal convertToFiat(BigDecimal btcAmount, String currency) {

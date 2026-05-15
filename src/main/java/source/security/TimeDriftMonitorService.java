@@ -1,9 +1,7 @@
 package source.security;
 
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -33,9 +31,6 @@ public class TimeDriftMonitorService {
 
     private static final long MAX_DRIFT_THRESHOLD_MS = 5000; // Tolerância de 5 segundos
 
-    @Value("${security.time-drift.https-oracles.enabled:true}")
-    private boolean httpsTimeOraclesEnabled;
-
     private final RemoteAttestationService attestationService;
     private final HttpClient httpClient;
 
@@ -46,19 +41,8 @@ public class TimeDriftMonitorService {
                 .build();
     }
 
-    @PostConstruct
-    void logConfiguration() {
-        if (!httpsTimeOraclesEnabled) {
-            logger.info("[TimeDriftMonitor] HTTPS time oracles disabled for this profile.");
-        }
-    }
-
     @Scheduled(fixedRate = 300000) // Verificação a cada 5 minutos
     public void monitorTimeDrift() {
-        if (!httpsTimeOraclesEnabled) {
-            return;
-        }
-
         List<Long> offsets = new ArrayList<>();
 
         for (String server : HTTPS_TIME_ORACLES) {

@@ -2,7 +2,6 @@ package source.ledger.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,31 +15,22 @@ public class LedgerHistoryCleanupService {
     private static final Logger logger = LoggerFactory.getLogger(LedgerHistoryCleanupService.class);
 
     private final LedgerTransactionHistoryRepository repository;
-    private final long retentionHours;
 
-    public LedgerHistoryCleanupService(
-            LedgerTransactionHistoryRepository repository,
-            @Value("${ledger.history.retention.hours:24}") long retentionHours) {
+    public LedgerHistoryCleanupService(LedgerTransactionHistoryRepository repository) {
         this.repository = repository;
-        this.retentionHours = Math.max(1, retentionHours);
     }
 
     /**
-     * Executes every five minutes to delete readable operational transaction history
-     * older than the configured ephemeral retention window.
-     *
-     * This cleanup does not disable ledger integrity. Durable user-facing history
-     * belongs on the mobile device; backend audit continuity is kept through
-     * hashes, commitments, Merkle roots, and minimum settlement state.
+     * Executes every hour to delete transaction history older than 24 hours.
      */
-    @Scheduled(cron = "0 */5 * * * *") // Every five minutes
+    @Scheduled(cron = "0 0 * * * *") // Every hour
     @Transactional
     public void cleanupOldHistory() {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(retentionHours);
-        logger.info("Starting cleanup of ephemeral ledger transaction history older than {}", cutoff);
+        LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+        logger.info("Starting cleanup of ledger transaction history older than {}", twentyFourHoursAgo);
 
-        int deletedCount = repository.deleteByCreatedAtBefore(cutoff);
+        int deletedCount = repository.deleteByCreatedAtBefore(twentyFourHoursAgo);
 
-        logger.info("Successfully deleted {} expired ephemeral ledger transaction history records.", deletedCount);
+        logger.info("Successfully deleted {} old ledger transaction history records.", deletedCount);
     }
 }

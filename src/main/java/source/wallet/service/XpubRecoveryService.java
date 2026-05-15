@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import source.common.infra.logging.LogSanitizer;
 import source.common.service.AddressDerivationService;
 import source.transactions.infra.BlockchainClient;
 import source.wallet.model.WalletEntity;
@@ -61,8 +60,8 @@ public class XpubRecoveryService {
         }
 
         try {
-            log.info("[Recovery] Starting scan for wallet {} xpubRef={} with gapLimit={}",
-                    wallet.getId(), LogSanitizer.fingerprint(xpub), maxGapLimit);
+            log.info("[Recovery] Starting scan for wallet {} (xpub: {}...) with GapLimit={}",
+                     wallet.getId(), xpub.substring(0, 10), maxGapLimit);
 
             int lastUsedIndex = -1;
             int currentGap = 0;
@@ -77,8 +76,7 @@ public class XpubRecoveryService {
                 if (txs != null && txs.isArray() && txs.size() > 0) {
                     lastUsedIndex = index;
                     currentGap = 0; // Reset gap since we found activity
-                    log.debug("[Recovery] Activity found at index {} addressRef={}",
-                            index, LogSanitizer.fingerprint(address));
+                    log.debug("[Recovery] Activity found at index {} (address: {})", index, address);
                 } else {
                     currentGap++;
                 }
