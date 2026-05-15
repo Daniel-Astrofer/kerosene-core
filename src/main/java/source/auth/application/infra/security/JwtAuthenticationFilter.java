@@ -11,12 +11,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Collections;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -63,11 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 Long userId = jwtService.extractId(token);
 
-                List<SimpleGrantedAuthority> authorities = jwtService.extractRoles(token).stream()
-                        .map(this::toAuthority)
-                        .distinct()
-                        .toList();
-                auth = new UsernamePasswordAuthenticationToken(userId, token, authorities);
+                auth = new UsernamePasswordAuthenticationToken(userId, token, Collections.singletonList(() -> "USER"));
 
                 // Check if the token needs renewal
                 if (jwtServiceImpl.shouldRenewToken(token)) {
@@ -94,14 +89,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private SimpleGrantedAuthority toAuthority(String role) {
-        String normalized = role == null ? "USER" : role.trim().toUpperCase();
-        if (!normalized.startsWith("ROLE_")) {
-            normalized = "ROLE_" + normalized;
-        }
-        return new SimpleGrantedAuthority(normalized);
     }
 
 }

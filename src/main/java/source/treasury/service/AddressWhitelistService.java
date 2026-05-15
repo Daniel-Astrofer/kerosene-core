@@ -3,9 +3,7 @@ package source.treasury.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import source.common.infra.logging.LogSanitizer;
-import source.treasury.application.port.out.AuditAddressPort;
-
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -19,7 +17,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * endereço de lucro for roubada.
  */
 @Service
-public class AddressWhitelistService implements AuditAddressPort {
+public class AddressWhitelistService {
 
     private static final Logger log = LoggerFactory.getLogger(AddressWhitelistService.class);
 
@@ -37,7 +35,6 @@ public class AddressWhitelistService implements AuditAddressPort {
      * Consome um endereço da Whitelist para a próxima transação de lucro.
      * @return O endereço destinatário.
      */
-    @Override
     public String getNextAuditAddress() {
         String address = reservedAddresses.poll();
         if (address == null) {
@@ -45,14 +42,13 @@ public class AddressWhitelistService implements AuditAddressPort {
             // Panic Mode trigger?
             return "PANIC_RECOVERY_ADDRESS_PLACEHOLDER";
         }
-        log.info("[Whitelist] Address consumed for audit: addressRef={}", LogSanitizer.fingerprint(address));
+        log.info("[Whitelist] Address consumed for audit: {}", address);
         return address;
     }
 
     /**
      * Adiciona um novo lote de endereços (carregado do Vault).
      */
-    @Override
     public void replenishWhitelist(List<String> newAddresses) {
         reservedAddresses.addAll(newAddresses);
     }

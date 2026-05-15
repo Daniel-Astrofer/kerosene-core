@@ -4,8 +4,7 @@ package source.auth.model.enums;
  * Defines the account security mode chosen by the user at signup.
  *
  * <ul>
- * <li>{@link #STANDARD} — standard account; transaction authorization uses a
- * passkey challenge and no platform co-signer secret.</li>
+ * <li>{@link #STANDARD} — password + TOTP; no platform co-signer secret.</li>
  * <li>{@link #SHAMIR} — Shamir Secret Sharing; the platform holds one
  * AES-256-GCM
  * encrypted share and acts as one of the required co-signers.</li>
@@ -19,7 +18,7 @@ package source.auth.model.enums;
  */
 public enum AccountSecurityType {
 
-    /** Standard account. Transactions require passkey, not TOTP. */
+    /** Standard password + TOTP. Platform stores no secret. */
     STANDARD,
 
     /**

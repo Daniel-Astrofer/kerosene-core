@@ -5,7 +5,8 @@ import source.auth.model.enums.AccountSecurityType;
 
 /**
  * Holds the temporary onboarding state for a user while they complete the
- * multi-step authentication process (PoW -> optional TOTP -> Passkey).
+ * multi-step authentication process (PoW -> TOTP -> Passkey) and wait for
+ * the mandatory Bitcoin payment confirmations.
  */
 public class SignupState implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -14,7 +15,7 @@ public class SignupState implements Serializable {
     private String username;
 
     /**
-     * Hashed account password.
+     * Hashed passphrase (done at signup time).
      */
     private char[] passphrase;
 
@@ -38,14 +39,6 @@ public class SignupState implements Serializable {
     private String passkeyCredentialId;
     private String passkeyUserHandle;
     private String passkeyDeviceName;
-    private String passkeyRelyingPartyId;
-    private String passkeyOriginHost;
-    private String passkeyBrand;
-    private String passkeyModel;
-    private String passkeySerialNumber;
-    private String passkeyDeviceInstallId;
-    private String passkeyPlatform;
-    private String passkeyBrowser;
     private String passkeyCredentialJson;
 
     /**
@@ -64,12 +57,6 @@ public class SignupState implements Serializable {
      * Safe to store in Redis because it is already ciphertext.
      */
     private String platformCosignerSecret;
-
-    private Integer shamirTotalShares;
-
-    private Integer shamirThreshold;
-
-    private Integer multisigThreshold;
 
     public SignupState() {
     }
@@ -178,70 +165,6 @@ public class SignupState implements Serializable {
         this.passkeyDeviceName = passkeyDeviceName;
     }
 
-    public String getPasskeyRelyingPartyId() {
-        return passkeyRelyingPartyId;
-    }
-
-    public void setPasskeyRelyingPartyId(String passkeyRelyingPartyId) {
-        this.passkeyRelyingPartyId = passkeyRelyingPartyId;
-    }
-
-    public String getPasskeyOriginHost() {
-        return passkeyOriginHost;
-    }
-
-    public void setPasskeyOriginHost(String passkeyOriginHost) {
-        this.passkeyOriginHost = passkeyOriginHost;
-    }
-
-    public String getPasskeyBrand() {
-        return passkeyBrand;
-    }
-
-    public void setPasskeyBrand(String passkeyBrand) {
-        this.passkeyBrand = passkeyBrand;
-    }
-
-    public String getPasskeyModel() {
-        return passkeyModel;
-    }
-
-    public void setPasskeyModel(String passkeyModel) {
-        this.passkeyModel = passkeyModel;
-    }
-
-    public String getPasskeySerialNumber() {
-        return passkeySerialNumber;
-    }
-
-    public void setPasskeySerialNumber(String passkeySerialNumber) {
-        this.passkeySerialNumber = passkeySerialNumber;
-    }
-
-    public String getPasskeyDeviceInstallId() {
-        return passkeyDeviceInstallId;
-    }
-
-    public void setPasskeyDeviceInstallId(String passkeyDeviceInstallId) {
-        this.passkeyDeviceInstallId = passkeyDeviceInstallId;
-    }
-
-    public String getPasskeyPlatform() {
-        return passkeyPlatform;
-    }
-
-    public void setPasskeyPlatform(String passkeyPlatform) {
-        this.passkeyPlatform = passkeyPlatform;
-    }
-
-    public String getPasskeyBrowser() {
-        return passkeyBrowser;
-    }
-
-    public void setPasskeyBrowser(String passkeyBrowser) {
-        this.passkeyBrowser = passkeyBrowser;
-    }
-
     public String getPasskeyCredentialJson() {
         if (passkeyCredentialJson != null && !passkeyCredentialJson.isBlank()) {
             return passkeyCredentialJson;
@@ -252,15 +175,7 @@ public class SignupState implements Serializable {
         return "{\"credentialId\":\"" + nullToEmpty(passkeyCredentialId)
                 + "\",\"publicKeyCose\":\"" + nullToEmpty(passkeyPublicKeyCose)
                 + "\",\"userHandle\":\"" + nullToEmpty(passkeyUserHandle)
-                + "\",\"deviceName\":\"" + nullToEmpty(passkeyDeviceName)
-                + "\",\"relyingPartyId\":\"" + nullToEmpty(passkeyRelyingPartyId)
-                + "\",\"originHost\":\"" + nullToEmpty(passkeyOriginHost)
-                + "\",\"brand\":\"" + nullToEmpty(passkeyBrand)
-                + "\",\"model\":\"" + nullToEmpty(passkeyModel)
-                + "\",\"serialNumber\":\"" + nullToEmpty(passkeySerialNumber)
-                + "\",\"deviceInstallId\":\"" + nullToEmpty(passkeyDeviceInstallId)
-                + "\",\"platform\":\"" + nullToEmpty(passkeyPlatform)
-                + "\",\"browser\":\"" + nullToEmpty(passkeyBrowser) + "\"}";
+                + "\",\"deviceName\":\"" + nullToEmpty(passkeyDeviceName) + "\"}";
     }
 
     public void setPasskeyCredentialJson(String passkeyCredentialJson) {
@@ -281,30 +196,6 @@ public class SignupState implements Serializable {
 
     public void setPlatformCosignerSecret(String platformCosignerSecret) {
         this.platformCosignerSecret = platformCosignerSecret;
-    }
-
-    public Integer getShamirTotalShares() {
-        return shamirTotalShares;
-    }
-
-    public void setShamirTotalShares(Integer shamirTotalShares) {
-        this.shamirTotalShares = shamirTotalShares;
-    }
-
-    public Integer getShamirThreshold() {
-        return shamirThreshold;
-    }
-
-    public void setShamirThreshold(Integer shamirThreshold) {
-        this.shamirThreshold = shamirThreshold;
-    }
-
-    public Integer getMultisigThreshold() {
-        return multisigThreshold;
-    }
-
-    public void setMultisigThreshold(Integer multisigThreshold) {
-        this.multisigThreshold = multisigThreshold;
     }
 
     public java.util.List<String> getBackupCodes() {

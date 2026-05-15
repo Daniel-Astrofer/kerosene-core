@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import source.common.infra.RedisAvailabilityGuard;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.infra.LightningClient;
 
@@ -24,7 +23,6 @@ public class LiquidityMonitorService {
     private final BlockchainClient blockchainClient;
     private final LightningClient lightningClient;
     private final FeeCalculator feeCalculator;
-    private final RedisAvailabilityGuard redisAvailabilityGuard;
 
     // Security Thresholds
     @Value("${liquidity.min.onchain.reserve:5000000}")
@@ -50,13 +48,11 @@ public class LiquidityMonitorService {
     public LiquidityMonitorService(StringRedisTemplate redisTemplate,
                                    BlockchainClient blockchainClient,
                                    LightningClient lightningClient,
-                                   FeeCalculator feeCalculator,
-                                   RedisAvailabilityGuard redisAvailabilityGuard) {
+                                   FeeCalculator feeCalculator) {
         this.redisTemplate = redisTemplate;
         this.blockchainClient = blockchainClient;
         this.lightningClient = lightningClient;
         this.feeCalculator = feeCalculator;
-        this.redisAvailabilityGuard = redisAvailabilityGuard;
     }
 
     /**
@@ -64,30 +60,9 @@ public class LiquidityMonitorService {
      */
     @Scheduled(fixedRate = 600000)
     public void checkLiquidityHealth() {
-        if (!redisAvailabilityGuard.isAvailable()) {
-            log.debug("[LiquidityMonitor] Skipping cycle because Redis is unavailable: {}",
-                    redisAvailabilityGuard.describeLastFailure());
-            return;
-        }
-
-        long onchainBalance;
-        try {
-            onchainBalance = blockchainClient.getHotWalletBalance();
-        } catch (RuntimeException ex) {
-            log.warn("[LiquidityMonitor] Skipping cycle because the on-chain wallet is unavailable: {}",
-                    rootMessage(ex));
-            redisTemplate.opsForValue().set(STATUS_WITHDRAWALS, "DISABLED_WALLET_UNAVAILABLE");
-            return;
-        }
-
-        LightningBalances lightningBalances = readLightningBalances();
-        if (lightningBalances == null) {
-            applyOnchainCircuitBreaker(onchainBalance);
-            markLightningUnavailable();
-            return;
-        }
-        long localChannelBalance = lightningBalances.localChannelBalance();
-        long remoteChannelBalance = lightningBalances.remoteChannelBalance();
+        long onchainBalance = blockchainClient.getHotWalletBalance();
+        long localChannelBalance = lightningClient.getLocalBalance();
+        long remoteChannelBalance = lightningClient.getRemoteBalance();
 
         // Using fast confirmation tier for dynamic fee calculation
         BlockchainClient.FeeRates fees = blockchainClient.estimateSmartFee(1, 6, 24);
@@ -107,7 +82,12 @@ public class LiquidityMonitorService {
 
         // 2. On-chain Circuit Breaker
         // Disables withdrawals if the hot wallet is too low to fulfill outgoing txs
-        applyOnchainCircuitBreaker(onchainBalance);
+        if (onchainBalance < minOnchainReserve) {
+            log.error("[LiquidityMonitor] CRITICAL: Low On-chain liquidity! BTC Withdrawals disabled.");
+            redisTemplate.opsForValue().set(STATUS_WITHDRAWALS, "DISABLED_LOW_LIQUIDITY");
+        } else {
+            redisTemplate.opsForValue().set(STATUS_WITHDRAWALS, "ENABLED");
+        }
 
         // 3. Channel Health Score (Agente 4)
         checkChannelHealth();
@@ -116,43 +96,9 @@ public class LiquidityMonitorService {
         calculateAndStoreDynamicFees(currentMempoolFee);
     }
 
-    private LightningBalances readLightningBalances() {
-        try {
-            return new LightningBalances(
-                    lightningClient.getLocalBalance(),
-                    lightningClient.getRemoteBalance());
-        } catch (RuntimeException ex) {
-            log.warn("[LiquidityMonitor] Lightning node unavailable; disabling new Lightning deposits until recovery: {}",
-                    rootMessage(ex));
-            return null;
-        }
-    }
-
-    private void applyOnchainCircuitBreaker(long onchainBalance) {
-        if (onchainBalance < minOnchainReserve) {
-            log.error("[LiquidityMonitor] CRITICAL: Low On-chain liquidity! BTC Withdrawals disabled.");
-            redisTemplate.opsForValue().set(STATUS_WITHDRAWALS, "DISABLED_LOW_LIQUIDITY");
-        } else {
-            redisTemplate.opsForValue().set(STATUS_WITHDRAWALS, "ENABLED");
-        }
-    }
-
-    private void markLightningUnavailable() {
-        redisTemplate.opsForValue().set(STATUS_DEPOSITS, "DISABLED_UNHEALTHY_NODE");
-        redisTemplate.opsForValue().set(CHANNEL_HEALTH_SCORE, "CRITICAL");
-    }
-
     private void checkChannelHealth() {
-        double currentUptime;
-        long currentLatency;
-        try {
-            currentUptime = lightningClient.getNodeUptime();
-            currentLatency = lightningClient.getLspLatency();
-        } catch (RuntimeException ex) {
-            log.warn("[LiquidityMonitor] Lightning health check unavailable: {}", rootMessage(ex));
-            markLightningUnavailable();
-            return;
-        }
+        double currentUptime = lightningClient.getNodeUptime();
+        long currentLatency = lightningClient.getLspLatency();
 
         // Agente 4: Filter binary noise with Exponential Moving Average (EMA)
         String oldUptimeStr = redisTemplate.opsForValue().get(UPTIME_EMA);
@@ -183,18 +129,6 @@ public class LiquidityMonitorService {
             redisTemplate.opsForValue().set(STATUS_DEPOSITS, "ENABLED");
             redisTemplate.opsForValue().set(CHANNEL_HEALTH_SCORE, "HEALTHY");
         }
-    }
-
-    private String rootMessage(Throwable throwable) {
-        Throwable cursor = throwable;
-        while (cursor.getCause() != null) {
-            cursor = cursor.getCause();
-        }
-        String message = cursor.getMessage();
-        return message != null && !message.isBlank() ? message : cursor.getClass().getSimpleName();
-    }
-
-    private record LightningBalances(long localChannelBalance, long remoteChannelBalance) {
     }
 
     /**

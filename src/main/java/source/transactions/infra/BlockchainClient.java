@@ -5,10 +5,6 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 public interface BlockchainClient {
     record FeeRates(long fastSatPerVByte, long halfHourSatPerVByte, long hourSatPerVByte) {
@@ -17,9 +13,6 @@ public interface BlockchainClient {
             halfHourSatPerVByte = Math.max(1L, halfHourSatPerVByte);
             hourSatPerVByte = Math.max(1L, hourSatPerVByte);
         }
-    }
-
-    record AddressUtxo(String txid, int vout, long valueSats, String scriptPubKey) {
     }
 
     JsonNode executeRpc(String method, Object... params);
@@ -63,61 +56,6 @@ public interface BlockchainClient {
         }
     }
 
-    default long getConfirmedBalanceForAddress(String address) {
-        if (address == null || address.isBlank()) {
-            return 0L;
-        }
-
-        try {
-            return scanDescriptorBalance("addr(" + address + ")", 1);
-        } catch (RuntimeException e) {
-            return 0L;
-        }
-    }
-
-    default long getConfirmedBalanceForXpub(String xpub, int range, boolean includeChangeBranch) {
-        if (xpub == null || xpub.isBlank()) {
-            return 0L;
-        }
-
-        int safeRange = Math.max(1, range);
-        long total = scanDescriptorBalance("wpkh(" + xpub + "/0/*)", safeRange);
-        if (includeChangeBranch) {
-            total += scanDescriptorBalance("wpkh(" + xpub + "/1/*)", safeRange);
-        }
-        return total;
-    }
-
-    default List<AddressUtxo> getUnspentOutputs(String address) {
-        if (address == null || address.isBlank()) {
-            return List.of();
-        }
-
-        try {
-            JsonNode utxos = unwrapResult(executeRpc("listunspent", 0, 9999999, List.of(address)));
-            if (utxos == null || !utxos.isArray()) {
-                return List.of();
-            }
-
-            List<AddressUtxo> results = new ArrayList<>();
-            for (JsonNode utxo : utxos) {
-                String txid = textField(utxo, "txid");
-                JsonNode vout = utxo.path("vout");
-                long valueSats = parseUtxoValueSats(utxo);
-                if (txid != null && vout.isIntegralNumber() && valueSats > 0L) {
-                    results.add(new AddressUtxo(
-                            txid,
-                            vout.asInt(),
-                            valueSats,
-                            textField(utxo, "scriptPubKey")));
-                }
-            }
-            return results;
-        } catch (RuntimeException e) {
-            return List.of();
-        }
-    }
-
     private long estimateSmartFeeForTarget(int confirmationTarget, long fallbackSatPerVByte) {
         if (confirmationTarget <= 0) {
             return fallbackSatPerVByte;
@@ -142,24 +80,6 @@ public interface BlockchainClient {
         } catch (RuntimeException e) {
             return fallbackSatPerVByte;
         }
-    }
-
-    private long scanDescriptorBalance(String descriptor, int range) {
-        Map<String, Object> scanObject = new LinkedHashMap<>();
-        scanObject.put("desc", descriptor);
-        scanObject.put("range", range);
-
-        JsonNode result = unwrapResult(executeRpc("scantxoutset", "start", List.of(scanObject)));
-        if (result == null || result.isNull() || result.isMissingNode()) {
-            return 0L;
-        }
-
-        JsonNode totalAmount = result.path("total_amount");
-        if (!totalAmount.isNumber()) {
-            return 0L;
-        }
-
-        return btcToSats(totalAmount.decimalValue());
     }
 
     private static JsonNode unwrapResult(JsonNode node) {
@@ -196,34 +116,6 @@ public interface BlockchainClient {
     private static BigDecimal decimalField(JsonNode node, String fieldName) {
         JsonNode value = node.path(fieldName);
         return value.isNumber() ? value.decimalValue() : BigDecimal.ZERO;
-    }
-
-    private static long parseUtxoValueSats(JsonNode node) {
-        JsonNode value = node.path("value");
-        if (value.isIntegralNumber()) {
-            return value.asLong();
-        }
-
-        JsonNode satoshis = node.path("satoshis");
-        if (satoshis.isIntegralNumber()) {
-            return satoshis.asLong();
-        }
-
-        JsonNode amount = node.path("amount");
-        if (amount.isNumber()) {
-            return btcToSats(amount.decimalValue());
-        }
-
-        return 0L;
-    }
-
-    private static String textField(JsonNode node, String fieldName) {
-        JsonNode value = node.path(fieldName);
-        if (value == null || value.isMissingNode() || value.isNull()) {
-            return null;
-        }
-        String text = value.asText();
-        return text != null && !text.isBlank() ? text : null;
     }
 
     private static long btcToSats(BigDecimal btc) {

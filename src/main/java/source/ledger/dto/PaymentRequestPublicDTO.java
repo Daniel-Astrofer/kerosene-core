@@ -12,30 +12,17 @@ import java.time.LocalDateTime;
  */
 public class PaymentRequestPublicDTO {
 
-    private String id;
     private BigDecimal amount;
     private String status;
     private LocalDateTime expiresAt;
-    private String destinationHash;
-    private boolean locked = true;
 
     public PaymentRequestPublicDTO() {
     }
 
     public PaymentRequestPublicDTO(InternalPaymentRequestDTO internal) {
-        this.id = internal.getId();
         this.amount = internal.getAmount();
         this.status = internal.getStatus();
         this.expiresAt = internal.getExpiresAt();
-        this.destinationHash = internal.getDestinationHash();
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
     }
 
     public BigDecimal getAmount() {
@@ -60,21 +47,5 @@ public class PaymentRequestPublicDTO {
 
     public void setExpiresAt(LocalDateTime expiresAt) {
         this.expiresAt = expiresAt;
-    }
-
-    public String getDestinationHash() {
-        return destinationHash;
-    }
-
-    public void setDestinationHash(String destinationHash) {
-        this.destinationHash = destinationHash;
-    }
-
-    public boolean isLocked() {
-        return locked;
-    }
-
-    public void setLocked(boolean locked) {
-        this.locked = locked;
     }
 }

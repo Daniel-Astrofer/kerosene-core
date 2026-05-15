@@ -1,7 +1,5 @@
 package source.auth;
 
-import org.springframework.http.HttpStatus;
-
 /**
  * Centralized exception classes for authentication and authorization
  * operations.
@@ -14,40 +12,6 @@ public class AuthExceptions {
      */
     public static class AuthValidationException extends RuntimeException {
         public AuthValidationException(String message) {
-            super(message);
-        }
-    }
-
-    public static class StructuredAuthException extends AuthValidationException {
-        private final HttpStatus status;
-        private final String errorCode;
-        private final Object data;
-
-        public StructuredAuthException(String message, HttpStatus status, String errorCode, Object data) {
-            super(message);
-            this.status = status;
-            this.errorCode = errorCode;
-            this.data = data;
-        }
-
-        public HttpStatus getStatus() {
-            return status;
-        }
-
-        public String getErrorCode() {
-            return errorCode;
-        }
-
-        public Object getData() {
-            return data;
-        }
-    }
-
-    /**
-     * Thrown when an account can use the platform but cannot receive funds yet.
-     */
-    public static class InboundReceivingBlockedException extends AuthValidationException {
-        public InboundReceivingBlockedException(String message) {
             super(message);
         }
     }
@@ -156,34 +120,6 @@ public class AuthExceptions {
      */
     public static class TotpTimeExceededException extends AuthValidationException {
         public TotpTimeExceededException(String message) {
-            super(message);
-        }
-    }
-
-    /**
-     * Thrown when an emergency recovery request is rejected without disclosing
-     * whether the username or recovery codes were valid.
-     */
-    public static class RecoveryRejectedException extends AuthValidationException {
-        public RecoveryRejectedException(String message) {
-            super(message);
-        }
-    }
-
-    /**
-     * Thrown when the emergency recovery flow is being rate limited or blocked.
-     */
-    public static class RecoveryRateLimitedException extends AuthValidationException {
-        public RecoveryRateLimitedException(String message) {
-            super(message);
-        }
-    }
-
-    /**
-     * Thrown when the emergency recovery session expired or was already consumed.
-     */
-    public static class RecoverySessionExpiredException extends AuthValidationException {
-        public RecoverySessionExpiredException(String message) {
             super(message);
         }
     }

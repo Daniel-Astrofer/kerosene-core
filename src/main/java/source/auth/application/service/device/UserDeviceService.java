@@ -1,6 +1,6 @@
 package source.auth.application.service.device;
 
-import source.auth.application.infra.persistence.jpa.UserDeviceRepository;
+import source.auth.application.infra.persistance.jpa.UserDeviceRepository;
 import source.auth.model.entity.UserDevice;
 import org.springframework.stereotype.Service;
 

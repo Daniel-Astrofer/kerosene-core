@@ -6,9 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.common.dto.ApiResponse;
-import source.common.service.TickerService;
 
-import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,11 +19,9 @@ import java.util.Map;
 public class EconomyController {
 
     private final StringRedisTemplate redisTemplate;
-    private final TickerService tickerService;
 
-    public EconomyController(StringRedisTemplate redisTemplate, TickerService tickerService) {
+    public EconomyController(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
-        this.tickerService = tickerService;
     }
 
     /**
@@ -42,26 +38,6 @@ public class EconomyController {
 
         return ResponseEntity.ok(ApiResponse.success(
             "Current platform liquidity and economy status retrieved.",
-            data));
-    }
-
-    @GetMapping("/btc-price")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getBtcPrice() {
-        BigDecimal btcUsd = tickerService.getPrice("usd");
-        BigDecimal btcBrl = tickerService.getPrice("brl");
-        BigDecimal usdBrl = BigDecimal.ZERO;
-
-        if (btcUsd.compareTo(BigDecimal.ZERO) > 0) {
-            usdBrl = btcBrl.divide(btcUsd, 8, java.math.RoundingMode.HALF_UP);
-        }
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("btcUsd", btcUsd);
-        data.put("btcBrl", btcBrl);
-        data.put("usdBrl", usdBrl);
-
-        return ResponseEntity.ok(ApiResponse.success(
-            "Current BTC market prices retrieved.",
             data));
     }
 }

@@ -8,9 +8,6 @@ public class TransactionResponseDTO {
     private String status;
     private Long feeSatoshis;
     private BigDecimal amountReceived;
-    private String sender;
-    private String receiver;
-    private String context;
 
     public TransactionResponseDTO() {
     }
@@ -27,17 +24,6 @@ public class TransactionResponseDTO {
         this.status = status;
         this.feeSatoshis = feeSatoshis;
         this.amountReceived = amountReceived;
-    }
-
-    public TransactionResponseDTO(String txid, String status, Long feeSatoshis, BigDecimal amountReceived,
-            String sender, String receiver, String context) {
-        this.txid = txid;
-        this.status = status;
-        this.feeSatoshis = feeSatoshis;
-        this.amountReceived = amountReceived;
-        this.sender = sender;
-        this.receiver = receiver;
-        this.context = context;
     }
 
     public String getTxid() {
@@ -70,29 +56,5 @@ public class TransactionResponseDTO {
 
     public void setAmountReceived(BigDecimal amountReceived) {
         this.amountReceived = amountReceived;
-    }
-
-    public String getSender() {
-        return sender;
-    }
-
-    public void setSender(String sender) {
-        this.sender = sender;
-    }
-
-    public String getReceiver() {
-        return receiver;
-    }
-
-    public void setReceiver(String receiver) {
-        this.receiver = receiver;
-    }
-
-    public String getContext() {
-        return context;
-    }
-
-    public void setContext(String context) {
-        this.context = context;
     }
 }

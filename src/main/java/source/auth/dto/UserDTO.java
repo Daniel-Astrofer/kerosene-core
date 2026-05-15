@@ -2,8 +2,8 @@ package source.auth.dto;
 
 import source.auth.dto.contracts.UserDTOContract;
 import source.auth.model.enums.AccountSecurityType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -12,12 +12,10 @@ public class UserDTO implements UserDTOContract {
     private String username;
 
     /**
-     * Password in char[] to limit heap lifetime.
+     * Passphrase in char[] to limit heap lifetime.
      * WRITE_ONLY ensures it's read from request but never sent back.
      */
-    @JsonAlias({ "passphrase" })
-    @JsonProperty("password")
-    private char[] password;
+    private char[] passphrase;
 
     /**
      * TOTP seed — stored in Redis during signup, never sent to client.
@@ -32,19 +30,12 @@ public class UserDTO implements UserDTOContract {
     private String challenge;
     private String nonce;
     private String preAuthToken;
-    private String sessionId;
 
     /**
      * Defaults to STANDARD (password + TOTP).
      * The platform co-signer secret is never stored here.
      */
     private AccountSecurityType accountSecurity = AccountSecurityType.STANDARD;
-
-    private Integer shamirTotalShares;
-
-    private Integer shamirThreshold;
-
-    private Integer multisigThreshold;
 
     /**
      * Backup codes — generated at signup, stored in Redis.
@@ -90,12 +81,7 @@ public class UserDTO implements UserDTOContract {
 
     @Override
     public char[] getPassphrase() {
-        return password;
-    }
-
-    @Override
-    public char[] getPassword() {
-        return password;
+        return passphrase;
     }
 
     @Override
@@ -115,12 +101,7 @@ public class UserDTO implements UserDTOContract {
 
     @Override
     public void setPassphrase(char[] passphrase) {
-        this.password = passphrase;
-    }
-
-    @Override
-    public void setPassword(char[] password) {
-        this.password = password;
+        this.passphrase = passphrase;
     }
 
     @Override
@@ -133,46 +114,12 @@ public class UserDTO implements UserDTOContract {
         this.totpCode = totpCode;
     }
 
-    @Override
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    @Override
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
-    }
-
     public AccountSecurityType getAccountSecurity() {
         return accountSecurity;
     }
 
     public void setAccountSecurity(AccountSecurityType accountSecurity) {
         this.accountSecurity = accountSecurity;
-    }
-
-    public Integer getShamirTotalShares() {
-        return shamirTotalShares;
-    }
-
-    public void setShamirTotalShares(Integer shamirTotalShares) {
-        this.shamirTotalShares = shamirTotalShares;
-    }
-
-    public Integer getShamirThreshold() {
-        return shamirThreshold;
-    }
-
-    public void setShamirThreshold(Integer shamirThreshold) {
-        this.shamirThreshold = shamirThreshold;
-    }
-
-    public Integer getMultisigThreshold() {
-        return multisigThreshold;
-    }
-
-    public void setMultisigThreshold(Integer multisigThreshold) {
-        this.multisigThreshold = multisigThreshold;
     }
 
     @Override

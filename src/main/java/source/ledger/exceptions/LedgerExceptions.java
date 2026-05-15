@@ -20,36 +20,6 @@ public class LedgerExceptions {
         }
     }
 
-    public static class ReceiverNotReadyException extends LedgerException {
-        public enum Reason {
-            NO_RECEIVING_WALLET,
-            INBOUND_BLOCKED
-        }
-
-        private final Reason reason;
-
-        public ReceiverNotReadyException(String message, Reason reason) {
-            super(message);
-            this.reason = reason;
-        }
-
-        public Reason getReason() {
-            return reason;
-        }
-
-        public static ReceiverNotReadyException noReceivingWallet() {
-            return new ReceiverNotReadyException(
-                    "The destination user exists but does not yet have a wallet ready to receive funds.",
-                    Reason.NO_RECEIVING_WALLET);
-        }
-
-        public static ReceiverNotReadyException inboundBlocked() {
-            return new ReceiverNotReadyException(
-                    "The destination user exists but is not yet ready to receive funds.",
-                    Reason.INBOUND_BLOCKED);
-        }
-    }
-
     public static class LedgerAlreadyExistsException extends LedgerException {
         public LedgerAlreadyExistsException(String message) {
             super(message);
@@ -116,12 +86,6 @@ public class LedgerExceptions {
 
     public static class LedgerSyncException extends LedgerException {
         public LedgerSyncException(String message) {
-            super(message);
-        }
-    }
-
-    public static class LedgerIntegrityViolationException extends LedgerException {
-        public LedgerIntegrityViolationException(String message) {
             super(message);
         }
     }

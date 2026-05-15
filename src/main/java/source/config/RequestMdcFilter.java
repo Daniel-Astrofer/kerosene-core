@@ -5,7 +5,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,7 +13,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * Populates MDC (Mapped Diagnostic Context) for every incoming HTTP request.
@@ -30,16 +28,14 @@ import java.util.regex.Pattern;
  * across thread-pool reuse.
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(1)
 public class RequestMdcFilter extends OncePerRequestFilter {
 
     private static final String MDC_REQUEST_ID = "requestId";
-    private static final String MDC_CORRELATION_ID = "correlationId";
     private static final String MDC_METHOD = "method";
     private static final String MDC_PATH = "path";
     private static final String MDC_USER_ID = "userId";
     private static final String MDC_SERVICE = "service";
-    private static final Pattern SAFE_ID_PATTERN = Pattern.compile("[A-Za-z0-9_.:-]{8,64}");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -49,12 +45,7 @@ public class RequestMdcFilter extends OncePerRequestFilter {
 
         try {
             // --- Correlation ID ---
-            String requestId = resolveInboundId(request.getHeader("X-Request-Id"));
-            String correlationId = resolveInboundId(request.getHeader("X-Correlation-Id"));
-            MDC.put(MDC_REQUEST_ID, requestId);
-            MDC.put(MDC_CORRELATION_ID, correlationId != null ? correlationId : requestId);
-            response.setHeader("X-Request-Id", requestId);
-            response.setHeader("X-Correlation-Id", correlationId != null ? correlationId : requestId);
+            MDC.put(MDC_REQUEST_ID, UUID.randomUUID().toString().replace("-", "").substring(0, 12));
 
             // --- Request metadata (non-sensitive) ---
             MDC.put(MDC_METHOD, request.getMethod());
@@ -81,22 +72,11 @@ public class RequestMdcFilter extends OncePerRequestFilter {
         } finally {
             // Always clean up — critical for thread-pool safety
             MDC.remove(MDC_REQUEST_ID);
-            MDC.remove(MDC_CORRELATION_ID);
             MDC.remove(MDC_METHOD);
             MDC.remove(MDC_PATH);
             MDC.remove(MDC_USER_ID);
             MDC.remove(MDC_SERVICE);
         }
-    }
-
-    private String resolveInboundId(String candidate) {
-        if (candidate != null) {
-            String trimmed = candidate.trim();
-            if (SAFE_ID_PATTERN.matcher(trimmed).matches()) {
-                return trimmed;
-            }
-        }
-        return UUID.randomUUID().toString().replace("-", "");
     }
 
     /**
