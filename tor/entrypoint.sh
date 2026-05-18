@@ -78,4 +78,6 @@ if grep -q 'SocksPort unix:' /etc/tor/torrc; then
   echo "==> UDS socket ready."
 fi
 
+touch /tmp/tor-ready
+
 wait $TOR_PID

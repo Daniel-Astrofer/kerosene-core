@@ -45,6 +45,7 @@ dependencies {
     implementation("com.bucket4j:bucket4j-core:8.7.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("com.yubico:webauthn-server-core:2.9.0")
 
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.micrometer:micrometer-observation")

@@ -16,10 +16,11 @@ import java.util.List;
 
 /**
  * Service for verifying user credentials during signup.
- * Validates username and passphrase for format, length, and BIP39 compliance.
+ * Validates username and passphrase for basic credential requirements.
  *
- * Supports English (default bitcoinj wordlist) and Portuguese (BIP39 PT-BR).
- * A phrase is accepted if it is valid in EITHER language.
+ * BIP39 validation remains available for wallet seed flows via
+ * {@link #checkPassphraseBip39(char[])}, but user signup accepts a normal
+ * login password/passphrase.
  */
 @Service
 public class SignupValidator implements SignupVerifier {
@@ -135,7 +136,6 @@ public class SignupValidator implements SignupVerifier {
         checkUsernameFormat(username);
         checkUsernameLength(username);
         checkPassphraseLength(passphrase);
-        checkPassphraseBip39(passphrase);
         checkUsernameExists(username);
         return true;
     }

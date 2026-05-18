@@ -165,6 +165,22 @@ public class SignupState implements Serializable {
         this.passkeyDeviceName = passkeyDeviceName;
     }
 
+    public String getHardwarePublicKey() {
+        return passkeyPublicKey;
+    }
+
+    public void setHardwarePublicKey(String hardwarePublicKey) {
+        this.passkeyPublicKey = hardwarePublicKey;
+    }
+
+    public String getHardwareDeviceName() {
+        return passkeyDeviceName;
+    }
+
+    public void setHardwareDeviceName(String hardwareDeviceName) {
+        this.passkeyDeviceName = hardwareDeviceName;
+    }
+
     public String getPasskeyCredentialJson() {
         if (passkeyCredentialJson != null && !passkeyCredentialJson.isBlank()) {
             return passkeyCredentialJson;
