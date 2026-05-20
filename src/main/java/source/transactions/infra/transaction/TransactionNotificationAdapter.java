@@ -1,6 +1,8 @@
 package source.transactions.infra.transaction;
 
 import org.springframework.stereotype.Component;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
@@ -9,6 +11,7 @@ import source.wallet.model.WalletEntity;
 import source.wallet.repository.WalletRepository;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
@@ -30,21 +33,21 @@ public class TransactionNotificationAdapter implements TransactionNotificationPo
             return;
         }
 
-        String body = "A transação foi enviada para processamento na rede Blockchain.";
-        if (amount != null) {
-            body = String.format("O envio de %s BTC foi transmitido com sucesso.", amount.toPlainString());
-        }
+        NotificationMessageKey messageKey = amount == null
+                ? NotificationMessageKey.TRANSACTION_BROADCAST_NO_AMOUNT
+                : NotificationMessageKey.TRANSACTION_BROADCAST_WITH_AMOUNT;
 
         notificationService.notifyUser(
                 userId,
-                NotificationKind.PAYMENT_SENT,
-                NotificationSeverity.INFO,
-                "Transação Transmitida",
-                body,
-                "/history",
-                "transaction",
-                null,
-                amount == null ? Map.of() : Map.of("amountBtc", amount.toPlainString()));
+                NotificationMessages.payload(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.INFO,
+                        messageKey,
+                        "/history",
+                        "transaction",
+                        null,
+                        amount == null ? Map.of() : Map.of("amountBtc", amount.toPlainString()),
+                        amount != null ? amount.toPlainString() : null));
     }
 
     @Override
@@ -58,29 +61,35 @@ public class TransactionNotificationAdapter implements TransactionNotificationPo
             return;
         }
 
-        String body = "Uma nova transferência foi identificada em sua carteira.";
-        if (amount != null) {
-            body = String.format("Aporte de %s BTC identificado na carteira '%s'.",
-                    amount.toPlainString(),
-                    wallet.getName());
+        boolean hasAmount = amount != null;
+        boolean hasMessage = message != null && !message.isBlank();
+        NotificationMessageKey messageKey = NotificationMessageKey.WALLET_ENTRY_DETECTED;
+        if (hasAmount && hasMessage) {
+            messageKey = NotificationMessageKey.WALLET_ENTRY_AMOUNT_MESSAGE_DETECTED;
+        } else if (hasAmount) {
+            messageKey = NotificationMessageKey.WALLET_ENTRY_AMOUNT_DETECTED;
         }
-        if (message != null && !message.isBlank()) {
-            body += " Mensagem: " + message;
+
+        Map<String, String> metadata = new LinkedHashMap<>();
+        metadata.put("walletName", wallet.getName());
+        if (hasAmount) {
+            metadata.put("amountBtc", amount.toPlainString());
+        }
+        if (hasMessage) {
+            metadata.put("message", message.trim());
         }
 
         notificationService.notifyUser(
                 wallet.getUser().getId(),
-                NotificationKind.DEPOSIT_DETECTED,
-                NotificationSeverity.INFO,
-                "Recurso Recebido",
-                body,
-                "/deposits",
-                "wallet",
-                wallet.getId() != null ? wallet.getId().toString() : null,
-                amount == null
-                        ? Map.of("walletName", wallet.getName())
-                        : Map.of(
-                                "walletName", wallet.getName(),
-                                "amountBtc", amount.toPlainString()));
+                NotificationMessages.payload(
+                        NotificationKind.DEPOSIT_DETECTED,
+                        NotificationSeverity.INFO,
+                        messageKey,
+                        "/deposits",
+                        "wallet",
+                        wallet.getId() != null ? wallet.getId().toString() : null,
+                        metadata,
+                        hasAmount ? amount.toPlainString() : null,
+                        hasMessage ? message.trim() : wallet.getName()));
     }
 }

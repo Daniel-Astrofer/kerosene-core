@@ -12,6 +12,8 @@ import source.mining.entity.MiningAllocationEntity;
 import source.mining.entity.MiningRigOfferEntity;
 import source.mining.exception.MiningExceptions;
 import source.mining.repository.MiningAllocationRepository;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
@@ -121,8 +123,7 @@ public class MiningAllocationUseCase {
                 userId,
                 NotificationKind.MINING_STARTED,
                 NotificationSeverity.SUCCESS,
-                "Locacao de hashpower iniciada",
-                "Locacao do rig " + rig.getDisplayName() + " iniciada com sucesso.",
+                NotificationMessageKey.MINING_STARTED,
                 "/mining",
                 "mining_allocation",
                 allocation.getId() != null ? allocation.getId().toString() : null,
@@ -130,7 +131,8 @@ public class MiningAllocationUseCase {
                         "walletName", wallet.getName(),
                         "rigName", rig.getDisplayName(),
                         "durationHours", String.valueOf(request.durationHours()),
-                        "amountBtc", rentalCost.toPlainString()));
+                        "amountBtc", rentalCost.toPlainString()),
+                rig.getDisplayName());
 
         return toAllocationDTO(allocation);
     }
@@ -251,23 +253,24 @@ public class MiningAllocationUseCase {
             Long userId,
             NotificationKind kind,
             NotificationSeverity severity,
-            String title,
-            String body,
+            NotificationMessageKey messageKey,
             String deeplink,
             String entityType,
             String entityId,
-            Map<String, String> metadata) {
+            Map<String, String> metadata,
+            Object... args) {
         try {
             notificationService.notifyUser(
                     userId,
-                    kind,
-                    severity,
-                    title,
-                    body,
-                    deeplink,
-                    entityType,
-                    entityId,
-                    metadata);
+                    NotificationMessages.payload(
+                            kind,
+                            severity,
+                            messageKey,
+                            deeplink,
+                            entityType,
+                            entityId,
+                            metadata,
+                            args));
         } catch (Exception ex) {
             log.warn("Failed to emit mining notification: {}", ex.getMessage());
         }

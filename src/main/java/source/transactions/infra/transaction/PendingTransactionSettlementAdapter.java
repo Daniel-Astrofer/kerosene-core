@@ -8,6 +8,8 @@ import source.common.idempotency.IdempotencyKeyBuilder;
 import source.ledger.entity.LedgerTransactionHistory;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
 import source.ledger.service.LedgerService;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
@@ -86,20 +88,18 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
             try {
                 notificationService.notifyUser(
                         senderWallet.getUser().getId(),
-                        NotificationKind.PAYMENT_SENT,
-                        NotificationSeverity.SUCCESS,
-                        "Transferência Confirmada",
-                        String.format(
-                                "A transferência de %s BTC da carteira '%s' foi confirmada na rede Blockchain.",
-                                transaction.getAmount().toPlainString(),
-                                senderWallet.getName()),
-                        "/history",
-                        "transaction",
-                        transaction.getTxid(),
-                        Map.of(
-                                "walletName", senderWallet.getName(),
-                                "amountBtc", transaction.getAmount().toPlainString(),
-                                "confirmations", String.valueOf(confirmations)));
+                        NotificationMessages.payload(
+                                NotificationKind.PAYMENT_SENT,
+                                NotificationSeverity.SUCCESS,
+                                NotificationMessageKey.NETWORK_TRANSFER_CONFIRMED,
+                                "/history",
+                                "transaction",
+                                transaction.getTxid(),
+                                Map.of(
+                                        "walletName", senderWallet.getName(),
+                                        "amountBtc", transaction.getAmount().toPlainString(),
+                                        "confirmations", String.valueOf(confirmations)),
+                                transaction.getAmount().toPlainString()));
 
                 historyRepository.findByBlockchainTxid(transaction.getTxid()).ifPresent(history -> {
                     history.setStatus("CONCLUDED");
@@ -140,22 +140,20 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
             try {
                 notificationService.notifyUser(
                         receiverWallet.getUser().getId(),
-                        NotificationKind.DEPOSIT_CONFIRMED,
-                        NotificationSeverity.SUCCESS,
-                        "Depósito Confirmado",
-                        String.format(
-                                "O aporte bruto de %s BTC na carteira '%s' foi confirmado. Liquido creditado: %s BTC.",
+                        NotificationMessages.payload(
+                                NotificationKind.DEPOSIT_CONFIRMED,
+                                NotificationSeverity.SUCCESS,
+                                NotificationMessageKey.NETWORK_DEPOSIT_CONFIRMED,
+                                "/deposits",
+                                "transaction",
+                                transaction.getTxid(),
+                                Map.of(
+                                        "walletName", receiverWallet.getName(),
+                                        "grossAmountBtc", transaction.getAmount().toPlainString(),
+                                        "netAmountBtc", netCredit.toPlainString(),
+                                        "confirmations", String.valueOf(confirmations)),
                                 transaction.getAmount().toPlainString(),
-                                receiverWallet.getName(),
-                                netCredit.toPlainString()),
-                        "/deposits",
-                        "transaction",
-                        transaction.getTxid(),
-                        Map.of(
-                                "walletName", receiverWallet.getName(),
-                                "grossAmountBtc", transaction.getAmount().toPlainString(),
-                                "netAmountBtc", netCredit.toPlainString(),
-                                "confirmations", String.valueOf(confirmations)));
+                                netCredit.toPlainString()));
 
                 upsertDepositHistory(transaction, confirmations, depositFee, netCredit, receiverWallet);
             } catch (Exception ex) {

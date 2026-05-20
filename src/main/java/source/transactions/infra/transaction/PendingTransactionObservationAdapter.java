@@ -2,6 +2,8 @@ package source.transactions.infra.transaction;
 
 import org.springframework.stereotype.Component;
 import source.ledger.repository.LedgerTransactionHistoryRepository;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
@@ -25,20 +27,17 @@ public class PendingTransactionObservationAdapter implements PendingTransactionO
 
     @Override
     public void notifyPendingDepositDetected(PendingTransaction transaction) {
-        String title = "Depósito Identificado";
-        String body = String.format(
-                "Um depósito de %s BTC está pendente na rede. Aguardando confirmações de segurança.",
-                transaction.getAmount().toPlainString());
         notificationService.notifyUser(
                 transaction.getUserId(),
-                NotificationKind.DEPOSIT_DETECTED,
-                NotificationSeverity.INFO,
-                title,
-                body,
-                "/deposits",
-                "transaction",
-                transaction.getTxid(),
-                Map.of("amountBtc", transaction.getAmount().toPlainString()));
+                NotificationMessages.payload(
+                        NotificationKind.DEPOSIT_DETECTED,
+                        NotificationSeverity.INFO,
+                        NotificationMessageKey.PENDING_DEPOSIT_DETECTED,
+                        "/deposits",
+                        "transaction",
+                        transaction.getTxid(),
+                        Map.of("amountBtc", transaction.getAmount().toPlainString()),
+                        transaction.getAmount().toPlainString()));
     }
 
     @Override

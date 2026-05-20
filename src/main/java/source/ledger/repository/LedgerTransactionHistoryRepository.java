@@ -36,6 +36,8 @@ public interface LedgerTransactionHistoryRepository extends JpaRepository<Ledger
                    l.transactionType AS transactionType,
                    l.amount AS amount,
                    l.status AS status,
+                   l.senderUserId AS senderUserId,
+                   l.receiverUserId AS receiverUserId,
                    l.networkFee AS networkFee,
                    l.blockchainTxid AS blockchainTxid,
                    l.createdAt AS createdAt,

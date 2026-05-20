@@ -6,9 +6,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.common.idempotency.IdempotencyKeyBuilder;
 import source.common.validation.FinancialAmountValidator;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
 import source.transactions.dto.ExternalTransferResponseDTO;
 import source.transactions.dto.OnchainSendRequestDTO;
 import source.transactions.exception.ExternalPaymentsExceptions;
@@ -235,11 +236,10 @@ public class SendOnchainPaymentUseCase {
                 LocalDateTime.now()));
         notificationPort.notifyUser(
                 userId,
-                UserNotificationPayload.create(
+                NotificationMessages.payload(
                         NotificationKind.PAYMENT_SENT,
                         NotificationSeverity.SUCCESS,
-                        "Pagamento on-chain enviado",
-                        "Pagamento externo enviado para " + request.toAddress() + ".",
+                        NotificationMessageKey.EXTERNAL_ONCHAIN_PAYMENT_SENT,
                         "/history",
                         "external_transfer",
                         transfer.getId() != null ? transfer.getId().toString() : null,

@@ -5,9 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import source.ledger.dto.InternalPaymentRequestDTO;
 import source.ledger.event.PaymentRequestEventPublisher;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
 import source.notification.service.NotificationService;
 
 import java.util.Map;
@@ -31,20 +32,18 @@ public class PaymentRequestNotificationService {
         try {
             notificationService.notifyUser(
                     request.getRequesterUserId(),
-                    UserNotificationPayload.create(
+                    NotificationMessages.payload(
                             NotificationKind.PAYMENT_REQUEST_CREATED,
                             NotificationSeverity.INFO,
-                            "Solicitação de Pagamento Gerada",
-                            String.format(
-                                    "Um novo link de pagamento no valor de %s BTC foi criado para a carteira '%s'.",
-                                    request.getAmount().toPlainString(),
-                                    request.getReceiverWalletName()),
+                            NotificationMessageKey.PAYMENT_REQUEST_CREATED,
                             "/history",
                             "payment_request",
                             request.getId() != null ? request.getId().toString() : null,
                             Map.of(
                                     "walletName", request.getReceiverWalletName(),
-                                    "amountBtc", request.getAmount().toPlainString())));
+                                    "amountBtc", request.getAmount().toPlainString()),
+                            request.getAmount().toPlainString(),
+                            request.getReceiverWalletName()));
         } catch (Exception exception) {
             log.warn("Payment request creation notification failed (non-blocking): {}", exception.getMessage());
         }
@@ -54,17 +53,15 @@ public class PaymentRequestNotificationService {
         try {
             notificationService.notifyUser(
                     request.getRequesterUserId(),
-                    UserNotificationPayload.create(
+                    NotificationMessages.payload(
                             NotificationKind.PAYMENT_REQUEST_PAID,
                             NotificationSeverity.SUCCESS,
-                            "Solicitação de Pagamento Liquidada",
-                            String.format(
-                                    "Seu pedido de pagamento no valor de %s BTC foi processado com sucesso.",
-                                    request.getAmount().toPlainString()),
+                            NotificationMessageKey.PAYMENT_REQUEST_PAID,
                             "/history",
                             "payment_request",
                             request.getId() != null ? request.getId().toString() : null,
-                            Map.of("amountBtc", request.getAmount().toPlainString())));
+                            Map.of("amountBtc", request.getAmount().toPlainString()),
+                            request.getAmount().toPlainString()));
         } catch (Exception exception) {
             log.warn("payRequest notification failed (non-blocking): {}", exception.getMessage());
         }

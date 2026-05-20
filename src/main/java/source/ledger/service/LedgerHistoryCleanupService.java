@@ -37,10 +37,14 @@ public class LedgerHistoryCleanupService {
     @Transactional
     public void cleanupOldHistory() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(retentionHours);
-        logger.info("Starting cleanup of ephemeral ledger transaction history older than {}", cutoff);
+        logger.debug("Cleaning ephemeral ledger transaction history older than {}", cutoff);
 
         int deletedCount = repository.deleteByCreatedAtBefore(cutoff);
 
-        logger.info("Successfully deleted {} expired ephemeral ledger transaction history records.", deletedCount);
+        if (deletedCount > 0) {
+            logger.info("Deleted {} expired ephemeral ledger transaction history records.", deletedCount);
+        } else {
+            logger.debug("No expired ephemeral ledger transaction history records found.");
+        }
     }
 }

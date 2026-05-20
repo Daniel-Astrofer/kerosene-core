@@ -265,6 +265,8 @@ class LedgerControllerTest {
             @Override public String getTransactionType() { return "EXTERNAL_WITHDRAWAL"; }
             @Override public BigDecimal getAmount() { return new BigDecimal("0.01000000"); }
             @Override public String getStatus() { return "PENDING"; }
+            @Override public Long getSenderUserId() { return 1L; }
+            @Override public Long getReceiverUserId() { return 2L; }
             @Override public BigDecimal getNetworkFee() { return new BigDecimal("0.00001000"); }
             @Override public String getBlockchainTxid() { return "a".repeat(64); }
             @Override public LocalDateTime getCreatedAt() { return createdAt; }

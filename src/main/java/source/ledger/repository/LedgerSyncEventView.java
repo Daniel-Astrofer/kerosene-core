@@ -13,6 +13,10 @@ public interface LedgerSyncEventView {
 
     String getStatus();
 
+    Long getSenderUserId();
+
+    Long getReceiverUserId();
+
     BigDecimal getNetworkFee();
 
     String getBlockchainTxid();

@@ -105,7 +105,7 @@ public class LedgerController {
         List<LedgerSyncEventDTO> history = LogContext.timed("FETCH_HISTORY",
                 () -> historyRepository.findUserHistoryView(userId, PageRequest.of(page, safeSize))
                         .stream()
-                        .map(this::toSyncEvent)
+                        .map(historyItem -> toSyncEvent(historyItem, userId))
                         .toList());
         log.info("History fetched: {} entries for userId={}", history.size(), userId);
         return ResponseEntity
@@ -184,12 +184,15 @@ public class LedgerController {
         }
     }
 
-    private LedgerSyncEventDTO toSyncEvent(LedgerSyncEventView history) {
+    private LedgerSyncEventDTO toSyncEvent(LedgerSyncEventView history, Long currentUserId) {
         return new LedgerSyncEventDTO(
                 history.getId(),
                 history.getTransactionType(),
                 history.getAmount(),
                 history.getStatus(),
+                currentUserId,
+                history.getSenderUserId(),
+                history.getReceiverUserId(),
                 history.getNetworkFee(),
                 LogSanitizer.fingerprint(history.getBlockchainTxid()),
                 history.getCreatedAt(),
@@ -200,14 +203,18 @@ public class LedgerController {
      * Authenticated mobile sync view for the short-lived legacy ledger buffer.
      *
      * It intentionally omits sender/receiver identifiers, free-form context and
-     * full txid. Durable readable history remains encrypted on the mobile client;
-     * backend audit continuity uses hash-chain/Merkle proofs.
+     * full txid. It includes only user ids needed by the mobile client to infer
+     * debit/credit direction. Durable readable history remains encrypted on the
+     * mobile client; backend audit continuity uses hash-chain/Merkle proofs.
      */
     public record LedgerSyncEventDTO(
             UUID id,
             String transactionType,
             BigDecimal amount,
             String status,
+            Long currentUserId,
+            Long senderUserId,
+            Long receiverUserId,
             BigDecimal networkFee,
             String txidFingerprint,
             LocalDateTime createdAt,

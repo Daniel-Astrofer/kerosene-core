@@ -22,6 +22,7 @@ import source.treasury.service.FinancialAuditTrailService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -128,10 +129,13 @@ public class FinancialReconciliationService {
     private int inspectTransfer(FinancialReconciliationRunEntity run, ExternalTransferEntity transfer) {
         int issues = 0;
         if (transfer.getBlockchainTxid() != null && !transfer.getBlockchainTxid().isBlank()) {
-            JsonNode tx = blockchainClient.getRawTransaction(transfer.getBlockchainTxid(), true);
-            int observedConfirmations = confirmations(tx);
-            if (observedConfirmations < transfer.getConfirmations()) {
-                issues += inspectConfirmationRegression(run, transfer, observedConfirmations);
+            JsonNode tx = lookupRawTransaction(transfer);
+            if (tx != null) {
+                int observedConfirmations = confirmations(tx);
+                int storedConfirmations = transfer.getConfirmations() != null ? transfer.getConfirmations() : 0;
+                if (observedConfirmations < storedConfirmations) {
+                    issues += inspectConfirmationRegression(run, transfer, observedConfirmations);
+                }
             }
         }
 
@@ -141,6 +145,51 @@ public class FinancialReconciliationService {
             issues += inspectStaleProviderPending(run, transfer);
         }
         return issues;
+    }
+
+    private JsonNode lookupRawTransaction(ExternalTransferEntity transfer) {
+        try {
+            return blockchainClient.getRawTransaction(transfer.getBlockchainTxid(), true);
+        } catch (RuntimeException exception) {
+            if (isPrunedTransactionLookupFailure(exception)) {
+                log.debug(
+                        "[FinancialReconciliation] Transaction {} is not available from the current Bitcoin Core node; "
+                                + "skipping confirmation-regression check for transfer {}.",
+                        transfer.getBlockchainTxid(),
+                        transfer.getId());
+                return null;
+            }
+            throw exception;
+        }
+    }
+
+    private boolean isPrunedTransactionLookupFailure(RuntimeException exception) {
+        String message = exceptionChainMessage(exception).toLowerCase(Locale.ROOT);
+        return message.contains("getrawtransaction")
+                && (message.contains("no such mempool or blockchain transaction")
+                || message.contains("use -txindex")
+                || message.contains("not in mempool")
+                || message.contains("transaction index is disabled")
+                || message.contains("code\":-5")
+                || message.contains("code: -5")
+                || message.contains("failed: no such"));
+    }
+
+    private String exceptionChainMessage(Throwable throwable) {
+        StringBuilder message = new StringBuilder();
+        Throwable current = throwable;
+        while (current != null) {
+            if (current.getMessage() != null) {
+                message.append(current.getMessage()).append('\n');
+            }
+            for (Throwable suppressed : current.getSuppressed()) {
+                if (suppressed.getMessage() != null) {
+                    message.append(suppressed.getMessage()).append('\n');
+                }
+            }
+            current = current.getCause();
+        }
+        return message.toString();
     }
 
     private int inspectStaleProviderPending(FinancialReconciliationRunEntity run, ExternalTransferEntity transfer) {

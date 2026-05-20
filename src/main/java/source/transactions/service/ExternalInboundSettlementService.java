@@ -5,9 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.auth.application.service.account.AccountActivationService;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
 import source.transactions.application.externalpayments.ExternalPaymentsLedgerPort;
 import source.transactions.application.externalpayments.ExternalPaymentsMath;
 import source.transactions.application.externalpayments.ExternalPaymentsNotificationPort;
@@ -198,19 +199,35 @@ public class ExternalInboundSettlementService {
 
         notificationPort.notifyUser(
                 transfer.getUserId(),
-                UserNotificationPayload.create(
+                NotificationMessages.payload(
                         NotificationKind.DEPOSIT_CONFIRMED,
                         NotificationSeverity.SUCCESS,
-                        "Deposito confirmado",
-                        notificationBody + " Liquido creditado: " + netCredit.toPlainString() + " BTC.",
+                        inboundSettlementMessageKey(transfer, historyType, notificationBody),
                         "/deposits",
                         "external_transfer",
                         transfer.getId() != null ? transfer.getId().toString() : null,
                         Map.of(
                                 "grossAmountBtc", normalizedGross.toPlainString(),
                                 "netAmountBtc", netCredit.toPlainString(),
-                                "network", transfer.getNetwork())));
+                                "network", transfer.getNetwork()),
+                        netCredit.toPlainString()));
         return true;
+    }
+
+    private NotificationMessageKey inboundSettlementMessageKey(
+            ExternalTransferEntity transfer,
+            String historyType,
+            String notificationBody) {
+        boolean lightning = isLightningTransfer(transfer) || "EXTERNAL_LIGHTNING_DEPOSIT".equalsIgnoreCase(historyType);
+        boolean reconciled = notificationBody != null && notificationBody.contains(" via ");
+        if (lightning) {
+            return reconciled
+                    ? NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_RECONCILED
+                    : NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_CONFIRMED;
+        }
+        return reconciled
+                ? NotificationMessageKey.EXTERNAL_ONCHAIN_DEPOSIT_RECONCILED
+                : NotificationMessageKey.EXTERNAL_ONCHAIN_DEPOSIT_CONFIRMED;
     }
 
     private String buildCompletionContext(

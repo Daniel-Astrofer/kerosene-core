@@ -8,9 +8,10 @@ import source.ledger.application.transaction.TransactionContext;
 import source.ledger.application.transaction.TransactionHandler;
 import source.ledger.application.transaction.TransactionHandlerChain;
 import source.ledger.application.transaction.TransactionNotificationPort;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
 
 import java.util.Map;
 
@@ -31,41 +32,35 @@ public class TransactionNotificationHandler implements TransactionHandler {
         try {
             notificationPort.notifyUser(
                     context.getReceiverWallet().getUser().getId(),
-                    UserNotificationPayload.create(
+                    NotificationMessages.payload(
                             NotificationKind.TRANSFER_RECEIVED,
                             NotificationSeverity.SUCCESS,
-                            "Transferência Recebida",
-                            String.format(
-                                    "Aporte de %s BTC recebido de @%s para a carteira '%s'.",
-                                    context.getTransaction().getAmount().toPlainString(),
-                                    context.getSender().getUsername(),
-                                    context.getReceiverWallet().getName()),
+                            NotificationMessageKey.INTERNAL_TRANSFER_RECEIVED,
                             "/history",
                             "transaction",
                             context.getTransaction().getIdempotencyKey(),
                             Map.of(
                                     "walletName", context.getReceiverWallet().getName(),
                                     "amountBtc", context.getTransaction().getAmount().toPlainString(),
-                                    "counterparty", context.getSender().getUsername())));
+                                    "counterparty", context.getSender().getUsername()),
+                            context.getTransaction().getAmount().toPlainString(),
+                            context.getReceiverWallet().getName()));
 
             notificationPort.notifyUser(
                     context.getSender().getId(),
-                    UserNotificationPayload.create(
+                    NotificationMessages.payload(
                             NotificationKind.TRANSFER_SENT,
                             NotificationSeverity.INFO,
-                            "Transferência Enviada",
-                            String.format(
-                                    "Envio de %s BTC realizado para @%s a partir da carteira '%s'.",
-                                    context.getTransaction().getAmount().toPlainString(),
-                                    context.getReceiverWallet().getUser().getUsername(),
-                                    context.getSenderWallet().getName()),
+                            NotificationMessageKey.INTERNAL_TRANSFER_SENT,
                             "/history",
                             "transaction",
                             context.getTransaction().getIdempotencyKey(),
                             Map.of(
                                     "walletName", context.getSenderWallet().getName(),
                                     "amountBtc", context.getTransaction().getAmount().toPlainString(),
-                                    "counterparty", context.getReceiverWallet().getUser().getUsername())));
+                                    "counterparty", context.getReceiverWallet().getUser().getUsername()),
+                            context.getTransaction().getAmount().toPlainString(),
+                            context.getSenderWallet().getName()));
         } catch (Exception exception) {
             log.warn("Notification failed (non-blocking): {}", exception.getMessage());
         }

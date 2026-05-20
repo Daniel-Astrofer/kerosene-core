@@ -82,6 +82,58 @@ class FinancialReconciliationServiceTest {
     }
 
     @Test
+    void skipsConfirmationCheckWhenPrunedNodeCannotServeOldRawTransaction() {
+        ExternalTransferRepository transferRepository = mock(ExternalTransferRepository.class);
+        FinancialReconciliationRunRepository runRepository = mock(FinancialReconciliationRunRepository.class);
+        FinancialReconciliationIssueRepository issueRepository = mock(FinancialReconciliationIssueRepository.class);
+        ExternalProviderOutboxService outboxService = mock(ExternalProviderOutboxService.class);
+        NetworkTransferEventService eventService = mock(NetworkTransferEventService.class);
+        BlockchainClient blockchainClient = mock(BlockchainClient.class);
+        FinancialAuditTrailService auditTrailService = mock(FinancialAuditTrailService.class);
+        FinancialOperationsMetrics metrics = mock(FinancialOperationsMetrics.class);
+        ExternalPaymentsLedgerPort ledgerPort = mock(ExternalPaymentsLedgerPort.class);
+        ProcessedTransactionService processedTransactionService = mock(ProcessedTransactionService.class);
+
+        String txid = "d".repeat(64);
+        ExternalTransferEntity transfer = new ExternalTransferEntity();
+        transfer.setId(UUID.randomUUID());
+        transfer.setStatus("COMPLETED");
+        transfer.setBlockchainTxid(txid);
+        transfer.setConfirmations(6);
+        when(transferRepository.findTop200ByStatusInOrderByUpdatedAtAsc(anyCollection()))
+                .thenReturn(List.of(transfer));
+        when(runRepository.save(any(FinancialReconciliationRunEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(issueRepository.save(any(FinancialReconciliationIssueEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(outboxService.findDueForAutomaticResolution()).thenReturn(List.of());
+        when(blockchainClient.getRawTransaction(txid, true)).thenThrow(new IllegalStateException(
+                "Bitcoin Core RPC request failed for method getrawtransaction",
+                new IllegalStateException(
+                        "Bitcoin Core RPC getrawtransaction failed: No such mempool or blockchain transaction. "
+                                + "Use -txindex or provide a block hash to enable blockchain transaction queries.")));
+
+        FinancialReconciliationService service = new FinancialReconciliationService(
+                transferRepository,
+                runRepository,
+                issueRepository,
+                outboxService,
+                eventService,
+                blockchainClient,
+                auditTrailService,
+                metrics,
+                ledgerPort,
+                processedTransactionService);
+
+        FinancialReconciliationRunEntity run = service.runOnce();
+
+        assertEquals("OK", run.getStatus());
+        assertEquals(0, run.getIssueCount());
+        verify(issueRepository, never()).save(any(FinancialReconciliationIssueEntity.class));
+        verify(eventService, never()).warn(any(ExternalTransferEntity.class), any(), any(), any());
+    }
+
+    @Test
     void autoRefundsProviderFailureWithoutExternalReferenceOnce() {
         ExternalTransferRepository transferRepository = mock(ExternalTransferRepository.class);
         FinancialReconciliationRunRepository runRepository = mock(FinancialReconciliationRunRepository.class);

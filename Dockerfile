@@ -14,13 +14,15 @@ RUN chmod +x gradlew
 
 # Cache dependencies before copying sources (layer-cache optimization)
 COPY build.gradle.kts settings.gradle.kts ./
-RUN ./gradlew dependencies --no-daemon --quiet || true
+COPY gradle.properties ./
+ARG GRADLE_MAX_WORKERS=2
+RUN ./gradlew dependencies --no-daemon --max-workers=${GRADLE_MAX_WORKERS} --quiet || true
 
 # Copy sources and build
 COPY src src
 COPY docker docker
 COPY web-admin-build web-admin-build
-RUN ./gradlew bootJar --no-daemon -x test
+RUN ./gradlew bootJar --no-daemon --max-workers=${GRADLE_MAX_WORKERS} -x test
 RUN javac docker/Healthcheck.java -d /workspace/healthcheck
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
