@@ -7,7 +7,7 @@ services:
       context: ../vault
       dockerfile: Dockerfile
     container_name: kerosene-vault
-    restart: unless-stopped
+    restart: "no"
     # ⚠️ No 'ports:' mapping — Vault is ONLY reachable via kerosene-tor-vault on
     # the net_vault network. Exposing any TCP port would deanonymize the real IP.
     environment:
@@ -71,7 +71,7 @@ services:
   lnd-neutrino:
     image: ${LIGHTNING_LND_IMAGE:-lightninglabs/lnd:v0.20.1-beta}
     container_name: lnd-neutrino
-    restart: unless-stopped
+    restart: "no"
     env_file: .env
     environment:
       - BITCOIN_NETWORK=${BITCOIN_NETWORK:-mainnet}
@@ -118,7 +118,7 @@ services:
   db-is:
     image: postgres:17-alpine
     container_name: kerosene_db_is
-    restart: unless-stopped
+    restart: "no"
     entrypoint: >
       sh -c "
       cp /certs/* /tmp/ &&
@@ -152,7 +152,7 @@ services:
   redis-is:
     image: redis:7-alpine
     container_name: kerosene_redis_is
-    restart: unless-stopped
+    restart: "no"
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD}
@@ -171,7 +171,7 @@ services:
     build:
       context: ../mpc-sidecar
     container_name: mpc-sidecar-is
-    restart: unless-stopped
+    restart: "no"
     tmpfs:
       - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
     volumes:
@@ -206,7 +206,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: kerosene-app-is
-    restart: unless-stopped
+    restart: "no"
     mem_limit: 768m
     cap_drop:
       - ALL
@@ -272,7 +272,7 @@ services:
   db-ch:
     image: postgres:17-alpine
     container_name: kerosene_db_ch
-    restart: unless-stopped
+    restart: "no"
     entrypoint: >
       sh -c "
       cp /certs/* /tmp/ &&
@@ -305,7 +305,7 @@ services:
   redis-ch:
     image: redis:7-alpine
     container_name: kerosene_redis_ch
-    restart: unless-stopped
+    restart: "no"
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD}
@@ -324,7 +324,7 @@ services:
     build:
       context: ../mpc-sidecar
     container_name: mpc-sidecar-ch
-    restart: unless-stopped
+    restart: "no"
     tmpfs:
       - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
     volumes:
@@ -357,7 +357,7 @@ services:
   kerosene-app-ch:
     build: .
     container_name: kerosene-app-ch
-    restart: unless-stopped
+    restart: "no"
     mem_limit: 768m
     cap_add:
       - IPC_LOCK
@@ -419,7 +419,7 @@ services:
   db-sg:
     image: postgres:17-alpine
     container_name: kerosene_db_sg
-    restart: unless-stopped
+    restart: "no"
     entrypoint: >
       sh -c "
       cp /certs/* /tmp/ &&
@@ -452,7 +452,7 @@ services:
   redis-sg:
     image: redis:7-alpine
     container_name: kerosene_redis_sg
-    restart: unless-stopped
+    restart: "no"
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD}
@@ -471,7 +471,7 @@ services:
     build:
       context: ../mpc-sidecar
     container_name: mpc-sidecar-sg
-    restart: unless-stopped
+    restart: "no"
     tmpfs:
       - /mnt/mpc-shards:rw,noexec,nosuid,size=64m
     volumes:
@@ -504,7 +504,7 @@ services:
   kerosene-app-sg:
     build: .
     container_name: kerosene-app-sg
-    restart: unless-stopped
+    restart: "no"
     mem_limit: 768m
     cap_add:
       - IPC_LOCK
@@ -586,7 +586,7 @@ services:
       context: ./tor/vanguards
       dockerfile: Dockerfile
     container_name: kerosene-vanguards-is
-    restart: unless-stopped
+    restart: "no"
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
@@ -632,7 +632,7 @@ services:
       context: ./tor/vanguards
       dockerfile: Dockerfile
     container_name: kerosene-vanguards-ch
-    restart: unless-stopped
+    restart: "no"
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
@@ -678,7 +678,7 @@ services:
       context: ./tor/vanguards
       dockerfile: Dockerfile
     container_name: kerosene-vanguards-sg
-    restart: unless-stopped
+    restart: "no"
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
