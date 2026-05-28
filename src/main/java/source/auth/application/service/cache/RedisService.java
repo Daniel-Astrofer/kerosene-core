@@ -1,6 +1,6 @@
 package source.auth.application.service.cache;
 
-import source.auth.application.infra.persistance.redis.contracts.RedisContract;
+import source.auth.application.infra.persistence.redis.contracts.RedisContract;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.cripto.contracts.Cryptography;
 import source.auth.application.service.cripto.contracts.Hasher;

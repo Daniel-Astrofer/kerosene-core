@@ -1,51 +1,78 @@
 package source.notification.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
+import source.notification.model.UserNotificationPayload;
+import source.notification.model.entity.NotificationEntity;
+import source.notification.repository.NotificationRepository;
 
 @Service
 public class NotificationService {
 
-    private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
+    private final NotificationPersistenceService notificationPersistenceService;
+    private final NotificationRepository repository;
 
-    private final SimpMessagingTemplate messagingTemplate;
-
-    @Autowired
-    public NotificationService(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
+    public NotificationService(
+            NotificationPersistenceService notificationPersistenceService,
+            NotificationRepository repository) {
+        this.notificationPersistenceService = notificationPersistenceService;
+        this.repository = repository;
     }
 
-    /**
-     * Sends a notification payload via WebSocket to a specific user queue.
-     * The client should be subscribed to `/user/queue/notifications`.
-     *
-     * @param userId The ID of the user receiving the notification.
-     * @param title  The title of the notification.
-     * @param body   The body content of the notification.
-     */
     public void notifyUser(Long userId, String title, String body) {
-        try {
-            Map<String, String> payload = new HashMap<>();
-            payload.put("title", title);
-            payload.put("body", body);
-            payload.put("timestamp", String.valueOf(System.currentTimeMillis()));
+        notifyUser(userId, UserNotificationPayload.legacy(title, body));
+    }
 
-            // Sends to the specific user. Spring routes it to:
-            // /user/{userId}/queue/notifications
-            messagingTemplate.convertAndSendToUser(
-                    String.valueOf(userId),
-                    "/queue/notifications",
-                    payload);
+    public void notifyUser(
+            Long userId,
+            NotificationKind kind,
+            NotificationSeverity severity,
+            String title,
+            String body) {
+        notifyUser(userId, UserNotificationPayload.create(kind, severity, title, body));
+    }
 
-            logger.info("Pushed WebSocket notification to user: {} with title: '{}'", userId, title);
-        } catch (Exception e) {
-            logger.error("Failed to push WebSocket notification to user {}: {}", userId, e.getMessage());
-        }
+    public void notifyUser(
+            Long userId,
+            NotificationKind kind,
+            NotificationSeverity severity,
+            String title,
+            String body,
+            String deeplink,
+            String entityType,
+            String entityId,
+            Map<String, String> metadata) {
+        notifyUser(
+                userId,
+                UserNotificationPayload.create(
+                        kind,
+                        severity,
+                        title,
+                        body,
+                        deeplink,
+                        entityType,
+                        entityId,
+                        metadata));
+    }
+
+    public void notifyUser(Long userId, UserNotificationPayload payload) {
+        notificationPersistenceService.persist(userId, payload);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NotificationEntity> getUserNotifications(Long userId) {
+        return repository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    @Transactional
+    public void markAsRead(Long userId, Long notificationId) {
+        repository.findByIdAndUserId(notificationId, userId).ifPresent(notification -> {
+            notification.setRead(true);
+            repository.save(notification);
+        });
     }
 }

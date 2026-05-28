@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Push-based Heartbeat Service (Beaconing).
@@ -49,13 +50,36 @@ public class SovereigntyHeartbeatService {
     @Value("${vault.proxy.path:}")
     private String proxyPath;
 
+    @Value("${sovereignty.heartbeat.initial-grace-ms:15000}")
+    private long heartbeatInitialGraceMs;
+
+    @Value("${sovereignty.heartbeat.request-timeout-ms:5000}")
+    private int heartbeatRequestTimeoutMs;
+
+    @Value("${sovereignty.heartbeat.retry-attempts:2}")
+    private int heartbeatRetryAttempts;
+
+    @Value("${sovereignty.heartbeat.retry-backoff-ms:250}")
+    private long heartbeatRetryBackoffMs;
+
+    @Value("${sovereignty.heartbeat.warn-after-consecutive-failures:3}")
+    private int heartbeatWarnAfterConsecutiveFailures;
+
     // For injecting the built client to reuse connections
     private HttpClient httpClient;
     private String nodeId;
     private final ShardIdentityManager shardIdentityManager;
+    private final VaultKeyProvider vaultKeyProvider;
+    private final TelemetryService telemetryService;
+    private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+    private volatile long heartbeatsEnabledAtMs = -1;
 
-    public SovereigntyHeartbeatService(ShardIdentityManager shardIdentityManager) {
+    public SovereigntyHeartbeatService(ShardIdentityManager shardIdentityManager,
+            VaultKeyProvider vaultKeyProvider,
+            TelemetryService telemetryService) {
         this.shardIdentityManager = shardIdentityManager;
+        this.vaultKeyProvider = vaultKeyProvider;
+        this.telemetryService = telemetryService;
     }
 
     /** Initialise the HTTP client eagerly at startup to avoid race conditions. */
@@ -74,8 +98,26 @@ public class SovereigntyHeartbeatService {
     public void sendHeartbeat() {
         if (!vaultEnabled)
             return;
+        if (!vaultKeyProvider.isReady()) {
+            heartbeatsEnabledAtMs = -1;
+            consecutiveFailures.set(0);
+            logger.debug("[Heartbeat] Waiting for Vault provisioning before sending heartbeats.");
+            return;
+        }
 
         try {
+            long now = System.currentTimeMillis();
+            if (heartbeatsEnabledAtMs < 0) {
+                heartbeatsEnabledAtMs = now;
+                logger.info("[Heartbeat] Vault provisioning complete. Delaying heartbeats for {}ms to let Tor circuits stabilize.",
+                        heartbeatInitialGraceMs);
+                return;
+            }
+            if ((now - heartbeatsEnabledAtMs) < heartbeatInitialGraceMs) {
+                logger.debug("[Heartbeat] In Tor warm-up window after provisioning, skipping.");
+                return;
+            }
+
             String resolvedUrl = resolveVaultUrl();
             if (resolvedUrl == null || resolvedUrl.isBlank()) {
                 logger.debug("[Heartbeat] Vault URL not yet available, skipping.");
@@ -85,48 +127,103 @@ public class SovereigntyHeartbeatService {
             long timestamp = System.currentTimeMillis();
             String signature = shardIdentityManager.sign("heartbeat:" + timestamp);
             java.util.Map<String, String> heartbeatHeaders = java.util.Map.of(
-                    "X-Node-Id", nodeId,
-                    "X-Shard-Timestamp", Long.toString(timestamp),
-                    "X-Shard-Signature", signature);
+                        "X-Node-Id", nodeId,
+                        "X-Shard-Timestamp", Long.toString(timestamp),
+                        "X-Shard-Signature", signature);
 
-            if (proxyPath != null && !proxyPath.isBlank()) {
-                // Caminho Produção/UDS SOCKS5
-                UdsSocks5Transport transport = new UdsSocks5Transport(proxyPath);
-                UdsSocks5Transport.HttpResult response = transport.executeHttpRequest(
-                        resolvedUrl + "/v1/vault/heartbeat",
-                        "POST",
-                        "",
-                        heartbeatHeaders);
+            sendHeartbeatWithRetry(resolvedUrl, heartbeatHeaders);
 
-                if (response.statusCode() != 200) {
-                    logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
-                } else {
-                    logger.debug("[Heartbeat] ACK from Vault.");
-                }
-            } else {
-                // Caminho Dev/TCP (HttpClient)
-                if (httpClient == null)
-                    return; // startup init failed, skip
-
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(resolvedUrl + "/v1/vault/heartbeat"))
-                        .header("X-Node-Id", nodeId)
-                        .header("X-Shard-Timestamp", Long.toString(timestamp))
-                        .header("X-Shard-Signature", signature)
-                        .timeout(Duration.ofSeconds(15)) // prevent Tor latency from blocking scheduler thread
-                        .POST(HttpRequest.BodyPublishers.noBody())
-                        .build();
-
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() != 200) {
-                    logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
-                } else {
-                    logger.debug("[Heartbeat] ACK from Vault.");
-                }
+            int recoveredAfter = consecutiveFailures.getAndSet(0);
+            if (recoveredAfter > 0) {
+                logger.info("[Heartbeat] Recovered Vault connectivity after {} consecutive failures.", recoveredAfter);
             }
         } catch (Exception e) {
-            logger.warn("[Heartbeat] Failed to reach Vault via Tor: {}", e.getMessage());
+            telemetryService.recordHeartbeatFailure("vault-heartbeat");
+            int failures = consecutiveFailures.incrementAndGet();
+
+            if (failures >= Math.max(1, heartbeatWarnAfterConsecutiveFailures)) {
+                if (failures == heartbeatWarnAfterConsecutiveFailures || failures % heartbeatWarnAfterConsecutiveFailures == 0) {
+                    logger.warn("[Heartbeat] Failed to reach Vault via Tor ({} consecutive failures): {}",
+                            failures, e.getMessage());
+                } else {
+                    logger.debug("[Heartbeat] Vault still unreachable after {} consecutive failures: {}",
+                            failures, e.getMessage());
+                }
+            } else {
+                logger.debug("[Heartbeat] Transient Tor failure contacting Vault ({} of {} before WARN): {}",
+                        failures, heartbeatWarnAfterConsecutiveFailures, e.getMessage());
+            }
         }
+    }
+
+    private void sendHeartbeatWithRetry(String resolvedUrl, java.util.Map<String, String> heartbeatHeaders)
+            throws Exception {
+        Exception lastFailure = null;
+        int maxAttempts = Math.max(1, heartbeatRetryAttempts);
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                sendHeartbeatOnce(resolvedUrl, heartbeatHeaders);
+                return;
+            } catch (IOException e) {
+                lastFailure = e;
+                if (attempt >= maxAttempts) {
+                    throw e;
+                }
+                logger.debug("[Heartbeat] Retrying heartbeat after transient Tor error (attempt {}/{}): {}",
+                        attempt, maxAttempts, e.getMessage());
+                sleepBeforeRetry();
+            }
+        }
+
+        if (lastFailure != null) {
+            throw lastFailure;
+        }
+    }
+
+    private void sendHeartbeatOnce(String resolvedUrl, java.util.Map<String, String> heartbeatHeaders) throws Exception {
+        if (proxyPath != null && !proxyPath.isBlank()) {
+            UdsSocks5Transport transport = new UdsSocks5Transport(proxyPath, heartbeatRequestTimeoutMs);
+            UdsSocks5Transport.HttpResult response = transport.executeHttpRequest(
+                    resolvedUrl + "/v1/vault/heartbeat",
+                    "POST",
+                    "",
+                    heartbeatHeaders);
+
+            if (response.statusCode() != 200) {
+                logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
+            } else {
+                logger.debug("[Heartbeat] ACK from Vault.");
+            }
+            return;
+        }
+
+        if (httpClient == null) {
+            return;
+        }
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(resolvedUrl + "/v1/vault/heartbeat"))
+                .header("X-Node-Id", heartbeatHeaders.get("X-Node-Id"))
+                .header("X-Shard-Timestamp", heartbeatHeaders.get("X-Shard-Timestamp"))
+                .header("X-Shard-Signature", heartbeatHeaders.get("X-Shard-Signature"))
+                .timeout(Duration.ofMillis(heartbeatRequestTimeoutMs))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
+        } else {
+            logger.debug("[Heartbeat] ACK from Vault.");
+        }
+    }
+
+    private void sleepBeforeRetry() throws InterruptedException {
+        if (heartbeatRetryBackoffMs <= 0) {
+            return;
+        }
+        Thread.sleep(heartbeatRetryBackoffMs);
     }
 
     private void initClient() {

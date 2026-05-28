@@ -1,16 +1,19 @@
 package source.security;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import source.security.application.honeypot.HoneypotInspectionCommand;
+import source.security.application.honeypot.HoneypotInspectionUseCase;
+import source.security.domain.honeypot.HoneypotInspectionResult;
+import source.security.infra.honeypot.HoneypotHttpResponseWriter;
+import source.security.infra.honeypot.JacksonRequestJsonBodyParser;
 
 import java.io.IOException;
 
@@ -37,15 +40,21 @@ import java.io.IOException;
 @Component
 public class HoneypotRequestFilter extends OncePerRequestFilter {
 
-    private static final Logger log = LoggerFactory.getLogger(HoneypotRequestFilter.class);
+    private final HoneypotInspectionUseCase inspectionUseCase;
+    private final HoneypotHttpResponseWriter responseWriter;
 
-    /** The hidden honeypot JSON field name — must stay in sync with UserDTO. */
-    private static final String HONEYPOT_FIELD = "__hp";
+    @Autowired
+    public HoneypotRequestFilter(
+            HoneypotInspectionUseCase inspectionUseCase,
+            HoneypotHttpResponseWriter responseWriter) {
+        this.inspectionUseCase = inspectionUseCase;
+        this.responseWriter = responseWriter;
+    }
 
-    private final ObjectMapper objectMapper;
-
-    public HoneypotRequestFilter(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    HoneypotRequestFilter(ObjectMapper objectMapper) {
+        this(
+                new HoneypotInspectionUseCase(new JacksonRequestJsonBodyParser(objectMapper)),
+                new HoneypotHttpResponseWriter());
     }
 
     @Override
@@ -64,34 +73,17 @@ public class HoneypotRequestFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        // Wrap the request so we can read the body twice (filter + controller)
         CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(request);
 
-        try {
-            byte[] body = wrappedRequest.getCachedBody();
-            if (body != null && body.length > 0) {
-                JsonNode node = objectMapper.readTree(body);
-                JsonNode hp = node.get(HONEYPOT_FIELD);
-                if (hp != null && !hp.isNull() && hp.asText("").length() > 0) {
-                    // Honeypot triggered — blackhole the request silently
-                    log.warn("[HONEYPOT] Triggered from IP={} path={} UA={}",
-                            request.getRemoteAddr(),
-                            request.getRequestURI(),
-                            request.getHeader("User-Agent"));
-                    response.setStatus(HttpServletResponse.SC_OK);
-                    response.setContentType("application/json");
-                    response.getWriter()
-                            .write("{\"success\":true,\"message\":\"OK\",\"timestamp\":\"" + java.time.Instant.now() + "\"}");
-                    return; // Do not proceed to controller
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[HONEYPOT] Malformed JSON rejected on path={}: {}", request.getRequestURI(), e.getMessage());
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            response.setContentType("application/json");
-            response.getWriter()
-                    .write("{\"success\":false,\"message\":\"Malformed JSON payload.\",\"timestamp\":\""
-                            + java.time.Instant.now() + "\"}");
+        HoneypotInspectionResult inspectionResult = inspectionUseCase.inspect(new HoneypotInspectionCommand(
+                request.getMethod(),
+                request.getRequestURI(),
+                request.getRemoteAddr(),
+                request.getHeader("User-Agent"),
+                wrappedRequest.getCachedBody()));
+
+        if (!inspectionResult.shouldContinueFilterChain()) {
+            responseWriter.write(inspectionResult, response);
             return;
         }
 

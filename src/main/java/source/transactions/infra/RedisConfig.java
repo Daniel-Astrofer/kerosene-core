@@ -15,17 +15,17 @@ import source.ledger.dto.InternalPaymentRequestDTO;
 public class RedisConfig {
 
     @Bean
-    public RedisTemplate<String, PaymentLinkDTO> redisTemplate(RedisConnectionFactory connectionFactory) {
+    public RedisTemplate<String, PaymentLinkDTO> redisTemplate(
+            RedisConnectionFactory connectionFactory,
+            ObjectMapper objectMapper) {
         RedisTemplate<String, PaymentLinkDTO> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
-        // Configurar ObjectMapper com suporte a Java 8 Date/Time
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
+        ObjectMapper redisObjectMapper = objectMapper.copy().registerModule(new JavaTimeModule());
 
         // Usar Jackson2JsonRedisSerializer com o ObjectMapper configurado
         Jackson2JsonRedisSerializer<PaymentLinkDTO> jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer<>(
-                objectMapper, PaymentLinkDTO.class);
+                redisObjectMapper, PaymentLinkDTO.class);
 
         StringRedisSerializer stringRedisSerializer = new StringRedisSerializer();
 
@@ -41,15 +41,15 @@ public class RedisConfig {
 
     @Bean
     public RedisTemplate<String, InternalPaymentRequestDTO> internalPaymentRequestRedisTemplate(
-            RedisConnectionFactory connectionFactory) {
+            RedisConnectionFactory connectionFactory,
+            ObjectMapper objectMapper) {
         RedisTemplate<String, InternalPaymentRequestDTO> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
+        ObjectMapper redisObjectMapper = objectMapper.copy().registerModule(new JavaTimeModule());
 
         Jackson2JsonRedisSerializer<InternalPaymentRequestDTO> serializer = new Jackson2JsonRedisSerializer<>(
-                objectMapper, InternalPaymentRequestDTO.class);
+                redisObjectMapper, InternalPaymentRequestDTO.class);
 
         StringRedisSerializer stringRedisSerializer = new StringRedisSerializer();
 

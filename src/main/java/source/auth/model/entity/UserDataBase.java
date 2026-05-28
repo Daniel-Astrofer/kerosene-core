@@ -5,6 +5,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import source.auth.model.contracts.UserDB;
 import source.auth.model.enums.AccountSecurityType;
+import source.auth.model.enums.UserRole;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
@@ -26,8 +27,8 @@ public class UserDataBase implements UserDB {
     private String username;
 
     @Convert(converter = source.security.persistence.StringCryptoConverter.class)
-    @Column(name = "passphrase")
-    private String passphrase;
+    @Column(name = "password_hash")
+    private String passwordHash;
 
     @Convert(converter = source.security.persistence.StringCryptoConverter.class)
     @Column(name = "totp_secret")
@@ -43,6 +44,9 @@ public class UserDataBase implements UserDB {
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
+
+    @Column(name = "activated_at")
+    private LocalDateTime activatedAt;
 
     @Column(name = "is_active", nullable = false, columnDefinition = "boolean default false")
     private Boolean isActive = false;
@@ -64,6 +68,10 @@ public class UserDataBase implements UserDB {
     @Column(name = "test_balance_claimed", nullable = false, columnDefinition = "boolean default false")
     private Boolean testBalanceClaimed = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 32, columnDefinition = "VARCHAR(32) DEFAULT 'USER'")
+    private UserRole role = UserRole.USER;
+
     /**
      * AES-256-GCM encrypted co-signer secret (Base64-encoded IV + ciphertext).
      * Only populated for SHAMIR and MULTISIG_2FA modes.
@@ -72,6 +80,15 @@ public class UserDataBase implements UserDB {
     @JsonIgnore
     @Column(name = "platform_cosigner_secret", columnDefinition = "TEXT")
     private String platformCosignerSecret;
+
+    @Column(name = "shamir_total_shares")
+    private Integer shamirTotalShares;
+
+    @Column(name = "shamir_threshold")
+    private Integer shamirThreshold;
+
+    @Column(name = "multisig_threshold", nullable = false, columnDefinition = "integer default 2")
+    private Integer multisigThreshold = 2;
 
     @OneToOne
     @JoinColumn(name = "voucher_id", referencedColumnName = "id", unique = true)
@@ -111,13 +128,13 @@ public class UserDataBase implements UserDB {
     }
 
     @Override
-    public void setPassphrase(String passphrase) {
-        this.passphrase = passphrase;
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     @Override
-    public String getPassphrase() {
-        return passphrase;
+    public String getPasswordHash() {
+        return passwordHash;
     }
 
     @Override
@@ -147,6 +164,14 @@ public class UserDataBase implements UserDB {
 
     public void setLastLoginAt(LocalDateTime lastLoginAt) {
         this.lastLoginAt = lastLoginAt;
+    }
+
+    public LocalDateTime getActivatedAt() {
+        return activatedAt;
+    }
+
+    public void setActivatedAt(LocalDateTime activatedAt) {
+        this.activatedAt = activatedAt;
     }
 
     public Boolean getIsActive() {
@@ -182,6 +207,30 @@ public class UserDataBase implements UserDB {
         this.platformCosignerSecret = platformCosignerSecret;
     }
 
+    public Integer getShamirTotalShares() {
+        return shamirTotalShares;
+    }
+
+    public void setShamirTotalShares(Integer shamirTotalShares) {
+        this.shamirTotalShares = shamirTotalShares;
+    }
+
+    public Integer getShamirThreshold() {
+        return shamirThreshold;
+    }
+
+    public void setShamirThreshold(Integer shamirThreshold) {
+        this.shamirThreshold = shamirThreshold;
+    }
+
+    public Integer getMultisigThreshold() {
+        return multisigThreshold;
+    }
+
+    public void setMultisigThreshold(Integer multisigThreshold) {
+        this.multisigThreshold = multisigThreshold;
+    }
+
     public Boolean getPasskeyEnabledForTransactions() {
         return passkeyEnabledForTransactions;
     }
@@ -198,11 +247,23 @@ public class UserDataBase implements UserDB {
         this.testBalanceClaimed = testBalanceClaimed;
     }
 
+    public UserRole getRole() {
+        return role != null ? role : UserRole.USER;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role != null ? role : UserRole.USER;
+    }
+
     public java.util.List<String> getBackupCodes() {
         return backupCodes;
     }
 
     public void setBackupCodes(java.util.List<String> backupCodes) {
         this.backupCodes = backupCodes;
+    }
+
+    public boolean hasTotpEnabled() {
+        return totpSecret != null && !totpSecret.isBlank();
     }
 }

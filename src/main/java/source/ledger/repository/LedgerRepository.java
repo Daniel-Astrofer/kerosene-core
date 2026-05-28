@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +24,9 @@ public interface LedgerRepository extends JpaRepository<LedgerEntity, Integer> {
 
     @Query("SELECT l FROM LedgerEntity l JOIN FETCH l.wallet WHERE l.wallet.user.id = :userId")
     List<LedgerEntity> findByWalletUserId(@Param("userId") Long userId);
+
+    @Query("SELECT COALESCE(SUM(l.balance), 0) FROM LedgerEntity l")
+    BigDecimal sumAllBalances();
 
     boolean existsByWalletId(Long walletId);
 

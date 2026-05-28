@@ -4,12 +4,20 @@ public interface User {
 
     String getUsername();
 
-    String getPassphrase();
+    String getPasswordHash();
 
     Long getId();
 
     void setUsername(String username);
 
-    void setPassphrase(String passphrase);
+    void setPasswordHash(String passwordHash);
+
+    default String getPassphrase() {
+        return getPasswordHash();
+    }
+
+    default void setPassphrase(String passphrase) {
+        setPasswordHash(passphrase);
+    }
 
 }

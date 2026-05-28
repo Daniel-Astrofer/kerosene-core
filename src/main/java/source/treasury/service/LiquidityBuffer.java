@@ -3,6 +3,7 @@ package source.treasury.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import source.treasury.domain.service.LiquidityRebalancePolicy;
 
 /**
  * Gestor de Liquidez - Alocação e Rebalanceamento
@@ -15,13 +16,11 @@ import org.springframework.stereotype.Service;
 public class LiquidityBuffer {
 
     private static final Logger log = LoggerFactory.getLogger(LiquidityBuffer.class);
+    private final LiquidityRebalancePolicy liquidityRebalancePolicy;
 
-    private static final double TARGET_LIGHTNING_PCT = 0.70;
-    private static final double TARGET_HOT_WALLET_PCT = 0.20;
-    private static final double TARGET_COLD_STORAGE_PCT = 0.10;
-
-    // Gatilho do Loop Out (Se Remote Balance cair abaixo de 20%, estouramos o limite de Inbound Liquidity)
-    private static final double MIN_INBOUND_LIQUIDITY_PCT = 0.20;
+    public LiquidityBuffer(LiquidityRebalancePolicy liquidityRebalancePolicy) {
+        this.liquidityRebalancePolicy = liquidityRebalancePolicy;
+    }
 
     /**
      * Inspeciona se um canal Lightning precisa de um Loop Out (Submarine Swap).
@@ -30,15 +29,12 @@ public class LiquidityBuffer {
      * @return true se precisar iniciar o Submarine Swap
      */
     public boolean requiresLoopOut(long localBalance, long remoteBalance) {
-        long totalCapacity = localBalance + remoteBalance;
-        if (totalCapacity == 0) return false;
+        double remotePct = liquidityRebalancePolicy.inboundLiquidityPercentage(localBalance, remoteBalance);
 
-        double remotePct = (double) remoteBalance / totalCapacity;
-
-        if (remotePct < MIN_INBOUND_LIQUIDITY_PCT) {
+        if (liquidityRebalancePolicy.requiresLoopOut(localBalance, remoteBalance)) {
             log.warn("[LiquidityBuffer] Inbound Liquidity Critica ({}% / Mínimo {}%). Loop Out Recomendado!",
                      String.format("%.2f", remotePct * 100),
-                     String.format("%.2f", MIN_INBOUND_LIQUIDITY_PCT * 100));
+                     String.format("%.2f", liquidityRebalancePolicy.minimumInboundLiquidityPercentage() * 100));
             return true;
         }
 

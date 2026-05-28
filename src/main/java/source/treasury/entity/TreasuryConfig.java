@@ -15,7 +15,7 @@ public class TreasuryConfig {
     @Column(name = "max_withdraw_limit", nullable = false, precision = 19, scale = 8)
     private BigDecimal maxWithdrawLimit = BigDecimal.ONE; // 1 BTC
 
-    @Column(name = "audit_xpub", nullable = false)
+    @Column(name = "audit_xpub")
     private String auditXpub;
 
     @Column(name = "updated_at", nullable = false)

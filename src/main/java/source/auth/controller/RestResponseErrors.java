@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 public class RestResponseErrors extends ResponseEntityExceptionHandler {
 
         @ExceptionHandler(AuthExceptions.UserAlreadyExistsException.class)
-        public ResponseEntity<ResponseError> userAlredyExists(Exception ex,
+        public ResponseEntity<ResponseError> userAlreadyExists(Exception ex,
                         HttpServletRequest request) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(new ResponseError(
                                 LocalDateTime.now(),
@@ -111,7 +111,7 @@ public class RestResponseErrors extends ResponseEntityExceptionHandler {
         }
 
         @ExceptionHandler
-        public ResponseEntity<ResponseError> WalletAlredyExists(WalletExceptions.WalletNameAlredyExists ex,
+        public ResponseEntity<ResponseError> WalletAlreadyExists(WalletExceptions.WalletNameAlreadyExists ex,
                         HttpServletRequest request) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(
                                 new ResponseError(

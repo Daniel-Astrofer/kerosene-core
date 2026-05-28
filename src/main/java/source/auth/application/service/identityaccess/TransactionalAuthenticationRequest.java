@@ -1,0 +1,54 @@
+package source.auth.application.service.identityaccess;
+
+import source.auth.model.entity.UserDataBase;
+
+public record TransactionalAuthenticationRequest(
+        UserDataBase user,
+        Long authenticatedUserId,
+        Long resourceOwnerUserId,
+        String totpSecret,
+        String totpCode,
+        String passkeyAssertionJson,
+        String confirmationPassphrase,
+        TransactionalAuthenticationScope scope) {
+
+    public TransactionalAuthenticationRequest {
+        if (scope == null) {
+            scope = TransactionalAuthenticationScope.LEDGER_TRANSFER;
+        }
+    }
+
+    public static TransactionalAuthenticationRequest ledgerTransfer(
+            UserDataBase sender,
+            String totpCode,
+            String passkeyAssertionJson,
+            String confirmationPassphrase) {
+        return new TransactionalAuthenticationRequest(
+                sender,
+                sender != null ? sender.getId() : null,
+                null,
+                sender != null ? sender.getTOTPSecret() : null,
+                totpCode,
+                passkeyAssertionJson,
+                confirmationPassphrase,
+                TransactionalAuthenticationScope.LEDGER_TRANSFER);
+    }
+
+    public static TransactionalAuthenticationRequest walletOutbound(
+            Long authenticatedUserId,
+            Long walletOwnerUserId,
+            String walletTotpSecret,
+            String totpCode,
+            String passkeyAssertionJson,
+            String confirmationPassphrase) {
+        return new TransactionalAuthenticationRequest(
+                null,
+                authenticatedUserId,
+                walletOwnerUserId,
+                walletTotpSecret,
+                totpCode,
+                passkeyAssertionJson,
+                confirmationPassphrase,
+                TransactionalAuthenticationScope.WALLET_OUTBOUND);
+    }
+}

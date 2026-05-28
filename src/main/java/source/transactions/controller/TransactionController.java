@@ -1,15 +1,23 @@
 package source.transactions.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import source.auth.application.service.account.AccountActivationService;
 import source.transactions.dto.*;
 import source.transactions.service.PaymentLinkService;
 import source.transactions.service.TransactionService;
+import source.transactions.service.ExternalPaymentsService;
 import source.common.dto.ApiResponse;
-import org.springframework.beans.factory.annotation.Value;
+import source.transactions.dto.OnchainAddressAllocationDTO;
+import source.transactions.dto.OnchainAddressRequestDTO;
+import source.wallet.application.port.in.WalletLookupPort;
+import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,17 +35,25 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/transactions")
+@Validated
 public class TransactionController {
 
         private final TransactionService service;
         private final PaymentLinkService paymentLinkService;
+        private final ExternalPaymentsService externalPaymentsService;
+        private final WalletLookupPort walletLookupPort;
+        private final AccountActivationService accountActivationService;
 
-        @Value("${bitcoin.deposit-address}")
-        private String systemDepositAddress;
-
-        public TransactionController(TransactionService service, PaymentLinkService paymentLinkService) {
+        public TransactionController(TransactionService service,
+                        PaymentLinkService paymentLinkService,
+                        ExternalPaymentsService externalPaymentsService,
+                        WalletLookupPort walletLookupPort,
+                        AccountActivationService accountActivationService) {
                 this.service = service;
                 this.paymentLinkService = paymentLinkService;
+                this.externalPaymentsService = externalPaymentsService;
+                this.walletLookupPort = walletLookupPort;
+                this.accountActivationService = accountActivationService;
         }
 
         // ==================== DEPOSIT ENDPOINTS ====================
@@ -49,10 +65,27 @@ public class TransactionController {
          * @return Endereço Bitcoin (Base58 ou Bech32)
          */
         @GetMapping("/deposit-address")
-        public ResponseEntity<ApiResponse<String>> getDepositAddress(HttpServletRequest request) {
+        public ResponseEntity<ApiResponse<String>> getDepositAddress(
+                        @RequestParam(required = false) BigDecimal expectedAmountBtc,
+                        HttpServletRequest request,
+                        Authentication auth) {
+                Long userId = getAuthenticatedUserId(auth);
+                WalletEntity wallet = walletLookupPort.findPrimaryWallet(userId);
+                if (wallet == null) {
+                        throw new IllegalStateException("User has no wallet configured to receive on-chain deposits.");
+                }
+                if (expectedAmountBtc == null || expectedAmountBtc.signum() <= 0) {
+                        throw new IllegalArgumentException(
+                                        "expectedAmountBtc is required. Use /transactions/network/onchain/address for new deposit flows.");
+                }
+
+                OnchainAddressAllocationDTO allocation = externalPaymentsService.issueOnchainAddress(
+                                userId,
+                                new OnchainAddressRequestDTO(wallet.getName(), expectedAmountBtc));
+
                 return ResponseEntity.ok(ApiResponse.success(
-                                "System master deposit address retrieved successfully. Please send only Bitcoin (BTC) to this address.",
-                                systemDepositAddress));
+                                "Dedicated deposit address issued successfully. Send only Bitcoin (BTC) to this address.",
+                                allocation.onchainAddress()));
         }
 
         // ==================== TRANSACTION ENDPOINTS ====================
@@ -136,21 +169,21 @@ public class TransactionController {
          * @return DTO com ID do payment link e demais informações
          */
         @PostMapping("/create-payment-link")
-        public ResponseEntity<ApiResponse<PaymentLinkDTO>> createPaymentLink(@RequestBody CreatePaymentLinkRequest req,
+        public ResponseEntity<ApiResponse<PaymentLinkDTO>> createPaymentLink(@Valid @RequestBody CreatePaymentLinkRequest req,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
-                PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, req.getAmount(),
-                                req.getDescription());
+                accountActivationService.assertInboundEnabled(userId);
+                PaymentLinkDTO link = paymentLinkService.createPaymentLink(userId, req);
                 return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse
                                 .success("Your new payment link has been successfully generated and is ready to be shared.",
                                                 link));
         }
 
         /**
-         * Obtém informações de um payment link
+         * Obtém informações de um payment link autenticado.
          * 
          * @param linkId ID único do payment link
-         * @return DTO com dados do payment link (público, sem autenticação)
+         * @return DTO com dados do payment link
          */
         @GetMapping("/payment-link/{linkId}")
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> getPaymentLink(@PathVariable String linkId,
@@ -166,8 +199,7 @@ public class TransactionController {
         }
 
         /**
-         * Confirma o pagamento de um payment link
-         * Valida a transação na blockchain antes de confirmar
+         * Confirma o pagamento de um payment link autenticado.
          * 
          * @param linkId ID do payment link
          * @param req    DTO com TXID e endereço de origem
@@ -175,9 +207,13 @@ public class TransactionController {
          */
         @PostMapping("/payment-link/{linkId}/confirm")
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> confirmPayment(@PathVariable String linkId,
-                        @RequestBody ConfirmPaymentRequest req,
+                        @Valid @RequestBody ConfirmPaymentRequest req,
                         HttpServletRequest request) {
-                PaymentLinkDTO link = paymentLinkService.confirmPayment(linkId, req.getTxid(), req.getFromAddress());
+                PaymentLinkDTO link = paymentLinkService.confirmPayment(
+                                linkId,
+                                req.getTxid(),
+                                req.getFromAddress(),
+                                req.getIdempotencyKey());
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Payment confirmed successfully. The transaction is now being monitored on the blockchain.",
                                 link));
@@ -193,6 +229,7 @@ public class TransactionController {
          */
         @PostMapping("/payment-link/{linkId}/complete")
         public ResponseEntity<ApiResponse<PaymentLinkDTO>> completePayment(@PathVariable String linkId,
+                        @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 PaymentLinkDTO link = paymentLinkService.getPaymentLink(linkId);
@@ -202,10 +239,32 @@ public class TransactionController {
                                                         "The specified payment link could not be found or you do not have permission to access it.",
                                                         "ERR_PAYMENT_LINK_NOT_FOUND"));
                 }
-                PaymentLinkDTO completed = paymentLinkService.completePayment(linkId);
+                PaymentLinkDTO completed = paymentLinkService.completePayment(linkId, idempotencyKey);
                 return ResponseEntity
                                 .ok(ApiResponse.success("The payment link has been successfully marked as completed.",
                                                 completed));
+        }
+
+        @PostMapping("/payment-link/{linkId}/cancel")
+        public ResponseEntity<ApiResponse<PaymentLinkDTO>> cancelPayment(
+                        @PathVariable String linkId,
+                        @RequestBody(required = false) CancelPaymentLinkRequest request,
+                        Authentication auth) {
+                Long userId = getAuthenticatedUserId(auth);
+                PaymentLinkDTO link = paymentLinkService.getPaymentLink(linkId);
+                if (link == null || !link.getUserId().equals(userId)) {
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                        .body(ApiResponse.error(
+                                                        "The specified payment link could not be found or you do not have permission to cancel it.",
+                                                        "ERR_PAYMENT_LINK_NOT_FOUND"));
+                }
+
+                PaymentLinkDTO cancelled = paymentLinkService.cancelPayment(
+                                linkId,
+                                request != null ? request.getReason() : null);
+                return ResponseEntity.ok(ApiResponse.success(
+                                "The payment link has been cancelled successfully.",
+                                cancelled));
         }
 
         /**
@@ -230,7 +289,7 @@ public class TransactionController {
          * @return DTO com TXID da transação na blockchain
          */
         @PostMapping("/withdraw")
-        public ResponseEntity<ApiResponse<TransactionResponseDTO>> withdraw(@RequestBody WithdrawRequestDTO req,
+        public ResponseEntity<ApiResponse<TransactionResponseDTO>> withdraw(@Valid @RequestBody WithdrawRequestDTO req,
                         Authentication auth) {
                 Long userId = getAuthenticatedUserId(auth);
                 TransactionResponseDTO response = service.withdraw(userId, req);

@@ -23,10 +23,9 @@ public class PendingTransactionRedisRepository {
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    public PendingTransactionRedisRepository(RedisTemplate<String, String> redisTemplate) {
+    public PendingTransactionRedisRepository(RedisTemplate<String, String> redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
-        this.objectMapper = new ObjectMapper();
-        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper = objectMapper.copy().registerModule(new JavaTimeModule());
     }
 
     /**
@@ -35,18 +34,12 @@ public class PendingTransactionRedisRepository {
     public PendingTransaction save(PendingTransaction transaction) {
         try {
             String key = KEY_PREFIX + transaction.getTxid();
+            PendingTransaction existing = findByTxid(transaction.getTxid());
             String json = objectMapper.writeValueAsString(transaction);
 
-            // Salvar transação
             redisTemplate.opsForValue().set(key, json, DEFAULT_TTL_HOURS, TimeUnit.HOURS);
-
-            // Adicionar aos índices
-            if ("PENDING".equals(transaction.getStatus())) {
-                redisTemplate.opsForSet().add(INDEX_PENDING, transaction.getTxid());
-            }
-
-            String userIndexKey = INDEX_USER_PREFIX + transaction.getUserId();
-            redisTemplate.opsForSet().add(userIndexKey, transaction.getTxid());
+            syncPendingIndex(transaction.getTxid(), existing != null ? existing.getStatus() : null, transaction.getStatus());
+            syncUserIndex(transaction, existing);
 
             return transaction;
         } catch (JsonProcessingException e) {
@@ -149,10 +142,32 @@ public class PendingTransactionRedisRepository {
             String key = KEY_PREFIX + txid;
             redisTemplate.delete(key);
 
-            // Limpar índices
             redisTemplate.opsForSet().remove(INDEX_PENDING, txid);
-            String userIndexKey = INDEX_USER_PREFIX + tx.getUserId();
-            redisTemplate.opsForSet().remove(userIndexKey, txid);
+            if (tx.getUserId() != null) {
+                String userIndexKey = INDEX_USER_PREFIX + tx.getUserId();
+                redisTemplate.opsForSet().remove(userIndexKey, txid);
+            }
+        }
+    }
+
+    private void syncPendingIndex(String txid, String previousStatus, String currentStatus) {
+        if ("PENDING".equals(previousStatus) && !"PENDING".equals(currentStatus)) {
+            redisTemplate.opsForSet().remove(INDEX_PENDING, txid);
+        }
+
+        if ("PENDING".equals(currentStatus)) {
+            redisTemplate.opsForSet().add(INDEX_PENDING, txid);
+        }
+    }
+
+    private void syncUserIndex(PendingTransaction transaction, PendingTransaction existing) {
+        if (existing != null && existing.getUserId() != null
+                && (transaction.getUserId() == null || !existing.getUserId().equals(transaction.getUserId()))) {
+            redisTemplate.opsForSet().remove(INDEX_USER_PREFIX + existing.getUserId(), transaction.getTxid());
+        }
+
+        if (transaction.getUserId() != null) {
+            redisTemplate.opsForSet().add(INDEX_USER_PREFIX + transaction.getUserId(), transaction.getTxid());
         }
     }
 }

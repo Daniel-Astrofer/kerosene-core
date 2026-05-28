@@ -3,11 +3,13 @@ package source.ledger.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import source.ledger.entity.LedgerEntry;
 import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Repository
@@ -27,6 +29,9 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     @Query("SELECT COALESCE(SUM(l.feeAmount), 0) FROM LedgerEntry l WHERE l.status = 'PENDING'")
     BigDecimal calculatePlatformProfitPending();
 
+    @Query("SELECT COALESCE(SUM(l.feeAmount), 0) FROM LedgerEntry l WHERE l.status = 'PENDING' AND l.createdAt <= :cutoff")
+    BigDecimal calculatePlatformProfitPendingUpTo(@Param("cutoff") LocalDateTime cutoff);
+
     /**
      * Após o Siphon (Dono sacar), o Backend marca os relatórios PENDING como
      * 'COLLECTED'.
@@ -35,4 +40,9 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     @Transactional
     @Query("UPDATE LedgerEntry l SET l.status = 'COLLECTED' WHERE l.status = 'PENDING'")
     void markFeesAsCollected();
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE LedgerEntry l SET l.status = 'COLLECTED' WHERE l.status = 'PENDING' AND l.createdAt <= :cutoff")
+    int markFeesAsCollectedUpTo(@Param("cutoff") LocalDateTime cutoff);
 }

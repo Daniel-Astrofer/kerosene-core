@@ -1,6 +1,7 @@
 package source.transactions.service;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
@@ -79,6 +80,7 @@ public class HardeningStressTest {
     void setUpRedis() {
         redisState.clear();
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.execute(any(org.springframework.data.redis.core.RedisCallback.class))).thenReturn("PONG");
         when(valueOperations.get(anyString())).thenAnswer(invocation -> redisState.get(invocation.getArgument(0)));
         doAnswer(invocation -> {
             redisState.put(invocation.getArgument(0), invocation.getArgument(1));
@@ -121,6 +123,18 @@ public class HardeningStressTest {
     }
 
     @Test
+    public void testLockedLightningWalletDisablesDepositsWithoutSchedulerFailure() {
+        Mockito.when(lightningClient.getLocalBalance())
+                .thenThrow(new RuntimeException("UNKNOWN: wallet locked, unlock it to enable full RPC access"));
+
+        assertDoesNotThrow(() -> liquidityMonitor.checkLiquidityHealth());
+
+        assertEquals("ENABLED", redisTemplate.opsForValue().get("system:status:withdrawals"));
+        assertEquals("DISABLED_UNHEALTHY_NODE", redisTemplate.opsForValue().get("system:status:deposits"));
+        assertEquals("CRITICAL", redisTemplate.opsForValue().get("system:health:lightning"));
+    }
+
+    @Test
     public void testHmacTamperingDetection() {
         // Simulation: Hacker modifies balance via direct SQL (psql)
         UserDataBase user = new UserDataBase();
@@ -155,6 +169,7 @@ public class HardeningStressTest {
     }
 
     @Test
+    @Disabled("No deterministic RBF harness exists yet; this placeholder was disabled to avoid false confidence.")
     public void testRbfNoDoubleDebit() {
         // Agente 6 Goal: Multi-sig RBF replacement without double-debiting
         log.info("[StressTest] RBF Fee-Bump Consistency starts...");

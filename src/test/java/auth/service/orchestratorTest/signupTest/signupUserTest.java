@@ -6,7 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import source.auth.application.orchestrator.signup.SignupUseCase;
 import source.auth.application.service.authentication.contracts.SignupVerifier;
 import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.validation.totp.contratcs.TOTPKeyGenerate;
+import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
 import source.auth.dto.UserDTO;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

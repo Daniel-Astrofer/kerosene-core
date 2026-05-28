@@ -1,112 +1,102 @@
 package source.wallet.service;
 
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import source.auth.application.service.cripto.contracts.Hasher;
+import source.wallet.application.port.in.DeleteWalletUseCase;
+import source.wallet.application.port.in.UpdateWalletUseCase;
+import source.wallet.application.port.out.WalletCredentialsPort;
+import source.wallet.application.service.WalletPersistenceSupport;
+import source.wallet.application.service.WalletReader;
 import source.wallet.dto.WalletRequestDTO;
 import source.wallet.dto.WalletUpdateDTO;
-import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
-import source.wallet.repository.WalletRepository;
+
 import java.util.List;
 
-@Transactional
 @Service
 public class WalletService implements WalletContract {
 
-    private final WalletRepository walletRepository;
-    private final Hasher hash;
-    private final SignupVerifier verify;
+    private final WalletReader walletReader;
+    private final WalletPersistenceSupport walletPersistenceSupport;
+    private final WalletCredentialsPort walletCredentialsPort;
+    private final UpdateWalletUseCase updateWalletUseCase;
+    private final DeleteWalletUseCase deleteWalletUseCase;
 
-    public WalletService(WalletRepository walletRepository,
-            @Qualifier("Argon2Hasher") Hasher hash, SignupVerifier verify) {
-        this.walletRepository = walletRepository;
-        this.hash = hash;
-        this.verify = verify;
+    public WalletService(
+            WalletReader walletReader,
+            WalletPersistenceSupport walletPersistenceSupport,
+            WalletCredentialsPort walletCredentialsPort,
+            UpdateWalletUseCase updateWalletUseCase,
+            DeleteWalletUseCase deleteWalletUseCase) {
+        this.walletReader = walletReader;
+        this.walletPersistenceSupport = walletPersistenceSupport;
+        this.walletCredentialsPort = walletCredentialsPort;
+        this.updateWalletUseCase = updateWalletUseCase;
+        this.deleteWalletUseCase = deleteWalletUseCase;
     }
 
     public void save(WalletEntity entity) {
-        // Validate BIP39 on the raw passphrase BEFORE hashing — after hashing it is
-        // write-only
-        verify.checkPassphraseBip39(entity.getPassphraseHash().toCharArray());
-        // Hash with Argon2id — hashing is always centralised here, never in the caller
-        entity.setPassphraseHash(hash.hash(entity.getPassphraseHash().toCharArray()));
-        walletRepository.save(entity);
+        walletCredentialsPort.validateBip39Passphrase(entity.getPassphraseHash());
+        walletPersistenceSupport.persistNew(entity);
     }
 
     public WalletEntity findByName(String name) {
-        String upperName = name != null ? name.toUpperCase() : null;
-        return walletRepository.findByName(upperName);
+        return walletReader.findByName(name);
     }
 
     public WalletEntity findByNameAndUserId(String name, Long userId) {
-        String upperName = name != null ? name.toUpperCase() : null;
-        return walletRepository.findByUserIdAndName(userId, upperName).orElse(null);
+        return walletReader.findByNameAndUserId(name, userId);
     }
 
     public WalletEntity findById(Long id) {
-        return walletRepository.findById(id).orElse(null);
+        return walletReader.findById(id);
+    }
+
+    public List<WalletEntity> findAll() {
+        return walletReader.findAll();
     }
 
     public WalletEntity findByPassphraseHash(String passphraseHash) {
-        return walletRepository.findByPassphraseHash(passphraseHash);
+        return walletReader.findByPassphraseHash(passphraseHash);
+    }
+
+    public WalletEntity findByDepositAddress(String depositAddress) {
+        return walletReader.findByDepositAddress(depositAddress);
+    }
+
+    public WalletEntity findByDestinationHash(String destinationHash) {
+        return walletReader.findByDestinationHash(destinationHash);
+    }
+
+    public WalletEntity findByLightningAddress(String lightningAddress) {
+        return walletReader.findByLightningAddress(lightningAddress);
     }
 
     public boolean existsByUserIdAndName(Long id, String name) {
-        return walletRepository.existsByUserIdAndName(id, name != null ? name.toUpperCase() : null);
+        return walletReader.existsByUserIdAndName(id, name);
     }
 
     public boolean existsByName(String name) {
-        return walletRepository.existsByName(name != null ? name.toUpperCase() : null);
+        return walletReader.existsByName(name);
     }
 
     public List<WalletEntity> findByUserId(Long userId) {
-        return walletRepository.findByUserId(userId);
+        return walletReader.findByUserId(userId);
+    }
+
+    public WalletEntity findPrimaryWallet(Long userId) {
+        return walletReader.findPrimaryWallet(userId);
     }
 
     public int incrementLastDerivedIndex(Long walletId) {
-        WalletEntity wallet = walletRepository.findByIdForUpdate(walletId)
-                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
-
-        Integer currentIndex = wallet.getLastDerivedIndex();
-        int nextIndex = currentIndex == null ? 0 : currentIndex + 1;
-        wallet.setLastDerivedIndex(nextIndex);
-        walletRepository.save(wallet);
-        return nextIndex;
+        return walletPersistenceSupport.incrementLastDerivedIndex(walletId);
     }
 
     public boolean deleteWallet(Long id, WalletRequestDTO wallet) {
-        String walletNameUpperCase = wallet.name() != null ? wallet.name().toUpperCase() : null;
-        WalletEntity dbWallet = walletRepository.findByUserIdAndName(id, walletNameUpperCase)
-                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet no exists"));
-
-        // Use Argon2 verify (BCrypt-style PHC comparison) — never hash-then-compare
-        if (!hash.verify(wallet.passphrase().toCharArray(), dbWallet.getPassphraseHash())) {
-            throw new WalletExceptions.WalletNoExists("invalid passphrase for deletion");
-        }
-
-        walletRepository.delete(dbWallet);
+        deleteWalletUseCase.deleteWallet(wallet, id);
         return true;
     }
 
     public void updateWallet(Long userId, WalletUpdateDTO dto) {
-        String dtoNameUpperCase = dto.name() != null ? dto.name().toUpperCase() : null;
-        WalletEntity wallet = walletRepository.findByUserIdAndName(userId, dtoNameUpperCase)
-                .orElseThrow(() -> new WalletExceptions.WalletNoExists("wallet not found"));
-
-        String newNameUpper = dto.newName() != null ? dto.newName().toUpperCase() : null;
-
-        if (newNameUpper != null && !newNameUpper.equals(dtoNameUpperCase)) {
-            if (walletRepository.existsByUserIdAndName(userId, newNameUpper)) {
-                throw new WalletExceptions.WalletNameAlredyExists("new name already in use");
-            }
-        }
-
-        if (newNameUpper != null && !newNameUpper.isEmpty()) {
-            wallet.setName(dto.newName());
-        }
-        walletRepository.save(wallet);
+        updateWalletUseCase.updateWallet(dto, userId);
     }
 }

@@ -1,5 +1,12 @@
 package source.ledger.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.math.BigDecimal;
 
 /**
@@ -8,7 +15,8 @@ import java.math.BigDecimal;
  * Suporta múltiplos formatos para sender e receiver:
  * - Username do usuário (ex: "what")
  * - ID da carteira (ex: "1", "2", etc)
- * - Hash/Endereço da carteira (ex: "1A1z7agoat7F9gq5...")
+ * - Endereço blockchain da carteira (ex: "bc1q...")
+ * - Hash público de destino da carteira (ex: SHA-256 hexadecimal exposto em payment requests)
  *
  * Campos de segurança adicionados:
  * - idempotencyKey: UUID gerado pelo app para prevenção de double-spend.
@@ -16,8 +24,16 @@ import java.math.BigDecimal;
  */
 public class TransactionDTO {
 
+    @NotBlank(message = "sender is required")
     private String sender; // Username, Wallet ID ou Address
+
+    @NotBlank(message = "receiver is required")
     private String receiver; // Username, Wallet ID ou Address
+
+    @NotNull(message = "amount is required")
+    @DecimalMin(value = "0.00000001", message = "amount must be greater than zero")
+    @DecimalMax(value = "21000000.00000000", message = "amount exceeds the maximum supported BTC amount")
+    @Digits(integer = 8, fraction = 8, message = "amount must use BTC precision with at most 8 decimal places")
     private BigDecimal amount;
     private String context;
 
@@ -26,6 +42,8 @@ public class TransactionDTO {
      * Se duas requisições chegarem com a mesma key, a segunda é descartada
      * e retorna o resultado da primeira (idempotência).
      */
+    @NotBlank(message = "idempotencyKey is required")
+    @Size(max = 96, message = "idempotencyKey must have at most 96 characters")
     private String idempotencyKey;
 
     /**
@@ -119,6 +137,18 @@ public class TransactionDTO {
         this.passkeyAssertionJson = passkeyAssertionJson;
     }
 
+    public boolean hasPasskeyAssertion() {
+        return passkeyAssertionJson != null && !passkeyAssertionJson.isBlank();
+    }
+
+    public boolean hasConfirmationPassphrase() {
+        return confirmationPassphrase != null && !confirmationPassphrase.isBlank();
+    }
+
+    public boolean hasTotpCode() {
+        return totpCode != null && !totpCode.isBlank();
+    }
+
     public String getConfirmationPassphrase() {
         return confirmationPassphrase;
     }
@@ -152,7 +182,8 @@ public class TransactionDTO {
         if (identifier == null || identifier.trim().isEmpty()) {
             return false;
         }
-        return identifier.matches("^(1|3|bc1)[a-zA-Z0-9]{25,62}$");
+        // Support Mainnet (1, 3, bc1) and Testnet (m, n, 2, tb1)
+        return identifier.matches("^(1|3|bc1|m|n|2|tb1)[a-zA-Z0-9]{25,90}$");
     }
 
     /**

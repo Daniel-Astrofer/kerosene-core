@@ -1,37 +1,75 @@
 package source.common.infra.health;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
-import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Component
 public class TorHealthIndicator implements HealthIndicator {
 
-    // Usually, the application connects to a local Tor proxy at port 9050
-    private static final String SOCKS_PROXY_HOST = "127.0.0.1";
-    private static final int SOCKS_PROXY_PORT = 9050; // Adjust for your docker setup if needed
+    private final Path socksPath;
+    private final Path vanguardsStatePath;
+
+    public TorHealthIndicator(
+            @Value("${tor.health.socks-path:/var/run/tor/socks/tor.sock}") String socksPath,
+            @Value("${tor.health.vanguards-state-file:}") String vanguardsStatePath) {
+        this.socksPath = Path.of(socksPath);
+        this.vanguardsStatePath = vanguardsStatePath == null || vanguardsStatePath.isBlank()
+                ? null
+                : Path.of(vanguardsStatePath);
+    }
 
     @Override
     public Health health() {
-        if (checkTorConnection()) {
-            return Health.up().withDetail("tor_proxy", "Connection successful")
-                    .withDetail("host", SOCKS_PROXY_HOST)
-                    .withDetail("port", SOCKS_PROXY_PORT)
-                    .build();
+        boolean torSocketReady = Files.exists(socksPath) && Files.isReadable(socksPath);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("torSocksPath", socksPath.toString());
+        details.put("torSocksReady", torSocketReady);
+
+        boolean vanguardsReady = true;
+        if (vanguardsStatePath != null) {
+            vanguardsReady = Files.isRegularFile(vanguardsStatePath) && Files.isReadable(vanguardsStatePath);
+            details.put("vanguardsStateFile", vanguardsStatePath.toString());
+            details.put("vanguardsStateReady", vanguardsReady);
+            if (vanguardsReady) {
+                details.put("vanguardsStateSizeBytes", readFileSize(vanguardsStatePath));
+                details.put("vanguardsStateLastModified", readLastModified(vanguardsStatePath));
+            }
         }
-        return Health.down().withDetail("tor_proxy", "Connection failed").build();
+
+        Health.Builder builder = torSocketReady && vanguardsReady ? Health.up() : Health.down();
+        details.forEach(builder::withDetail);
+        if (!torSocketReady) {
+            builder.withDetail("reason", "Tor SOCKS Unix socket missing or unreadable");
+        }
+        if (torSocketReady && !vanguardsReady) {
+            builder.withDetail("reason", "Tor is up but Vanguards state is missing or unreadable");
+        }
+        return builder.build();
     }
 
-    private boolean checkTorConnection() {
-        try (Socket socket = new Socket()) {
-            // Attempt an immediate connection to the local Tor SOCKS proxy instance
-            socket.connect(new InetSocketAddress(SOCKS_PROXY_HOST, SOCKS_PROXY_PORT), 2000);
-            return true;
-        } catch (Exception e) {
-            return false;
+    private static long readFileSize(Path path) {
+        try {
+            return Files.size(path);
+        } catch (IOException ignored) {
+            return -1L;
+        }
+    }
+
+    private static String readLastModified(Path path) {
+        try {
+            FileTime fileTime = Files.getLastModifiedTime(path);
+            return fileTime.toString();
+        } catch (IOException ignored) {
+            return "unknown";
         }
     }
 }

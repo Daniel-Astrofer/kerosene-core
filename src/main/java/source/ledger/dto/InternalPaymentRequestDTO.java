@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 public class InternalPaymentRequestDTO {
     private String id;
     private Long requesterUserId;
+    private Long receiverWalletId;
     private String receiverWalletName;
+    private String destinationHash;
     private BigDecimal amount;
     private String status; // PENDING, PAID, CANCELED
     private LocalDateTime expiresAt;
@@ -32,12 +34,28 @@ public class InternalPaymentRequestDTO {
         this.requesterUserId = requesterUserId;
     }
 
+    public Long getReceiverWalletId() {
+        return receiverWalletId;
+    }
+
+    public void setReceiverWalletId(Long receiverWalletId) {
+        this.receiverWalletId = receiverWalletId;
+    }
+
     public String getReceiverWalletName() {
         return receiverWalletName;
     }
 
     public void setReceiverWalletName(String receiverWalletName) {
         this.receiverWalletName = receiverWalletName;
+    }
+
+    public String getDestinationHash() {
+        return destinationHash;
+    }
+
+    public void setDestinationHash(String destinationHash) {
+        this.destinationHash = destinationHash;
     }
 
     public BigDecimal getAmount() {

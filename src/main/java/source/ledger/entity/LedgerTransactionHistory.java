@@ -17,6 +17,15 @@ import java.util.UUID;
         @jakarta.persistence.Index(name = "idx_ledger_history_txid", columnList = "blockchain_txid"),
         @jakarta.persistence.Index(name = "idx_ledger_history_status", columnList = "status")
 })
+/**
+ * Ephemeral operational ledger history.
+ *
+ * This legacy structure is not a durable user statement and must not be exposed
+ * in enterprise/admin views as personal transaction history. Readable rows are a
+ * short synchronization and settlement buffer, with the default retention set to
+ * 24 hours. Durable user-facing history belongs in encrypted mobile storage;
+ * backend continuity is provided by hashes, commitments, and Merkle audit roots.
+ */
 public class LedgerTransactionHistory {
 
     @Id

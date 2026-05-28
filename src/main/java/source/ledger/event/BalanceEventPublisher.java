@@ -21,10 +21,13 @@ public class BalanceEventPublisher {
         BalanceUpdateEvent event = new BalanceUpdateEvent(
                 walletId, walletName, userId, newBalance, amount, context);
 
-        // Publish to user-specific topic
-        String destination = "/topic/balance/" + userId;
-        messagingTemplate.convertAndSend(destination, event);
-        log.info("[WS] Published balance update to {} - Wallet: {}, NewBalance: {}", destination, walletName,
+        messagingTemplate.convertAndSendToUser(
+                String.valueOf(userId),
+                "/queue/balance",
+                event);
+        log.info("[WS] Published balance update to user {} /queue/balance - Wallet: {}, NewBalance: {}",
+                userId,
+                walletName,
                 newBalance);
     }
 }
