@@ -2,6 +2,7 @@ package source.payments.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.lang.management.ManagementFactory;
 
 @Service
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class PaymentExternalExecutionWorker {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentExternalExecutionWorker.class);

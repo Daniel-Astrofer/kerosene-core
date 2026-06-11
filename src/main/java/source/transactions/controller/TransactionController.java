@@ -3,6 +3,7 @@ package source.transactions.controller;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -35,6 +36,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/transactions")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 @Validated
 public class TransactionController {
 

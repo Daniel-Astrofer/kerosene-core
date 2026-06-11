@@ -1,5 +1,6 @@
 package source.transactions.controller;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/onramp")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class OnrampController {
 
     private final OnrampService onrampService;

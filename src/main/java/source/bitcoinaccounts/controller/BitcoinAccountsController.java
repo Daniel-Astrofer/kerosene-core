@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -27,6 +28,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/bitcoin")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class BitcoinAccountsController {
 
     private final BitcoinAccountService accountService;

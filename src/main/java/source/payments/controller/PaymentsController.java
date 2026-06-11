@@ -1,6 +1,7 @@
 package source.payments.controller;
 
 import jakarta.validation.Valid;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,7 @@ import source.payments.service.ReceivingCapabilityService;
 import java.util.UUID;
 
 @RestController
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class PaymentsController {
 
     private final PaymentQuoteService paymentQuoteService;

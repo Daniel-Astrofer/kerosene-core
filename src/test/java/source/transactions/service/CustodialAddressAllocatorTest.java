@@ -6,7 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import source.common.service.AddressDerivationService;
-import source.ledger.sync.QuorumSyncService;
+import source.sovereign.quorum.QuorumSyncService;
 import source.transactions.infra.BitcoinCoreRpcClient;
 import source.wallet.model.WalletEntity;
 import source.wallet.model.WalletMode;

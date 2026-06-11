@@ -6,7 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import source.ledger.audit.MerkleAuditRepository;
 import source.ledger.audit.MerkleAuditEntity;
-import source.ledger.sync.QuorumSyncService;
+import source.sovereign.quorum.QuorumSyncService;
 
 import java.time.Duration;
 import java.time.Instant;

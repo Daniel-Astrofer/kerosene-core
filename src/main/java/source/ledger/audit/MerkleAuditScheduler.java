@@ -2,6 +2,7 @@ package source.ledger.audit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import source.security.VaultKeyProvider;
@@ -17,6 +18,7 @@ import source.security.VaultKeyProvider;
  * Bitcoin OP_RETURN transaction to create an immutable public timestamp.
  */
 @Component
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class MerkleAuditScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(MerkleAuditScheduler.class);

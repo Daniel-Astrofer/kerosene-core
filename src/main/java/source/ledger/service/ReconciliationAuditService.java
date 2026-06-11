@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import source.ledger.repository.LedgerRepository;
@@ -18,6 +19,7 @@ import java.math.BigDecimal;
  * Compares Ledger total (Postgres) with real UTXOs + Channel funds (Agente 2).
  */
 @Service
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class ReconciliationAuditService {
 
     private static final Logger log = LoggerFactory.getLogger(ReconciliationAuditService.class);

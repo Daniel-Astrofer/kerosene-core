@@ -1,5 +1,6 @@
 package source.ledger.audit;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/audit")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class MerkleAuditController {
 
     private final MerkleAuditService auditService;

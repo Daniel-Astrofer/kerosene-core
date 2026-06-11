@@ -1,0 +1,21 @@
+package source.kfe.dto;
+
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import source.kfe.model.KfeDirection;
+import source.kfe.model.KfeRail;
+
+import java.util.UUID;
+
+public record KfeSubmitTransactionRequest(
+        @NotBlank String idempotencyKey,
+        @NotNull KfeRail rail,
+        @NotNull KfeDirection direction,
+        UUID sourceWalletId,
+        UUID destinationWalletId,
+        @Min(1) long amountSats,
+        @Min(0) long networkFeeSats,
+        String externalReference,
+        String memo) {
+}

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.math.BigDecimal;
  * Assegura que o total de fundos emitidos no DB (L2) não excede os satoshis reais do nó (L1).
  */
 @Service
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class ShadowBalanceAuditService {
 
     private static final int AUDIT_BATCH_SIZE = 500;

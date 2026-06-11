@@ -1,5 +1,6 @@
 package source.ledger.controller;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,6 +40,7 @@ import source.config.LogContext;
 
 @RestController
 @RequestMapping("/ledger")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class LedgerController {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LedgerController.class);

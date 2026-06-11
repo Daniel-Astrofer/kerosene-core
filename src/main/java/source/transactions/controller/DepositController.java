@@ -1,5 +1,6 @@
 package source.transactions.controller;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/deposit")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class DepositController {
 
     private final ExternalPaymentsService externalPaymentsService;

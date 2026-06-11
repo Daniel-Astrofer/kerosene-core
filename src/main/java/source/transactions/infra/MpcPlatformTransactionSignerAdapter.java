@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import source.auth.AuthExceptions;
 import source.auth.application.service.identityaccess.PlatformTransactionSignerPort;
 import source.auth.model.entity.UserDataBase;
+import source.sovereign.mpc.MpcSidecarClient;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

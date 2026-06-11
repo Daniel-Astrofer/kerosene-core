@@ -1,11 +1,13 @@
 package source.treasury.service;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import source.treasury.application.port.in.PerformFinancialAuditUseCase;
 import source.treasury.application.port.out.CircuitBreakerPort;
 
 @Service
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class FinancialIntegrityService {
 
     private final PerformFinancialAuditUseCase performFinancialAuditUseCase;

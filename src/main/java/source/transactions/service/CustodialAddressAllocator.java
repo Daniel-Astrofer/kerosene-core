@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import source.common.infra.logging.LogSanitizer;
 import source.common.service.AddressDerivationService;
-import source.ledger.sync.QuorumSyncService;
+import source.sovereign.quorum.QuorumSyncService;
 import source.transactions.exception.ExternalPaymentsExceptions;
 import source.transactions.infra.BitcoinCoreRpcClient;
 import source.wallet.exceptions.WalletExceptions;

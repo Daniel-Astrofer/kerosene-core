@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import source.ledger.application.balance.LedgerBalanceConsensusPort;
 import source.ledger.exceptions.LedgerExceptions;
-import source.ledger.sync.QuorumSyncService;
+import source.sovereign.quorum.QuorumSyncService;
 
 @Component
 public class QuorumLedgerBalanceConsensusAdapter implements LedgerBalanceConsensusPort {

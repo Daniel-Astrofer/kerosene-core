@@ -3,6 +3,7 @@ package source.transactions.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import source.common.observability.FinancialOperationsMetrics;
@@ -12,6 +13,7 @@ import java.net.InetAddress;
 import java.util.List;
 
 @Service
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class ExternalProviderOutboxWorker {
 
     private static final Logger log = LoggerFactory.getLogger(ExternalProviderOutboxWorker.class);

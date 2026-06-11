@@ -1,5 +1,6 @@
 package source.treasury.controller;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/treasury")
+@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 @PreAuthorize("hasRole('ADMIN')")
 public class TreasuryController {
 
