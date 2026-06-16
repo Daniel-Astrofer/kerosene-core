@@ -1,0 +1,9 @@
+{
+  "properties": [
+    {
+      "name": "kerosene.scheduling.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables application scheduled jobs. Tests set this to false to prevent background workers."
+    }
+  ]
+}
