@@ -21,7 +21,7 @@ public class ExternalRailProviderConfiguration {
     @ConditionalOnMissingBean(name = "externalLightningInvoiceGateway")
     public LightningInvoiceGateway externalLightningInvoiceGateway(
             Environment environment,
-            ObjectProvider<LndLightningNodeClient> lndGateway,
+            @Qualifier("lndLightningGateway") ObjectProvider<LndLightningNodeClient> lndGateway,
             ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
             ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
         return chooseProvider(
@@ -37,7 +37,7 @@ public class ExternalRailProviderConfiguration {
     @ConditionalOnMissingBean(name = "externalLightningPaymentGateway")
     public LightningPaymentGateway externalLightningPaymentGateway(
             Environment environment,
-            ObjectProvider<LndLightningNodeClient> lndGateway,
+            @Qualifier("lndLightningGateway") ObjectProvider<LndLightningNodeClient> lndGateway,
             ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
             ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
         return chooseProvider(

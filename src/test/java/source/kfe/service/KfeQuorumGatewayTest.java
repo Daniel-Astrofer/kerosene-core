@@ -39,7 +39,20 @@ class KfeQuorumGatewayTest {
 
     @BeforeEach
     void setUp() {
-        gateway = new KfeQuorumGateway(transport, membership, failStopPolicy, 2);
+        gateway = new KfeQuorumGateway(transport, membership, failStopPolicy, 2, false);
+    }
+
+    @Test
+    void shouldAllowSingleLocalNodeWhenLocalSimulationEnabled() {
+        KfeQuorumGateway localGateway = new KfeQuorumGateway(transport, membership, failStopPolicy, 2, true);
+        when(membership.current()).thenReturn(new QuorumTopology(List.of()));
+
+        KfeQuorumGateway.Result result = localGateway.requireHealthyUnanimousConsensus("hash123");
+
+        assertEquals(1, result.acceptedNodes());
+        assertEquals(1, result.totalHealthyNodes());
+        verify(failStopPolicy).recordQuorumSuccess();
+        verifyNoInteractions(transport);
     }
 
     @Test

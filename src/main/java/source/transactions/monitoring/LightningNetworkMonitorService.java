@@ -1,6 +1,7 @@
 package source.transactions.monitoring;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import source.transactions.service.LndLightningNodeClient;
 
@@ -13,7 +14,8 @@ public class LightningNetworkMonitorService {
 
     private final ObjectProvider<LndLightningNodeClient> bitcoinNodeServiceProvider;
 
-    public LightningNetworkMonitorService(ObjectProvider<LndLightningNodeClient> bitcoinNodeServiceProvider) {
+    public LightningNetworkMonitorService(
+            @Qualifier("lndLightningGateway") ObjectProvider<LndLightningNodeClient> bitcoinNodeServiceProvider) {
         this.bitcoinNodeServiceProvider = bitcoinNodeServiceProvider;
     }
 

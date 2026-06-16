@@ -19,8 +19,8 @@ public class ExternalRailProviderConfiguration {
     @ConditionalOnMissingBean(name = "kfeExternalLightningInvoiceGateway")
     public LightningInvoiceGateway kfeExternalLightningInvoiceGateway(
             Environment environment,
-            ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
-            ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
+            @Qualifier("kfeBtcpayCustodyGateway") ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
+            @Qualifier("kfeConfigurableCustodyGateway") ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
         return chooseProvider(
                 environment.getProperty(INVOICE_PROVIDER_PROPERTY, "auto"),
                 "Lightning invoice",
@@ -33,9 +33,9 @@ public class ExternalRailProviderConfiguration {
     @ConditionalOnMissingBean(name = "kfeExternalLightningPaymentGateway")
     public LightningPaymentGateway kfeExternalLightningPaymentGateway(
             Environment environment,
-            ObjectProvider<LndRestLightningClient> lndRestGateway,
-            ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
-            ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
+            @Qualifier("kfeLndRestLightningClient") ObjectProvider<LndRestLightningClient> lndRestGateway,
+            @Qualifier("kfeBtcpayCustodyGateway") ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
+            @Qualifier("kfeConfigurableCustodyGateway") ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
         return chooseProvider(
                 environment.getProperty(PAYMENT_PROVIDER_PROPERTY, "auto"),
                 "Lightning payment",

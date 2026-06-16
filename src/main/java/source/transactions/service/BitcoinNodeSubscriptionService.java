@@ -3,6 +3,7 @@ package source.transactions.service;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -43,7 +44,7 @@ public class BitcoinNodeSubscriptionService {
     private volatile long lastLockedWalletWarningMs;
 
     public BitcoinNodeSubscriptionService(
-            LndLightningNodeClient bitcoinNodeService,
+            @Qualifier("lndLightningGateway") LndLightningNodeClient bitcoinNodeService,
             BlockchainAddressWatchService blockchainAddressWatchService,
             ExternalTransfersPort externalTransfersPort,
             ExternalTransferRepository externalTransferRepository,

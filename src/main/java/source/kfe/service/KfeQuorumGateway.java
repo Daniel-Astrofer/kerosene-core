@@ -1,5 +1,8 @@
 package source.kfe.service;
 
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import source.sovereign.quorum.FailStopPolicy;
@@ -9,31 +12,42 @@ import source.sovereign.quorum.QuorumPhaseResult;
 import source.sovereign.quorum.QuorumTopology;
 import source.sovereign.quorum.QuorumTransport;
 
-import java.util.List;
-
 @Service
 public class KfeQuorumGateway {
+
+    private static final Logger log = LoggerFactory.getLogger(KfeQuorumGateway.class);
 
     private final QuorumTransport transport;
     private final QuorumMembership membership;
     private final FailStopPolicy failStopPolicy;
     private final int minimumHealthyNodes;
+    private final boolean allowLocalSimulation;
 
     public KfeQuorumGateway(
             QuorumTransport transport,
             QuorumMembership membership,
             FailStopPolicy failStopPolicy,
-            @Value("${kfe.quorum.minimum-healthy-nodes:2}") int minimumHealthyNodes) {
+            @Value("${kfe.quorum.minimum-healthy-nodes:2}") int minimumHealthyNodes,
+            @Value("${quorum.allow-local-simulation:false}") boolean allowLocalSimulation) {
         this.transport = transport;
         this.membership = membership;
         this.failStopPolicy = failStopPolicy;
         this.minimumHealthyNodes = Math.max(2, minimumHealthyNodes);
+        this.allowLocalSimulation = allowLocalSimulation;
     }
 
     public Result requireHealthyUnanimousConsensus(String proposalHash) {
         failStopPolicy.assertWritesAllowed(proposalHash);
 
         QuorumTopology configuredTopology = membership.current();
+        if (allowLocalSimulation && configuredTopology.remotePeers().isEmpty()) {
+            log.warn("[KFE Quorum] Local simulation accepted proposalHash={}. "
+                    + "Configure quorum.shard.urls before using production financial rails.",
+                    proposalHash);
+            failStopPolicy.recordQuorumSuccess();
+            return new Result(configuredTopology.localNodeCount(), configuredTopology.totalNodes());
+        }
+
         QuorumPhaseResult health = transport.healthCheck(configuredTopology);
         List<QuorumPeer> healthyPeers = health.peerResults().stream()
                 .filter(result -> result.accepted() && !result.timedOut())
