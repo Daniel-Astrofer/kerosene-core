@@ -85,7 +85,7 @@ public class TimeDriftMonitorService {
                     offsets.add(offset);
                 }
             } catch (Exception e) {
-                logger.warn("Falha ao contatar oráculo HTTPS " + server + ": " + e.getMessage());
+                logger.warn("Falha ao contatar oráculo HTTPS {}: {}", server, e.getMessage());
             }
         }
 

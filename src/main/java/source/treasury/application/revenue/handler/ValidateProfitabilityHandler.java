@@ -12,8 +12,6 @@ import java.math.BigDecimal;
 public class ValidateProfitabilityHandler extends AbstractRevenueCollectionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ValidateProfitabilityHandler.class);
-    private static final BigDecimal SATOSHIS_PER_BITCOIN = new BigDecimal("100000000");
-
     @Override
     protected void doHandle(RevenueCollectionContext context) {
         long profit = context.userFeeSats() - context.networkFeeSats();
@@ -26,6 +24,6 @@ public class ValidateProfitabilityHandler extends AbstractRevenueCollectionHandl
         }
 
         context.setProfitSats(profit);
-        context.setProfitBtc(BigDecimal.valueOf(profit).divide(SATOSHIS_PER_BITCOIN));
+        context.setProfitBtc(BigDecimal.valueOf(profit).movePointLeft(8));
     }
 }

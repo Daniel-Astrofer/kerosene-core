@@ -205,7 +205,6 @@ public class LiquidityMonitorService {
      * Moving funds from Lightning channels to On-chain reserve (Agente 4 Go-Live Requirement).
      */
     private void triggerLoopOut(long localSats) {
-        String retryKey = "system:loopout:retries";
         String lastFailKey = "system:loopout:last_fail";
 
         // Agente 4: Backoff check
@@ -224,20 +223,7 @@ public class LiquidityMonitorService {
         log.info("[LoopOut] Dispatching SWAP request for {} sats (Attempt {})...",
                  swapAmount, getRetryCount() + 1);
 
-        try {
-            // Simulated Boltz/PeerSwap API call
-            boolean swapInitiated = false; // Simulated failure/offline (Agente 4)
-
-            if (swapInitiated) {
-                log.info("[LoopOut] Swap SUCCESS.");
-                redisTemplate.delete(retryKey);
-                redisTemplate.delete(lastFailKey);
-            } else {
-                handleLoopOutFailure(swapAmount);
-            }
-        } catch (Exception e) {
-            handleLoopOutFailure(swapAmount);
-        }
+        handleLoopOutFailure(swapAmount);
     }
 
     private void handleLoopOutFailure(long amount) {

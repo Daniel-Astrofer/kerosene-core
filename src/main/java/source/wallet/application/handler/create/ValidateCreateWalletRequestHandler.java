@@ -31,7 +31,7 @@ public class ValidateCreateWalletRequestHandler extends AbstractWalletRequestHan
             if (context.getNormalizedXpub() == null) {
                 throw new IllegalArgumentException("Self-custody wallets require a valid XPUB.");
             }
-            if (new String(context.getRequest().passphrase()) == null || context.getRequest().passphrase().length == 0) {
+            if (context.getRequest().passphrase() == null || context.getRequest().passphrase().length == 0) {
                 throw new IllegalArgumentException("A management passphrase is required for self-custody wallets.");
             }
         } else {

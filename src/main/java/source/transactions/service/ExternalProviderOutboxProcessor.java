@@ -308,10 +308,9 @@ public class ExternalProviderOutboxProcessor {
     }
 
     private boolean isSettled(String status) {
-        return status != null
-                && ("SETTLED".equalsIgnoreCase(status)
+        return "SETTLED".equalsIgnoreCase(status)
                 || "COMPLETED".equalsIgnoreCase(status)
-                || "PAID".equalsIgnoreCase(status));
+                || "PAID".equalsIgnoreCase(status);
     }
 
     private boolean isRetryable(RuntimeException exception) {

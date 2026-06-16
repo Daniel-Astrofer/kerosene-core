@@ -1,6 +1,7 @@
 package source.auth.application.service.recovery;
 
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -71,7 +72,7 @@ public class RecoveryCredentialRotator {
 
         if (user.getBackupCodes() == null
                 || state.getMatchedBackupCodeHashes() == null
-                || !user.getBackupCodes().containsAll(state.getMatchedBackupCodeHashes())) {
+                || !new HashSet<>(user.getBackupCodes()).containsAll(state.getMatchedBackupCodeHashes())) {
             throw new AuthExceptions.RecoveryRejectedException(
                     "Recovery request rejected. Existing recovery codes were already rotated.");
         }

@@ -1,5 +1,6 @@
 package source.auth.dto;
 
+import java.io.Serial;
 import java.io.Serializable;
 import source.auth.model.enums.AccountSecurityType;
 
@@ -8,6 +9,7 @@ import source.auth.model.enums.AccountSecurityType;
  * multi-step authentication process (PoW -> optional TOTP -> Passkey).
  */
 public class SignupState implements Serializable {
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private String sessionId;

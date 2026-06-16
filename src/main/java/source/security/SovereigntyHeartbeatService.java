@@ -168,9 +168,7 @@ public class SovereigntyHeartbeatService {
             }
         }
 
-        if (lastFailure != null) {
-            throw lastFailure;
-        }
+        throw lastFailure;
     }
 
     private void sendHeartbeatOnce(String resolvedUrl, java.util.Map<String, String> heartbeatHeaders) throws Exception {

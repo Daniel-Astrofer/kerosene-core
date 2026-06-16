@@ -100,11 +100,6 @@ public class TickerService {
 
     private void savePrice(String currency, BigDecimal value) {
         ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-        if (valueOperations == null) {
-            log.warn("[Ticker] Redis ValueOperations unavailable. Skipping cache write for {}.", currency);
-            return;
-        }
-
         valueOperations.set(
                 REDIS_PRICE_KEY_PREFIX + currency,
                 value.toPlainString(),
@@ -115,11 +110,6 @@ public class TickerService {
     private void ensurePricePresent(String currency, BigDecimal fallbackValue) {
         String key = REDIS_PRICE_KEY_PREFIX + currency;
         ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-        if (valueOperations == null) {
-            log.warn("[Ticker] Redis ValueOperations unavailable. Using fallback price for {}.", currency);
-            return;
-        }
-
         String existing = valueOperations.get(key);
         if (existing == null || existing.isBlank()) {
             savePrice(currency, fallbackValue);
@@ -139,9 +129,7 @@ public class TickerService {
     public BigDecimal getPrice(String currency) {
         try {
             ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
-            String val = valueOperations != null
-                    ? valueOperations.get(REDIS_PRICE_KEY_PREFIX + currency.toLowerCase())
-                    : null;
+            String val = valueOperations.get(REDIS_PRICE_KEY_PREFIX + currency.toLowerCase());
             if (val != null) {
                 return new BigDecimal(val);
             }

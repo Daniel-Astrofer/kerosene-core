@@ -46,7 +46,7 @@ public class RedisAvailabilityGuard {
 
             try {
                 String response = redisTemplate.execute((RedisCallback<String>) RedisConnection::ping);
-                boolean available = response != null && "PONG".equalsIgnoreCase(response);
+                boolean available = "PONG".equalsIgnoreCase(response);
                 updateState(available, available ? "" : "Unexpected Redis ping response: " + response);
             } catch (Exception exception) {
                 updateState(false, exception.getMessage());

@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -247,7 +248,7 @@ public class LedgerAuditController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Invalid TOTP"));
         }
 
-        String requiredHardwareSignature = firstNonBlank(expectedHardwareSignature, "Yubikey");
+        String requiredHardwareSignature = Objects.requireNonNull(firstNonBlank(expectedHardwareSignature, "Yubikey"));
         if (hardwareSig == null || !hardwareSig.contains(requiredHardwareSignature)) {
             log.warn("[SIPHON] Hardware signature mismatch.");
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Invalid Hardware Attestation"));

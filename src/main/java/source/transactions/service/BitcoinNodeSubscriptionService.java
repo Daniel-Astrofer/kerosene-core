@@ -20,12 +20,16 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 @ConditionalOnBean(LndLightningNodeClient.class)
 public class BitcoinNodeSubscriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(BitcoinNodeSubscriptionService.class);
+    private static final long MIN_RECONNECT_DELAY_SECONDS = 3;
+    private static final long MAX_RECONNECT_DELAY_SECONDS = 30;
+    private static final long WALLET_LOCKED_RECONNECT_DELAY_SECONDS = 30;
 
     private final LndLightningNodeClient bitcoinNodeService;
     private final BlockchainAddressWatchService blockchainAddressWatchService;
@@ -34,8 +38,8 @@ public class BitcoinNodeSubscriptionService {
     private final NetworkTransferLifecycleService networkTransferLifecycleService;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private volatile boolean running = true;
-    private volatile long lastInvoiceAddIndex;
-    private volatile long lastInvoiceSettleIndex;
+    private final AtomicLong lastInvoiceAddIndex = new AtomicLong();
+    private final AtomicLong lastInvoiceSettleIndex = new AtomicLong();
     private volatile long lastLockedWalletWarningMs;
 
     public BitcoinNodeSubscriptionService(
@@ -64,18 +68,25 @@ public class BitcoinNodeSubscriptionService {
     public void stop() throws InterruptedException {
         running = false;
         executor.shutdownNow();
-        executor.awaitTermination(5, TimeUnit.SECONDS);
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+            log.warn("[BitcoinNodeSubscription] Listener executor did not terminate cleanly.");
+        }
     }
 
     private void runTransactionsLoop() {
+        int reconnectAttempts = 0;
         while (running) {
             try {
                 Iterator<Transaction> stream = bitcoinNodeService.subscribeTransactions();
                 while (running && stream.hasNext()) {
+                    reconnectAttempts = 0;
                     processTransaction(stream.next());
                 }
+                if (running) {
+                    reconnectAttempts = sleepBeforeReconnect("Transaction", null, reconnectAttempts);
+                }
             } catch (Exception ex) {
-                sleepBeforeReconnect("Transaction", ex);
+                reconnectAttempts = sleepBeforeReconnect("Transaction", ex, reconnectAttempts);
             }
         }
     }
@@ -84,7 +95,7 @@ public class BitcoinNodeSubscriptionService {
         Map<String, Long> amountsByAddress = new HashMap<>();
         transaction.getOutputDetailsList().forEach(output -> {
             String address = output.getAddress();
-            if (address != null && !address.isBlank() && output.getIsOurAddress()) {
+            if (!address.isBlank() && output.getIsOurAddress()) {
                 amountsByAddress.merge(address, output.getAmount(), Long::sum);
             }
         });
@@ -122,21 +133,28 @@ public class BitcoinNodeSubscriptionService {
     }
 
     private void runInvoicesLoop() {
+        int reconnectAttempts = 0;
         while (running) {
             try {
-                Iterator<Invoice> stream = bitcoinNodeService.subscribeInvoices(lastInvoiceAddIndex, lastInvoiceSettleIndex);
+                Iterator<Invoice> stream = bitcoinNodeService.subscribeInvoices(
+                        lastInvoiceAddIndex.get(),
+                        lastInvoiceSettleIndex.get());
                 while (running && stream.hasNext()) {
+                    reconnectAttempts = 0;
                     processInvoice(stream.next());
                 }
+                if (running) {
+                    reconnectAttempts = sleepBeforeReconnect("Invoice", null, reconnectAttempts);
+                }
             } catch (Exception ex) {
-                sleepBeforeReconnect("Invoice", ex);
+                reconnectAttempts = sleepBeforeReconnect("Invoice", ex, reconnectAttempts);
             }
         }
     }
 
     private void processInvoice(Invoice invoice) {
-        lastInvoiceAddIndex = Math.max(lastInvoiceAddIndex, invoice.getAddIndex());
-        lastInvoiceSettleIndex = Math.max(lastInvoiceSettleIndex, invoice.getSettleIndex());
+        lastInvoiceAddIndex.updateAndGet(current -> Math.max(current, invoice.getAddIndex()));
+        lastInvoiceSettleIndex.updateAndGet(current -> Math.max(current, invoice.getSettleIndex()));
 
         String paymentHash = java.util.HexFormat.of().formatHex(invoice.getRHash().toByteArray());
         ExternalTransferEntity transfer = externalTransferRepository.findTopByPaymentHashOrderByCreatedAtDesc(paymentHash)
@@ -155,8 +173,14 @@ public class BitcoinNodeSubscriptionService {
                 "LND_SUBSCRIBE_INVOICES");
     }
 
-    private void sleepBeforeReconnect(String streamName, Exception ex) {
-        boolean walletLocked = isWalletLocked(ex);
+    private int sleepBeforeReconnect(String streamName, Exception ex, int reconnectAttempts) {
+        boolean walletLocked = ex != null && isWalletLocked(ex);
+        int nextAttempts = walletLocked ? 0 : Math.min(reconnectAttempts + 1, 4);
+        long delaySeconds = walletLocked
+                ? WALLET_LOCKED_RECONNECT_DELAY_SECONDS
+                : Math.min(MAX_RECONNECT_DELAY_SECONDS,
+                        MIN_RECONNECT_DELAY_SECONDS << Math.max(0, nextAttempts - 1));
+
         if (walletLocked) {
             long now = System.currentTimeMillis();
             if (now - lastLockedWalletWarningMs >= TimeUnit.MINUTES.toMillis(1)) {
@@ -167,15 +191,19 @@ public class BitcoinNodeSubscriptionService {
                 log.debug("[BitcoinNodeSubscription] LND wallet still locked; {} stream remains paused.",
                         streamName);
             }
+        } else if (ex == null) {
+            log.warn("[BitcoinNodeSubscription] {} stream ended; reconnecting in {}s.", streamName, delaySeconds);
         } else {
-            log.warn("[BitcoinNodeSubscription] {} stream interrupted: {}", streamName, ex.getMessage());
+            log.warn("[BitcoinNodeSubscription] {} stream interrupted: {}; reconnecting in {}s.",
+                    streamName, ex.getMessage(), delaySeconds);
         }
 
         try {
-            TimeUnit.SECONDS.sleep(walletLocked ? 30 : 3);
+            TimeUnit.SECONDS.sleep(delaySeconds);
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
+        return nextAttempts;
     }
 
     private boolean isWalletLocked(Exception ex) {

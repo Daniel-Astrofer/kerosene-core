@@ -58,8 +58,12 @@ public class SubscribeAuthorizationStompMessageHandler extends AbstractStompMess
     }
 
     private Long principalUserId(StompMessageContext context) {
+        java.security.Principal user = context.accessor().getUser();
+        if (user == null) {
+            return null;
+        }
         try {
-            return Long.valueOf(context.accessor().getUser().getName());
+            return Long.valueOf(user.getName());
         } catch (Exception exception) {
             return null;
         }

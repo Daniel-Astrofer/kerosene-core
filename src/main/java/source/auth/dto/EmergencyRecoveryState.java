@@ -1,10 +1,12 @@
 package source.auth.dto;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 public class EmergencyRecoveryState implements Serializable {
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private String sessionId;

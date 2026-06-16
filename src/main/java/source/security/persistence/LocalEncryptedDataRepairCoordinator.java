@@ -300,6 +300,7 @@ public class LocalEncryptedDataRepairCoordinator implements SmartLifecycle {
         }
 
         try (Statement statement = connection.createStatement()) {
+            //noinspection SqlSourceToSinkFlow
             statement.execute("truncate table " + String.join(", ", tables) + " restart identity cascade");
         }
     }

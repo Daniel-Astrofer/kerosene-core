@@ -129,6 +129,7 @@ public class BlockchainZmqListenerService {
     private void listen() {
         try (ZContext context = new ZContext()) {
             ZMQ.Socket socket = context.createSocket(SocketType.SUB);
+            socket.setReceiveTimeOut(100);
             socket.subscribe("rawtx".getBytes(ZMQ.CHARSET));
             socket.subscribe("hashblock".getBytes(ZMQ.CHARSET));
             socket.connect(rawTxEndpoint);
@@ -137,14 +138,16 @@ public class BlockchainZmqListenerService {
             }
 
             while (running.get() && !Thread.currentThread().isInterrupted()) {
-                byte[] topicBytes = socket.recv(ZMQ.DONTWAIT);
+                byte[] topicBytes = socket.recv();
                 if (topicBytes == null) {
-                    Thread.sleep(100L);
                     continue;
                 }
 
                 String topic = new String(topicBytes, ZMQ.CHARSET);
                 byte[] payload = socket.recv();
+                if (payload == null) {
+                    continue;
+                }
                 drainMultipart(socket);
 
                 if ("rawtx".equals(topic)) {
@@ -153,8 +156,6 @@ public class BlockchainZmqListenerService {
                     handleNewBlock(payload);
                 }
             }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
         } catch (Exception ex) {
             log.error("[BlockchainZmq] Listener terminated unexpectedly: {}", ex.getMessage(), ex);
         } finally {

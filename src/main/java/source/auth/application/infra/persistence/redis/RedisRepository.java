@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.concurrent.TimeUnit;
+import java.util.Objects;
 
 @Repository
 public class RedisRepository implements RedisContract {
@@ -90,7 +91,7 @@ public class RedisRepository implements RedisContract {
             String json = redis.execute(
                     (org.springframework.data.redis.connection.RedisConnection conn) -> {
                         byte[] rawKey = redis.getStringSerializer().serialize("signup:" + sessionId);
-                        byte[] rawVal = conn.stringCommands().getDel(rawKey);
+                        byte[] rawVal = conn.stringCommands().getDel(Objects.requireNonNull(rawKey));
                         return rawVal != null ? new String(rawVal, java.nio.charset.StandardCharsets.UTF_8) : null;
                     });
             if (json == null)
@@ -104,7 +105,7 @@ public class RedisRepository implements RedisContract {
 
     @Override
     public void deleteSignupState(String sessionId) {
-        if (!Boolean.TRUE.equals(redis.delete("signup:" + sessionId))) {
+        if (!redis.delete("signup:" + sessionId)) {
             throw new AuthExceptions.InvalidCredentials("Temporarily saved SignupState not found to delete");
         }
     }
@@ -140,7 +141,7 @@ public class RedisRepository implements RedisContract {
             String json = redis.execute(
                     (org.springframework.data.redis.connection.RedisConnection conn) -> {
                         byte[] rawKey = redis.getStringSerializer().serialize("recovery:" + sessionId);
-                        byte[] rawVal = conn.stringCommands().getDel(rawKey);
+                        byte[] rawVal = conn.stringCommands().getDel(Objects.requireNonNull(rawKey));
                         return rawVal != null ? new String(rawVal, java.nio.charset.StandardCharsets.UTF_8) : null;
                     });
             if (json == null) {
@@ -155,7 +156,7 @@ public class RedisRepository implements RedisContract {
 
     @Override
     public void deleteEmergencyRecoveryState(String sessionId) {
-        if (!Boolean.TRUE.equals(redis.delete("recovery:" + sessionId))) {
+        if (!redis.delete("recovery:" + sessionId)) {
             throw new AuthExceptions.InvalidCredentials("Temporarily saved EmergencyRecoveryState not found to delete");
         }
     }

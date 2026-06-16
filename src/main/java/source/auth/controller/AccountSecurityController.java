@@ -63,12 +63,11 @@ public class AccountSecurityController {
             @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash,
             @RequestBody AccountSecurityUpdateRequestDTO request) {
         UserDataBase user = getAuthenticatedUser();
-        PasskeyInventoryDTO passkeys = passkeyInventoryService.inventoryFor(user);
 
         validateAndApply(user, request);
         user = userService.createUserInDataBase(user);
 
-        passkeys = passkeyInventoryService.inventoryFor(user);
+        PasskeyInventoryDTO passkeys = passkeyInventoryService.inventoryFor(user);
         return ResponseEntity.ok(ApiResponse.success(
                 "Account security profile updated successfully.",
                 AccountSecurityProfileDTO.fromUser(

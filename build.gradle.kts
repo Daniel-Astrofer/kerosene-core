@@ -1,7 +1,7 @@
 plugins {
 
     java
-    id("org.springframework.boot") version "3.3.2"
+    id("org.springframework.boot") version "3.5.15"
     id("io.spring.dependency-management") version "1.1.6"
     // Supply Chain Defense: varre CVEs conhecidos em todas as dependências (NVD)
     id("org.owasp.dependencycheck") version "10.0.4"
@@ -16,6 +16,9 @@ description = "backend"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
 }
 
 repositories {
@@ -24,11 +27,11 @@ repositories {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.25.3"
+        artifact = "com.google.protobuf:protoc:3.25.9"
     }
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:1.62.2"
+            artifact = "io.grpc:protoc-gen-grpc-java:1.82.0"
         }
     }
     generateProtoTasks {
@@ -40,19 +43,24 @@ protobuf {
     }
 }
 
+configurations.configureEach {
+    exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+}
+
 dependencies {
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
 
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
-    implementation("org.bitcoinj:bitcoinj-core:0.15.10")
+    implementation("org.bitcoinj:bitcoinj-core:0.15.10") {
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+    }
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	runtimeOnly("com.h2database:h2")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.jboss.aerogear:aerogear-otp-java:1.0.0.M1")
     implementation("commons-codec:commons-codec:1.16.0")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
@@ -60,8 +68,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-websocket")
     implementation("org.postgresql:postgresql:42.7.7")
     implementation("org.zeromq:jeromq:0.6.0")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.17.2")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor")
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("com.bucket4j:bucket4j-core:8.7.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -72,15 +80,23 @@ dependencies {
 
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
     implementation("io.micrometer:micrometer-observation")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // gRPC for MPC Sidecar
-    implementation("io.grpc:grpc-netty-shaded:1.64.0")
-    implementation("io.grpc:grpc-protobuf:1.64.0")
-    implementation("io.grpc:grpc-stub:1.64.0")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+    implementation("io.grpc:grpc-netty-shaded:1.82.0")
+    implementation("io.grpc:grpc-protobuf:1.82.0")
+    implementation("io.grpc:grpc-stub:1.82.0")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.84")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.84")
+    constraints {
+        implementation("com.google.protobuf:protobuf-java:3.25.9") {
+            because("CVE-2024-7254 affects older protobuf-java runtimes")
+        }
+        implementation("io.netty:netty-codec-http2:4.2.6.Final") {
+            because("CVE-2025-55163 affects older Netty HTTP/2 implementations")
+        }
+    }
     compileOnly("jakarta.annotation:jakarta.annotation-api:2.1.1")
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
 }

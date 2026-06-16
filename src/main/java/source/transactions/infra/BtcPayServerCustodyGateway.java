@@ -127,7 +127,7 @@ public class BtcPayServerCustodyGateway implements CustodyGateway {
         String status = normalizeInvoiceStatus(invoice);
         long receivedSats = btcNodeToSats(invoice.path("amount"));
         if (receivedSats <= 0L) {
-            receivedSats = btcNodeToSats(paymentMethod.path("amount"));
+            receivedSats = btcNodeToSats(paymentMethod == null ? null : paymentMethod.path("amount"));
         }
 
         return new IncomingLightningInvoiceStatus(

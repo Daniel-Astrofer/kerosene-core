@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,11 +45,14 @@ public class MerkleAuditController {
     public ResponseEntity<?> latestRoot() {
         return auditService.findLatest()
                 .map(c -> ResponseEntity.ok(toMap(c)))
-                .orElse(ResponseEntity.ok(Map.of(
-                        "merkleRoot", "NO_CHECKPOINT_YET",
-                        "ledgerCount", 0,
-                        "createdAt", LocalDateTime.now().toString(),
-                        "anchorTxid", (Object) null)));
+                .orElseGet(() -> {
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("merkleRoot", "NO_CHECKPOINT_YET");
+                    body.put("ledgerCount", 0);
+                    body.put("createdAt", LocalDateTime.now().toString());
+                    body.put("anchorTxid", null);
+                    return ResponseEntity.ok(body);
+                });
     }
 
     /**

@@ -13,6 +13,7 @@ import source.transactions.application.transaction.monitoring.TransactionMonitor
 import source.transactions.model.PendingTransaction;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
@@ -26,7 +27,7 @@ public class PendingTransactionMonitoringScheduler {
     @Value("${blockchain.monitor.interval.max:120000}")
     private long maxInterval;
 
-    private volatile long currentBackoffMs = 0;
+    private final AtomicLong currentBackoffMs = new AtomicLong();
 
     private final TransactionPendingPort transactionPendingPort;
     private final MonitorPendingTransactionUseCase monitorPendingTransactionUseCase;
@@ -49,9 +50,9 @@ public class PendingTransactionMonitoringScheduler {
             return;
         }
 
-        if (currentBackoffMs > 0) {
-            currentBackoffMs = Math.max(0, currentBackoffMs - 30000);
-            log.debug("[BlockchainMonitor] Skipping cycle (backoff cooling down: {}ms remaining)", currentBackoffMs);
+        if (currentBackoffMs.get() > 0) {
+            long remainingBackoffMs = currentBackoffMs.updateAndGet(backoffMs -> Math.max(0, backoffMs - 30000));
+            log.debug("[BlockchainMonitor] Skipping cycle (backoff cooling down: {}ms remaining)", remainingBackoffMs);
             return;
         }
 
@@ -67,7 +68,8 @@ public class PendingTransactionMonitoringScheduler {
                 monitorPendingTransactionUseCase.check(transaction);
             } catch (TransactionMonitoringRateLimitException ex) {
                 log.warn("[BlockchainMonitor] Rate limited by blockchain API. Backing off.");
-                currentBackoffMs = Math.min(currentBackoffMs == 0 ? minInterval : currentBackoffMs * 2, maxInterval);
+                currentBackoffMs.updateAndGet(backoffMs ->
+                        Math.min(backoffMs == 0 ? minInterval : backoffMs * 2, maxInterval));
                 rateLimitHit = true;
                 break;
             } catch (Exception ex) {
@@ -75,8 +77,8 @@ public class PendingTransactionMonitoringScheduler {
             }
         }
 
-        if (!rateLimitHit && currentBackoffMs > 0) {
-            currentBackoffMs = Math.max(0, currentBackoffMs / 2);
+        if (!rateLimitHit && currentBackoffMs.get() > 0) {
+            currentBackoffMs.updateAndGet(backoffMs -> Math.max(0, backoffMs / 2));
         }
     }
 }

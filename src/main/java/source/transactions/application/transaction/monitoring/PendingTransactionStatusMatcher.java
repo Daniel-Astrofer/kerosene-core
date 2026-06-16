@@ -10,7 +10,7 @@ public final class PendingTransactionStatusMatcher {
 
     public static boolean matches(String current, String expected) {
         if (current == null || expected == null) {
-            return current == expected;
+            return current == null && expected == null;
         }
 
         return MessageDigest.isEqual(

@@ -73,8 +73,7 @@ public class PendingTransactionSettlementAdapter implements PendingTransactionSe
             }
 
             long feeSats = transaction.getFeeSatoshis() != null ? transaction.getFeeSatoshis() : 0L;
-            BigDecimal totalDeduction = transaction.getAmount().add(
-                    BigDecimal.valueOf(feeSats).divide(BigDecimal.valueOf(100_000_000)));
+            BigDecimal totalDeduction = transaction.getAmount().add(BigDecimal.valueOf(feeSats).movePointLeft(8));
 
             ledgerService.updateBalance(
                     senderWallet.getId(),

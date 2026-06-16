@@ -12,6 +12,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Servico de Atestacao Remota (Remote Attestation) para garantir a integridade
@@ -43,7 +44,7 @@ public class RemoteAttestationService {
     private volatile boolean tmeEnabled = false; // Total Memory Encryption (Cold Boot mitigation)
     private volatile Instant lastCheckedAt = Instant.now();
     private volatile String lastQuoteHash = "";
-    private volatile long totalChecks = 0;
+    private final AtomicLong totalChecks = new AtomicLong();
 
     private final VaultKeyProvider vaultKeyProvider;
 
@@ -79,7 +80,7 @@ public class RemoteAttestationService {
     }
 
     public long getTotalChecks() {
-        return totalChecks;
+        return totalChecks.get();
     }
 
     /**
@@ -90,7 +91,7 @@ public class RemoteAttestationService {
     public void pcrPollingHeartbeat() {
         try {
             String currentQuote = generateTpmQuote();
-            totalChecks++;
+            long checks = totalChecks.incrementAndGet();
             lastCheckedAt = Instant.now();
             lastQuoteHash = currentQuote;
 
@@ -105,7 +106,7 @@ public class RemoteAttestationService {
                     logger.info("[Remote Attestation] TPM Integrity Recovered/Re-attested. Exiting STALL mode.");
                 }
                 integrityOk = true;
-                logger.debug("[Remote Attestation] TPM Integrity Check Passed. Total checks: {}", totalChecks);
+                logger.debug("[Remote Attestation] TPM Integrity Check Passed. Total checks: {}", checks);
             }
         } catch (Exception e) {
             if (integrityOk) {

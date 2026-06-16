@@ -510,8 +510,7 @@ public class PasskeyService {
 
         String originHost = extractOriginHost(originInClientData);
         String requestHost = currentRequestHost();
-        return originHost != null
-                && requestHost != null
+        return requestHost != null
                 && isDynamicHostAllowed(requestHost)
                 && requestHost.equals(originHost);
     }

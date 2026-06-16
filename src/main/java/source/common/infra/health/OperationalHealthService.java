@@ -233,7 +233,7 @@ public class OperationalHealthService {
         try {
             String pong = redisTemplate.execute(
                     (org.springframework.data.redis.core.RedisCallback<String>) connection -> connection.ping());
-            boolean up = pong != null && "PONG".equalsIgnoreCase(pong);
+            boolean up = "PONG".equalsIgnoreCase(pong);
             return record(new DependencyHealth(
                     "redis",
                     up ? UP : DOWN,

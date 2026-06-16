@@ -3,7 +3,7 @@ package source.sovereign.quorum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -52,6 +52,14 @@ public class RaftLogService {
 
     public long getLastAppliedIndex() {
         return lastAppliedIndex;
+    }
+
+    public synchronized List<LogEntry> entriesSince(long indexExclusive) {
+        return operationLog.entrySet().stream()
+                .filter(entry -> entry.getKey() > indexExclusive)
+                .sorted(Comparator.comparingLong(java.util.Map.Entry::getKey))
+                .map(entry -> new LogEntry(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     public static record LogEntry(long index, String operation) {}

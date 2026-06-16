@@ -79,7 +79,7 @@ public final class LogSanitizer {
             "(?i)\\b(?:bc1|tb1|bcrt1)[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{25,90}\\b");
 
     private static final Pattern BASE58_ADDRESS = Pattern.compile(
-            "\\b[123mn2][a-km-zA-HJ-NP-Z1-9]{25,90}\\b");
+            "\\b[123mn][a-km-zA-HJ-NP-Z1-9]{25,90}\\b");
 
     // ─── Brazilian PII ────────────────────────────────────────────────────────
     private static final Pattern CPF = Pattern.compile(
@@ -190,7 +190,7 @@ public final class LogSanitizer {
 
     private static String maskToken(String token) {
         if (token == null || token.length() <= 12) return "[MASKED]";
-        return token.substring(0, Math.min(6, token.length())) + "..." + token.substring(token.length() - 4);
+        return token.substring(0, 6) + "..." + token.substring(token.length() - 4);
     }
 
     private static String maskCpf(String value) {

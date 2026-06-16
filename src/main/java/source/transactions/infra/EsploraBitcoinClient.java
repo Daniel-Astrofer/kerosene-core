@@ -187,6 +187,9 @@ public class EsploraBitcoinClient implements BlockchainClient {
 
         try {
             JsonNode summary = readJson(getUrl("/address/" + address));
+            if (summary == null) {
+                return 0L;
+            }
             JsonNode chainStats = summary.path("chain_stats");
             long funded = asLong(chainStats.path("funded_txo_sum"));
             long spent = asLong(chainStats.path("spent_txo_sum"));
