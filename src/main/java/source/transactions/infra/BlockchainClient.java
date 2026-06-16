@@ -2,6 +2,7 @@ package source.transactions.infra;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import source.common.validation.FinancialAmountValidator;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -138,7 +139,7 @@ public interface BlockchainClient {
             return Math.max(1L, btcPerKvB
                     .multiply(new BigDecimal("100000000"))
                     .divide(new BigDecimal("1000"), 0, RoundingMode.CEILING)
-                    .longValue());
+                    .longValueExact());
         } catch (RuntimeException e) {
             return fallbackSatPerVByte;
         }
@@ -230,8 +231,9 @@ public interface BlockchainClient {
         if (btc == null || btc.signum() <= 0) {
             return 0L;
         }
+        FinancialAmountValidator.requireBtcPrecision(btc, "btc");
         return btc.multiply(new BigDecimal("100000000"))
-                .setScale(0, RoundingMode.DOWN)
-                .longValue();
+                .setScale(0, RoundingMode.UNNECESSARY)
+                .longValueExact();
     }
 }

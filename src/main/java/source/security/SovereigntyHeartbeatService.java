@@ -8,15 +8,9 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ProxySelector;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -65,8 +59,6 @@ public class SovereigntyHeartbeatService {
     @Value("${sovereignty.heartbeat.warn-after-consecutive-failures:3}")
     private int heartbeatWarnAfterConsecutiveFailures;
 
-    // For injecting the built client to reuse connections
-    private HttpClient httpClient;
     private String nodeId;
     private final ShardIdentityManager shardIdentityManager;
     private final VaultKeyProvider vaultKeyProvider;
@@ -182,36 +174,18 @@ public class SovereigntyHeartbeatService {
     }
 
     private void sendHeartbeatOnce(String resolvedUrl, java.util.Map<String, String> heartbeatHeaders) throws Exception {
-        if (proxyPath != null && !proxyPath.isBlank()) {
-            UdsSocks5Transport transport = new UdsSocks5Transport(proxyPath, heartbeatRequestTimeoutMs);
-            UdsSocks5Transport.HttpResult response = transport.executeHttpRequest(
-                    resolvedUrl + "/v1/vault/heartbeat",
-                    "POST",
-                    "",
-                    heartbeatHeaders);
-
-            if (response.statusCode() != 200) {
-                logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
-            } else {
-                logger.debug("[Heartbeat] ACK from Vault.");
-            }
-            return;
+        if (proxyPath == null || proxyPath.isBlank()) {
+            throw new IllegalStateException(
+                    "Vault heartbeat requires Tor UDS routing. Configure vault.proxy.path=/var/run/tor/socks/tor.sock");
         }
 
-        if (httpClient == null) {
-            return;
-        }
+        UdsSocks5Transport transport = new UdsSocks5Transport(proxyPath, heartbeatRequestTimeoutMs);
+        UdsSocks5Transport.HttpResult response = transport.executeHttpRequest(
+                resolvedUrl + "/v1/vault/heartbeat",
+                "POST",
+                "",
+                heartbeatHeaders);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(resolvedUrl + "/v1/vault/heartbeat"))
-                .header("X-Node-Id", heartbeatHeaders.get("X-Node-Id"))
-                .header("X-Shard-Timestamp", heartbeatHeaders.get("X-Shard-Timestamp"))
-                .header("X-Shard-Signature", heartbeatHeaders.get("X-Shard-Signature"))
-                .timeout(Duration.ofMillis(heartbeatRequestTimeoutMs))
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build();
-
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             logger.warn("[Heartbeat] Vault rejected heartbeat: HTTP {}", response.statusCode());
         } else {
@@ -228,29 +202,10 @@ public class SovereigntyHeartbeatService {
 
     private void initClient() {
         this.nodeId = getNodeIdentity();
-
-        if (proxyPath != null && !proxyPath.isBlank()) {
-            // UdsSocks5Transport is stateless and used dynamically per request,
-            // so we don't need to build an HttpClient here.
-            return;
+        if (proxyPath == null || proxyPath.isBlank()) {
+            throw new IllegalStateException(
+                    "Vault heartbeat requires Tor UDS routing. Configure vault.proxy.path=/var/run/tor/socks/tor.sock");
         }
-
-        HttpClient.Builder clientBuilder = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10));
-
-        if (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0) {
-            clientBuilder.proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)));
-        }
-
-        String resolvedUrl = resolveVaultUrl();
-        if (resolvedUrl != null && resolvedUrl.startsWith("https")) {
-            javax.net.ssl.SSLParameters sslParams = new javax.net.ssl.SSLParameters();
-            sslParams.setProtocols(new String[] { "TLSv1.3" });
-            sslParams.setNeedClientAuth(true);
-            clientBuilder.sslParameters(sslParams);
-        }
-
-        this.httpClient = clientBuilder.build();
     }
 
     /**

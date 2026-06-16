@@ -4,8 +4,6 @@ import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -24,8 +22,6 @@ import java.util.Map;
  */
 @Component
 public class VaultProvisioningClient {
-
-    private static final Logger logger = LoggerFactory.getLogger(VaultProvisioningClient.class);
 
     private final JsonFactory jsonFactory = new JsonFactory();
     private final HttpClient directClient;
@@ -49,12 +45,13 @@ public class VaultProvisioningClient {
     }
 
     public byte[] provisionMasterKey(String resolvedVaultUrl, VaultAttestationSession session)
-            throws IOException, InterruptedException {
+            throws IOException {
         byte[] keyBytes;
-        if (proxyPath != null && !proxyPath.isBlank()) {
+        if (isOnionUrl(resolvedVaultUrl)) {
+            requireTorTransport();
             keyBytes = provisionViaUds(resolvedVaultUrl, session);
         } else {
-            keyBytes = provisionDirectly(resolvedVaultUrl, session);
+            keyBytes = provisionViaDirect(resolvedVaultUrl, session);
         }
 
         if (keyBytes == null || keyBytes.length != MasterKeyMemoryStore.KEY_BYTES) {
@@ -62,6 +59,10 @@ public class VaultProvisioningClient {
                     "Invalid key length from Vault: " + (keyBytes == null ? "null" : keyBytes.length));
         }
         return keyBytes;
+    }
+
+    private boolean isOnionUrl(String url) {
+        return url != null && url.contains(".onion");
     }
 
     private byte[] provisionViaUds(String resolvedVaultUrl, VaultAttestationSession session) throws IOException {
@@ -84,36 +85,31 @@ public class VaultProvisioningClient {
         return extractKeyBytesFromVaultResponse(result.body());
     }
 
-    private byte[] provisionDirectly(String resolvedVaultUrl, VaultAttestationSession session)
-            throws IOException, InterruptedException {
-        assertDirectConnectionAllowed();
-        logger.warn("[VaultProvisioningClient] DEV MODE - connecting to Vault directly without Tor.");
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(resolvedVaultUrl + "/v1/vault/provision"))
+    private byte[] provisionViaDirect(String resolvedVaultUrl, VaultAttestationSession session) throws IOException {
+        URI uri = URI.create(resolvedVaultUrl + "/v1/vault/provision");
+        HttpRequest request = HttpRequest.newBuilder(uri)
+                .GET()
                 .header("Authorization", "Bearer " + session.sessionToken())
                 .header("X-Node-Id", session.nodeId())
                 .timeout(Duration.ofMillis(vaultRequestTimeoutMs))
-                .GET()
                 .build();
 
-        HttpResponse<byte[]> response = directClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() != 200) {
-            throw new VaultAttestationException("Provisioning failed: Status " + response.statusCode());
+        try {
+            HttpResponse<byte[]> response = directClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != 200) {
+                throw new VaultAttestationException("Provisioning failed via direct HTTP: Status " + response.statusCode());
+            }
+            return extractKeyBytesFromVaultResponse(response.body());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("[VaultProvisioningClient] Provisioning interrupted", e);
         }
-
-        return extractKeyBytesFromVaultResponse(response.body());
     }
 
-    private void assertDirectConnectionAllowed() {
-        if (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0) {
-            logger.error("[VaultProvisioningClient] CRITICAL: vault.proxy.host={} is set but vault.proxy.path is not.",
-                    proxyHost);
-            logger.error("[VaultProvisioningClient] Java ProxySelector would resolve .onion via local DNS.");
-            logger.error("[VaultProvisioningClient] Set vault.proxy.path to the Tor UDS socket path instead.");
+    private void requireTorTransport() {
+        if (proxyPath == null || proxyPath.isBlank()) {
             throw new VaultAttestationException(
-                    "DNS leak prevention: vault.proxy.path (UDS socket) is required when connecting to .onion URLs. "
-                            + "Configure vault.proxy.path=/var/run/tor/socks/tor.sock");
+                    "Vault key provisioning requires Tor UDS routing. Configure vault.proxy.path=/var/run/tor/socks/tor.sock");
         }
     }
 

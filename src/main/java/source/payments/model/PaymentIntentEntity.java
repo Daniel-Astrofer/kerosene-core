@@ -17,7 +17,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "payment_intents", schema = "financial", indexes = {
         @Index(name = "idx_payment_intents_sender_created", columnList = "sender_user_id, created_at"),
-        @Index(name = "idx_payment_intents_status", columnList = "status"),
+        @Index(name = "idx_payment_intents_status_updated", columnList = "status, updated_at"),
         @Index(name = "idx_payment_intents_idempotency", columnList = "idempotency_key")
 })
 public class PaymentIntentEntity {

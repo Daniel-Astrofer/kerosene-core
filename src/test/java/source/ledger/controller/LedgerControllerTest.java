@@ -47,6 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.test.context.TestPropertySource;
 
 @WebMvcTest(
         controllers = LedgerController.class,
@@ -57,6 +58,7 @@ import org.mockito.quality.Strictness;
         })
 @AutoConfigureMockMvc(addFilters = false)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@TestPropertySource(properties = "kfe.legacy-financial.enabled=true")
 @DisplayName("LedgerController Tests")
 class LedgerControllerTest {
 

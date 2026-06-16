@@ -24,7 +24,7 @@ public class WalletPersistenceSupport {
     }
 
     public WalletEntity persistNew(WalletEntity wallet) {
-        wallet.setPassphraseHash(walletCredentialsPort.hashPassphrase(wallet.getPassphraseHash()));
+        wallet.setPassphraseHash(walletCredentialsPort.hashPassphrase(wallet.getPassphraseHash().toCharArray()));
         return walletPersistencePort.save(wallet);
     }
 
@@ -32,8 +32,9 @@ public class WalletPersistenceSupport {
         return walletPersistencePort.save(wallet);
     }
 
-    public boolean matchesPassphrase(String rawPassphrase, WalletEntity wallet) {
+    public boolean matchesPassphrase(char[] rawPassphrase, WalletEntity wallet) {
         return rawPassphrase != null
+                && rawPassphrase.length > 0
                 && wallet != null
                 && walletCredentialsPort.matches(rawPassphrase, wallet.getPassphraseHash());
     }

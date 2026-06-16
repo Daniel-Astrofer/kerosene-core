@@ -26,10 +26,10 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
      * Calcula o total pendente de lucros da plataforma para ser sacado via
      * Siphoning.
      */
-    @Query("SELECT COALESCE(SUM(l.feeAmount), 0) FROM LedgerEntry l WHERE l.status = 'PENDING'")
+    @Query("SELECT COALESCE(SUM(l.feeAmount), 0) FROM LedgerEntry l WHERE l.status = 'PENDING' AND l.userId = 'PLATFORM'")
     BigDecimal calculatePlatformProfitPending();
 
-    @Query("SELECT COALESCE(SUM(l.feeAmount), 0) FROM LedgerEntry l WHERE l.status = 'PENDING' AND l.createdAt <= :cutoff")
+    @Query("SELECT COALESCE(SUM(l.feeAmount), 0) FROM LedgerEntry l WHERE l.status = 'PENDING' AND l.userId = 'PLATFORM' AND l.createdAt <= :cutoff")
     BigDecimal calculatePlatformProfitPendingUpTo(@Param("cutoff") LocalDateTime cutoff);
 
     /**
@@ -38,11 +38,11 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
      */
     @Modifying
     @Transactional
-    @Query("UPDATE LedgerEntry l SET l.status = 'COLLECTED' WHERE l.status = 'PENDING'")
+    @Query("UPDATE LedgerEntry l SET l.status = 'COLLECTED' WHERE l.status = 'PENDING' AND l.userId = 'PLATFORM'")
     void markFeesAsCollected();
 
     @Modifying
     @Transactional
-    @Query("UPDATE LedgerEntry l SET l.status = 'COLLECTED' WHERE l.status = 'PENDING' AND l.createdAt <= :cutoff")
+    @Query("UPDATE LedgerEntry l SET l.status = 'COLLECTED' WHERE l.status = 'PENDING' AND l.userId = 'PLATFORM' AND l.createdAt <= :cutoff")
     int markFeesAsCollectedUpTo(@Param("cutoff") LocalDateTime cutoff);
 }

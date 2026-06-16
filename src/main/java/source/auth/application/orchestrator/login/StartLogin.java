@@ -16,7 +16,7 @@ import source.auth.model.entity.UserDataBase;
 @Component
 public class StartLogin {
 
-    static final long PRE_AUTH_TTL_SECONDS = 300L;
+    public static final long PRE_AUTH_TTL_SECONDS = 300L;
 
     private final LoginVerifier verifier;
     private final RedisServicer redisService;
@@ -69,7 +69,7 @@ public class StartLogin {
         }
     }
 
-    static String preAuthKey(String preAuthToken) {
+    public static String preAuthKey(String preAuthToken) {
         return "pre_auth:" + preAuthToken;
     }
 }

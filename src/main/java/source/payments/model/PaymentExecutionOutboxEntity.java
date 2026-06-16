@@ -13,7 +13,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "payment_execution_outbox", schema = "financial", indexes = {
-        @Index(name = "idx_payment_execution_status_next", columnList = "status, next_attempt_at"),
+        @Index(name = "idx_payment_execution_status_next", columnList = "status, next_attempt_at, created_at"),
         @Index(name = "idx_payment_execution_claim", columnList = "status, claimed_at"),
         @Index(name = "idx_payment_execution_intent", columnList = "payment_intent_id", unique = true),
         @Index(name = "idx_payment_execution_idempotency", columnList = "idempotency_key", unique = true)

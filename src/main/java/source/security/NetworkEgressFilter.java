@@ -20,7 +20,7 @@ import java.util.Set;
  * 1. Docker seccomp profile: restricts allowed syscalls per container
  * (see: security_opt: ["seccomp:seccomp-profile.json"] in docker-compose.yml)
  *
- * 2. iptables OUTPUT rules on the host (applied by deploy/init-iptables.sh):
+ * 2. iptables OUTPUT rules on the host (applied by deploy/host/init-iptables.sh):
  * - Default policy: DROP all outbound traffic
  * - Allowlist: only internal Docker networks + Tor SOCKS5 port 9050
  * - Example:
@@ -44,7 +44,7 @@ public class NetworkEgressFilter {
 
     /**
      * Allowed hosts — enforced at OS/iptables level, documented here for reference.
-     * Update deploy/init-iptables.sh when adding new infrastructure endpoints.
+     * Update deploy/host/init-iptables.sh when adding new infrastructure endpoints.
      */
     public static final Set<String> DOCUMENTED_ALLOWED_HOSTS = Set.of(
             "kerosene_db_is",

@@ -6,7 +6,11 @@ import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExternalPaymentsMathTest {
@@ -32,5 +36,13 @@ class ExternalPaymentsMathTest {
 
         assertFalse(new ExternalPaymentsMath("mainnet").isValidBitcoinAddress(invalidChecksum));
         assertFalse(new ExternalPaymentsMath("mainnet").isValidBitcoinAddress("bc1qnotarealaddress000000000000000000"));
+    }
+
+    @Test
+    void btcToSatsRequiresExactSatoshiPrecision() {
+        ExternalPaymentsMath math = new ExternalPaymentsMath("mainnet");
+
+        assertEquals(1L, math.btcToSats(new BigDecimal("0.00000001")));
+        assertThrows(IllegalArgumentException.class, () -> math.btcToSats(new BigDecimal("0.000000001")));
     }
 }

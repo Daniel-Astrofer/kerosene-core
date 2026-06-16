@@ -11,18 +11,26 @@ import source.auth.application.service.identityaccess.TransactionalAuthenticatio
 import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
 import source.auth.application.service.identityaccess.TransactionalAuthenticationResult;
 import source.auth.model.entity.UserDataBase;
-import source.ledger.service.LedgerService;
+import source.kfe.model.KfeBalanceEntity;
+import source.kfe.model.KfeWalletAddressEntity;
+import source.kfe.model.KfeWalletEntity;
+import source.kfe.model.KfeWalletKind;
+import source.kfe.model.KfeWalletStatus;
+import source.kfe.repository.KfeWalletAddressRepository;
+import source.kfe.repository.KfeWalletRepository;
+import source.kfe.service.KfeBalanceService;
 import source.mining.dto.MiningAllocationRequestDTO;
 import source.mining.dto.MiningAllocationResponseDTO;
 import source.mining.entity.MiningAllocationEntity;
 import source.mining.entity.MiningRigOfferEntity;
 import source.mining.repository.MiningAllocationRepository;
 import source.mining.repository.MiningRigOfferRepository;
-import source.wallet.model.WalletEntity;
-import source.wallet.service.WalletService;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,10 +49,13 @@ class MiningServiceTest {
     private MiningAllocationRepository allocationRepository;
 
     @Mock
-    private WalletService walletService;
+    private KfeWalletRepository walletRepository;
 
     @Mock
-    private LedgerService ledgerService;
+    private KfeWalletAddressRepository walletAddressRepository;
+
+    @Mock
+    private KfeBalanceService balanceService;
 
     @Mock
     private MiningHistoryPort historyPort;
@@ -61,14 +72,15 @@ class MiningServiceTest {
     void setUp() {
         RigCatalog rigCatalog = new RigCatalog(rigOfferRepository);
         MiningSettlementService settlementService = new MiningSettlementService(
-                ledgerService,
+                balanceService,
                 rigCatalog,
                 allocationRepository,
                 historyPort,
                 notificationService);
         MiningAllocationUseCase allocationUseCase = new MiningAllocationUseCase(
                 allocationRepository,
-                walletService,
+                walletRepository,
+                walletAddressRepository,
                 transactionalAuthenticationPort,
                 rigCatalog,
                 settlementService,
@@ -83,11 +95,21 @@ class MiningServiceTest {
         when(user.getId()).thenReturn(1L);
         when(user.getUsername()).thenReturn("miner");
 
-        WalletEntity wallet = new WalletEntity();
-        wallet.setId(11L);
-        wallet.setName("TREASURY");
-        wallet.setUser(user);
-        wallet.setDepositAddress("bc1qmineraddressxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        UUID walletId = UUID.randomUUID();
+        KfeWalletEntity wallet = new KfeWalletEntity();
+        wallet.setId(walletId);
+        wallet.setUserId(1L);
+        wallet.setLabel("TREASURY");
+        wallet.setKind(KfeWalletKind.INTERNAL);
+        wallet.setStatus(KfeWalletStatus.ACTIVE);
+        wallet.setSpendable(true);
+
+        KfeWalletAddressEntity address = new KfeWalletAddressEntity();
+        address.setWalletId(walletId);
+        address.setAddress("bc1qmineraddressxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+
+        KfeBalanceEntity balance = KfeBalanceEntity.empty(walletId, "BTC", "initial-hash");
+        balance.setAvailableSats(100_000_000L);
 
         MiningRigOfferEntity rig = new MiningRigOfferEntity();
         rig.setId(21L);
@@ -106,8 +128,10 @@ class MiningServiceTest {
 
         when(rigOfferRepository.findByIdAndActiveTrue(21L)).thenReturn(java.util.Optional.of(rig));
         when(rigOfferRepository.save(any(MiningRigOfferEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(walletService.findByNameAndUserId("TREASURY", 1L)).thenReturn(wallet);
-        when(ledgerService.getBalance(11L)).thenReturn(new BigDecimal("1.00000000"));
+        when(walletRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(wallet));
+        when(walletAddressRepository.findTopByWalletIdAndStatusOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(Optional.of(address));
+        when(balanceService.requireForUpdate(walletId, "BTC")).thenReturn(balance);
         when(transactionalAuthenticationPort.authorize(any(TransactionalAuthenticationRequest.class)))
                 .thenReturn(new TransactionalAuthenticationResult(user, ""));
         when(allocationRepository.save(any(MiningAllocationEntity.class))).thenAnswer(invocation -> {
@@ -139,6 +163,7 @@ class MiningServiceTest {
         assertEquals(new BigDecimal("1000.00000000"), response.allocatedHashrate());
         assertEquals(new BigDecimal("0.01000000"), response.rentalCostBtc());
         assertEquals("ACTIVE", response.status());
-        verify(ledgerService).updateBalance(11L, new BigDecimal("-0.01000000"), "MINING_ALLOC:sha256-pro-150");
+        verify(balanceService).reserve(walletId, "BTC", 1_000_000L);
+        verify(balanceService).settleReservedDebit(walletId, "BTC", 1_000_000L);
     }
 }

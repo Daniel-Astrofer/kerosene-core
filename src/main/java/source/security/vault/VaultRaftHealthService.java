@@ -6,6 +6,9 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -13,6 +16,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,10 +43,11 @@ public class VaultRaftHealthService {
             ObjectMapper objectMapper,
             @Value("${vault.raft.enabled:false}") boolean enabled,
             @Value("${vault.raft.required:false}") boolean required,
-            @Value("${vault.raft.url:http://vault-raft-1:8200}") String baseUrl,
+            @Value("${vault.raft.url:https://vault-raft-1:8200}") String baseUrl,
             @Value("${vault.raft.token:}") String token,
             @Value("${vault.raft.token-file:}") String tokenFile,
-            @Value("${vault.raft.expected-servers:3}") int expectedServers) {
+            @Value("${vault.raft.expected-servers:3}") int expectedServers,
+            @Value("${vault.raft.tls-insecure:false}") boolean tlsInsecure) {
         this.objectMapper = objectMapper;
         this.enabled = enabled;
         this.required = required;
@@ -47,9 +55,26 @@ public class VaultRaftHealthService {
         this.token = token != null ? token.trim() : "";
         this.tokenFile = tokenFile != null ? tokenFile.trim() : "";
         this.expectedServers = Math.max(1, expectedServers);
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(3))
-                .build();
+        HttpClient.Builder httpBuilder = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(3));
+        if (tlsInsecure) {
+            httpBuilder.sslContext(insecureSslContext());
+        }
+        this.httpClient = httpBuilder.build();
+    }
+
+    private static SSLContext insecureSslContext() {
+        try {
+            SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(null, new TrustManager[]{new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            }}, new SecureRandom());
+            return ctx;
+        } catch (NoSuchAlgorithmException | KeyManagementException e) {
+            throw new RuntimeException("Failed to create insecure SSLContext for Vault Raft", e);
+        }
     }
 
     @PostConstruct

@@ -2,6 +2,7 @@ package source.kfe.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import source.kfe.model.KfeAuditLogEntity;
 import source.kfe.model.KfeTransactionStatus;
 import source.kfe.repository.KfeAuditLogRepository;
@@ -27,6 +28,7 @@ public class KfeAuditLogService {
         this.objectMapper = objectMapper;
     }
 
+    @Transactional
     public KfeAuditLogEntity record(
             String eventType,
             UUID transactionId,
@@ -35,6 +37,7 @@ public class KfeAuditLogService {
             KfeTransactionStatus toStatus,
             Map<String, ?> redactedPayload) {
         String payloadHash = hashService.sha256(toJson(redactedPayload));
+        repository.lockAuditAppender();
         String previousHash = repository.findTopByOrderBySequenceNumberDesc()
                 .map(KfeAuditLogEntity::getEventHash)
                 .orElse(GENESIS_HASH);

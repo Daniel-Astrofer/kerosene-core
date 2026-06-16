@@ -5,20 +5,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.stomp.StompCommand;
-import source.ledger.application.paymentrequest.InternalPaymentRequestStore;
-import source.ledger.dto.InternalPaymentRequestDTO;
 
 public class SubscribeAuthorizationStompMessageHandler extends AbstractStompMessageHandler {
 
     private static final Logger log = LoggerFactory.getLogger(SubscribeAuthorizationStompMessageHandler.class);
 
-    private final InternalPaymentRequestStore paymentRequestStore;
-
-    public SubscribeAuthorizationStompMessageHandler(
-            InternalPaymentRequestStore paymentRequestStore,
-            StompMessageHandler next) {
+    public SubscribeAuthorizationStompMessageHandler(StompMessageHandler next) {
         super(next);
-        this.paymentRequestStore = paymentRequestStore;
     }
 
     @Override
@@ -60,15 +53,7 @@ public class SubscribeAuthorizationStompMessageHandler extends AbstractStompMess
         }
 
         if (destination.startsWith("/topic/payment-request/")) {
-            String requestId = destination.substring("/topic/payment-request/".length()).trim();
-            if (requestId.isBlank() || requestId.contains("/")) {
-                reject(destination, "invalid payment request destination");
-            }
-            InternalPaymentRequestDTO request = paymentRequestStore.findById(requestId);
-            if (request == null || request.getRequesterUserId() == null
-                    || !request.getRequesterUserId().equals(principalUserId)) {
-                reject(destination, "payment request owner mismatch");
-            }
+            reject(destination, "legacy payment request channel disabled");
         }
     }
 

@@ -19,7 +19,7 @@ public class KfePricingService {
         }
 
         if (rail == KfeRail.INTERNAL || direction == KfeDirection.INTERNAL) {
-            return new Quote(amountSats, amountSats, 0L, 0L);
+            return new Quote(amountSats, amountSats, 0L, amountSats);
         }
 
         long keroseneFee = rail == KfeRail.ONCHAIN ? percentageFee(amountSats) : 0L;

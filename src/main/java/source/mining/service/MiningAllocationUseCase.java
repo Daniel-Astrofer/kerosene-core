@@ -6,6 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
 import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
+import source.kfe.model.KfeWalletAddressStatus;
+import source.kfe.model.KfeWalletEntity;
+import source.kfe.model.KfeWalletKind;
+import source.kfe.model.KfeWalletStatus;
+import source.kfe.repository.KfeWalletAddressRepository;
+import source.kfe.repository.KfeWalletRepository;
 import source.mining.dto.MiningAllocationRequestDTO;
 import source.mining.dto.MiningAllocationResponseDTO;
 import source.mining.entity.MiningAllocationEntity;
@@ -17,8 +23,6 @@ import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
-import source.wallet.application.port.in.WalletLookupPort;
-import source.wallet.model.WalletEntity;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -33,7 +37,8 @@ public class MiningAllocationUseCase {
     private static final Logger log = LoggerFactory.getLogger(MiningAllocationUseCase.class);
 
     private final MiningAllocationRepository allocationRepository;
-    private final WalletLookupPort walletLookupPort;
+    private final KfeWalletRepository walletRepository;
+    private final KfeWalletAddressRepository walletAddressRepository;
     private final TransactionalAuthenticationPort transactionalAuthenticationPort;
     private final RigCatalog rigCatalog;
     private final MiningSettlementService settlementService;
@@ -42,14 +47,16 @@ public class MiningAllocationUseCase {
 
     public MiningAllocationUseCase(
             MiningAllocationRepository allocationRepository,
-            WalletLookupPort walletLookupPort,
+            KfeWalletRepository walletRepository,
+            KfeWalletAddressRepository walletAddressRepository,
             TransactionalAuthenticationPort transactionalAuthenticationPort,
             RigCatalog rigCatalog,
             MiningSettlementService settlementService,
             MiningHistoryPort historyPort,
             NotificationService notificationService) {
         this.allocationRepository = allocationRepository;
-        this.walletLookupPort = walletLookupPort;
+        this.walletRepository = walletRepository;
+        this.walletAddressRepository = walletAddressRepository;
         this.transactionalAuthenticationPort = transactionalAuthenticationPort;
         this.rigCatalog = rigCatalog;
         this.settlementService = settlementService;
@@ -59,11 +66,11 @@ public class MiningAllocationUseCase {
 
     @Transactional
     public MiningAllocationResponseDTO createAllocation(Long userId, MiningAllocationRequestDTO request) {
-        WalletEntity wallet = resolveWallet(userId, request.walletName());
+        KfeWalletEntity wallet = resolveWallet(userId, request.walletName());
         transactionalAuthenticationPort.authorize(TransactionalAuthenticationRequest.walletOutbound(
                 userId,
-                wallet.getUser() != null ? wallet.getUser().getId() : null,
-                wallet.getTotpSecret(),
+                wallet.getUserId(),
+                null,
                 request.totpCode(),
                 request.passkeyAssertionResponseJSON(),
                 request.confirmationPassphrase()));
@@ -91,7 +98,7 @@ public class MiningAllocationUseCase {
         allocation.setUserId(userId);
         allocation.setWalletId(wallet.getId());
         allocation.setRigId(rig.getId());
-        allocation.setWalletNameSnapshot(wallet.getName());
+        allocation.setWalletNameSnapshot(wallet.getLabel());
         allocation.setRigNameSnapshot(rig.getDisplayName());
         allocation.setAlgorithm(rig.getAlgorithm());
         allocation.setHashUnit(rig.getHashUnit());
@@ -100,7 +107,7 @@ public class MiningAllocationUseCase {
         allocation.setRentalCostBtc(rentalCost);
         allocation.setProjectedGrossYieldBtc(projectedGrossYield);
         allocation.setProjectedNetYieldBtc(projectedNetYield);
-        allocation.setPayoutAddress(firstNonBlank(request.payoutAddress(), wallet.getDepositAddress()));
+        allocation.setPayoutAddress(firstNonBlank(request.payoutAddress(), activeAddress(wallet)));
         allocation.setPoolUrl(request.poolUrl());
         allocation.setWorkerName(request.workerName());
         allocation.setProviderRentalReference("rent_" + rig.getRigCode() + "_" + UUID.randomUUID().toString().substring(0, 8));
@@ -111,7 +118,7 @@ public class MiningAllocationUseCase {
 
         historyPort.record(new MiningHistoryPort.MiningHistoryRecord(
                 userId,
-                wallet.getName(),
+                wallet.getLabel(),
                 rig.getDisplayName(),
                 "MINING_HASHPOWER_ALLOCATION",
                 rentalCost,
@@ -128,7 +135,7 @@ public class MiningAllocationUseCase {
                 "mining_allocation",
                 allocation.getId() != null ? allocation.getId().toString() : null,
                 Map.of(
-                        "walletName", wallet.getName(),
+                        "walletName", wallet.getLabel(),
                         "rigName", rig.getDisplayName(),
                         "durationHours", String.valueOf(request.durationHours()),
                         "amountBtc", rentalCost.toPlainString()),
@@ -161,12 +168,22 @@ public class MiningAllocationUseCase {
         return toAllocationDTO(settlementService.cancel(userId, allocation));
     }
 
-    private WalletEntity resolveWallet(Long userId, String walletName) {
-        WalletEntity wallet = walletLookupPort.findByNameAndUserId(walletName, userId);
-        if (wallet == null) {
-            throw new source.wallet.exceptions.WalletExceptions.WalletNoExists("wallet not found");
-        }
-        return wallet;
+    private KfeWalletEntity resolveWallet(Long userId, String walletName) {
+        String requestedName = walletName != null ? walletName.trim() : "";
+        return walletRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .filter(wallet -> wallet.getStatus() == KfeWalletStatus.ACTIVE)
+                .filter(wallet -> wallet.getKind() != KfeWalletKind.WATCH_ONLY && wallet.isSpendable())
+                .filter(wallet -> requestedName.isBlank() || wallet.getLabel().equalsIgnoreCase(requestedName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("KFE wallet not found"));
+    }
+
+    private String activeAddress(KfeWalletEntity wallet) {
+        return walletAddressRepository
+                .findTopByWalletIdAndStatusOrderByCreatedAtDesc(wallet.getId(), KfeWalletAddressStatus.ACTIVE)
+                .map(address -> address.getAddress())
+                .orElse(null);
     }
 
     private void validateDuration(MiningAllocationRequestDTO request, MiningRigOfferEntity rig) {

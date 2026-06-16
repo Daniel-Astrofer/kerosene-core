@@ -19,7 +19,7 @@ public class InstantiateWalletHandler extends AbstractWalletRequestHandler<Creat
     @Override
     protected void doHandle(CreateWalletContext context) {
         WalletEntity wallet = new WalletEntity();
-        wallet.setPassphraseHash(context.getRequest().passphrase());
+        wallet.setPassphraseHash(new String(context.getRequest().passphrase()));
         wallet.setName(context.getNormalizedName());
         wallet.setUser(context.getUser());
         wallet.setXpub(context.getNormalizedXpub());

@@ -80,7 +80,7 @@ class PaymentConfirmServiceTest {
     @Test
     void confirmRejectsExpiredQuote() {
         PaymentIntentEntity intent = quotedInternalIntent();
-        intent.setQuoteExpiresAt(Instant.now().minusSeconds(1));
+        intent.setQuoteExpiresAt(Instant.now().minusSeconds(60));
         when(paymentIntentRepository.findByIdAndSenderUserIdForUpdate(intent.getId(), 1L))
                 .thenReturn(Optional.of(intent));
         when(paymentIntentRepository.findByIdempotencyKey("idem-expired")).thenReturn(Optional.empty());

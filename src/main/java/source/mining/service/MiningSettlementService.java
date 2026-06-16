@@ -4,8 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.ledger.exceptions.LedgerExceptions;
-import source.ledger.service.LedgerService;
+import source.kfe.model.KfeBalanceEntity;
+import source.kfe.service.KfeBalanceService;
 import source.mining.entity.MiningAllocationEntity;
 import source.mining.entity.MiningRigOfferEntity;
 import source.mining.exception.MiningExceptions;
@@ -22,40 +22,45 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+import java.util.UUID;
+
 @Service
 public class MiningSettlementService {
 
     private static final Logger log = LoggerFactory.getLogger(MiningSettlementService.class);
 
-    private final LedgerService ledgerService;
+    private final KfeBalanceService balanceService;
     private final RigCatalog rigCatalog;
     private final MiningAllocationRepository allocationRepository;
     private final MiningHistoryPort historyPort;
     private final NotificationService notificationService;
 
     public MiningSettlementService(
-            LedgerService ledgerService,
+            KfeBalanceService balanceService,
             RigCatalog rigCatalog,
             MiningAllocationRepository allocationRepository,
             MiningHistoryPort historyPort,
             NotificationService notificationService) {
-        this.ledgerService = ledgerService;
+        this.balanceService = balanceService;
         this.rigCatalog = rigCatalog;
         this.allocationRepository = allocationRepository;
         this.historyPort = historyPort;
         this.notificationService = notificationService;
     }
 
-    public void ensureBalance(Long walletId, BigDecimal requiredAmount) {
-        BigDecimal current = ledgerService.getBalance(walletId);
-        if (current.compareTo(requiredAmount) < 0) {
-            throw new LedgerExceptions.InsufficientBalanceException(
+    public void ensureBalance(UUID walletId, BigDecimal requiredAmount) {
+        KfeBalanceEntity balance = balanceService.requireForUpdate(walletId, "BTC");
+        long requiredSats = btcToSats(requiredAmount);
+        if (balance.getAvailableSats() < requiredSats) {
+            throw new IllegalStateException(
                     "Insufficient wallet balance for the requested mining allocation.");
         }
     }
 
-    public void debitRental(Long walletId, BigDecimal rentalCost, String rigCode) {
-        ledgerService.updateBalance(walletId, normalize(rentalCost).negate(), "MINING_ALLOC:" + rigCode);
+    public void debitRental(UUID walletId, BigDecimal rentalCost, String rigCode) {
+        long amountSats = btcToSats(rentalCost);
+        balanceService.reserve(walletId, "BTC", amountSats);
+        balanceService.settleReservedDebit(walletId, "BTC", amountSats);
     }
 
     @Transactional
@@ -67,10 +72,10 @@ public class MiningSettlementService {
             return;
         }
 
-        ledgerService.updateBalance(
+        balanceService.creditAvailable(
                 allocation.getWalletId(),
-                normalize(allocation.getProjectedNetYieldBtc()),
-                "MINING_SETTLEMENT:" + allocation.getId());
+                "BTC",
+                btcToSats(allocation.getProjectedNetYieldBtc()));
 
         allocation.setStatus("COMPLETED");
         allocation.setSettledAt(LocalDateTime.now());
@@ -123,7 +128,7 @@ public class MiningSettlementService {
 
         BigDecimal creditBack = minedToDate.add(refundable).setScale(8, RoundingMode.HALF_UP);
         if (creditBack.compareTo(BigDecimal.ZERO) > 0) {
-            ledgerService.updateBalance(allocation.getWalletId(), creditBack, "MINING_CANCEL:" + allocation.getId());
+            balanceService.creditAvailable(allocation.getWalletId(), "BTC", btcToSats(creditBack));
         }
 
         rigCatalog.releaseHashrate(rig, allocation.getAllocatedHashrate());
@@ -161,6 +166,10 @@ public class MiningSettlementService {
 
     private BigDecimal normalize(BigDecimal value) {
         return value.setScale(8, RoundingMode.HALF_UP);
+    }
+
+    private long btcToSats(BigDecimal value) {
+        return normalize(value).movePointRight(8).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
     }
 
     private void notifyUser(

@@ -22,12 +22,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @Component
-@ConditionalOnBean(BitcoinNodeService.class)
+@ConditionalOnBean(LndLightningNodeClient.class)
 public class BitcoinNodeSubscriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(BitcoinNodeSubscriptionService.class);
 
-    private final BitcoinNodeService bitcoinNodeService;
+    private final LndLightningNodeClient bitcoinNodeService;
     private final BlockchainAddressWatchService blockchainAddressWatchService;
     private final ExternalTransfersPort externalTransfersPort;
     private final ExternalTransferRepository externalTransferRepository;
@@ -39,7 +39,7 @@ public class BitcoinNodeSubscriptionService {
     private volatile long lastLockedWalletWarningMs;
 
     public BitcoinNodeSubscriptionService(
-            BitcoinNodeService bitcoinNodeService,
+            LndLightningNodeClient bitcoinNodeService,
             BlockchainAddressWatchService blockchainAddressWatchService,
             ExternalTransfersPort externalTransfersPort,
             ExternalTransferRepository externalTransferRepository,

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-CERTS_DIR="${CERTS_DIR:-$PROJECT_DIR/certs}"
+DEPLOY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CERTS_DIR="${CERTS_DIR:-$DEPLOY_DIR/local/certs}"
 
 mkdir -p "$CERTS_DIR"
 cd "$CERTS_DIR"

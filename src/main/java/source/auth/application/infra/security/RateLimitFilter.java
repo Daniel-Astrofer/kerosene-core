@@ -43,6 +43,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "recoverySessionId",
             "linkId",
             "txid");
+    private static final List<String> PUBLIC_AUTH_IDENTITY_ROUTES = List.of(
+            "/auth/admin/login",
+            "/auth/device-key/challenge",
+            "/auth/device-key/onboarding",
+            "/auth/device-key/verify",
+            "/auth/login",
+            "/auth/passkey/challenge",
+            "/auth/passkey/onboarding",
+            "/auth/passkey/verify",
+            "/auth/pow/challenge",
+            "/auth/recovery/emergency",
+            "/auth/signup");
     private static final List<RouteLimit> ROUTE_LIMITS = List.of(
             new RouteLimit("/auth/recovery/emergency", "auth-recovery", 5),
             new RouteLimit("/auth/passkey/verify", "auth-passkey-verify", 10),
@@ -75,7 +87,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return uri != null && (uri.startsWith("/health/") || uri.startsWith("/actuator/health"));
+        return uri != null && (uri.startsWith("/health/")
+                || uri.startsWith("/actuator/health")
+                || uri.startsWith("/quorum/"));
     }
 
     @Override
@@ -123,19 +137,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String resolveRequesterBucket(HttpServletRequest request) {
-        String authorization = request.getHeader("Authorization");
-        if (hasText(authorization)) {
-            return "authz:" + stableHash(authorization);
-        }
-
-        String idempotencyKey = request.getHeader("X-Idempotency-Key");
-        if (hasText(idempotencyKey)) {
-            return "idem:" + stableHash(idempotencyKey);
-        }
-
-        String digest = request.getHeader("Digest");
-        if (hasText(digest)) {
-            return "digest:" + stableHash(digest);
+        boolean preferAuthorization = shouldPreferAuthorization(request.getRequestURI());
+        if (preferAuthorization) {
+            String authorizationBucket = authorizationBucket(request);
+            if (hasText(authorizationBucket)) {
+                return authorizationBucket;
+            }
         }
 
         String queryIdentity = extractQueryIdentity(request);
@@ -152,6 +159,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         String remoteAddr = request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
         return "net:" + stableHash(remoteAddr + "|" + request.getMethod() + "|" + request.getRequestURI());
+    }
+
+    private boolean shouldPreferAuthorization(String uri) {
+        if (!hasText(uri)) {
+            return true;
+        }
+        return PUBLIC_AUTH_IDENTITY_ROUTES.stream()
+                .noneMatch(publicRoute -> uri.equals(publicRoute) || uri.startsWith(publicRoute + "/"));
+    }
+
+    private String authorizationBucket(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        if (!hasText(authorization)) {
+            return null;
+        }
+        return "authz:" + stableHash(authorization.trim());
     }
 
     private String extractQueryIdentity(HttpServletRequest request) {
@@ -178,10 +201,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 }
             }
         } catch (IOException ignored) {
-            // Fall back to the raw payload hash when the body is not parseable JSON.
+            return null;
         }
 
-        return "body:" + stableHash(new String(cachedBody, StandardCharsets.UTF_8));
+        return null;
     }
 
     private String uriBucket(String uri) {

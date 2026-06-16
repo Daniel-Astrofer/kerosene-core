@@ -7,14 +7,21 @@ import org.springframework.stereotype.Service;
 
 import javax.net.ssl.*;
 import java.io.*;
+import java.net.URI;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 
 /**
  * ─── TOR MTLS TRANSPORT ──────────────────────────────────────────────────────
@@ -39,14 +46,17 @@ public class TorMtlsService {
     @Value("${certs.path:/certs}")
     private String certsDir;
 
+    private final QuorumAttestationService attestationService;
     private SSLSocketFactory sslSocketFactory;
+    private SSLContext sslContext;
+    private volatile java.net.http.HttpClient directHttpsClient;
 
-    public TorMtlsService() {
-        // SSL socket factory will be initialized lazily or in @PostConstruct
+    public TorMtlsService(QuorumAttestationService attestationService) {
+        this.attestationService = attestationService;
     }
 
     private synchronized void ensureSslInitialized() throws Exception {
-        if (sslSocketFactory != null) return;
+        if (sslSocketFactory != null && sslContext != null && directHttpsClient != null) return;
 
         log.info("[Tor-mTLS] Initializing SSL Context from certificates in {}...", certsDir);
 
@@ -89,61 +99,96 @@ public class TorMtlsService {
 
         SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
         sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
+        this.sslContext = sslContext;
         this.sslSocketFactory = sslContext.getSocketFactory();
+        SSLParameters sslParameters = new SSLParameters();
+        sslParameters.setProtocols(new String[] { "TLSv1.3" });
+        sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+        this.directHttpsClient = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .sslContext(sslContext)
+                .sslParameters(sslParameters)
+                .build();
         log.info("[Tor-mTLS] SSL Context initialized (TLS 1.3)");
     }
 
     /**
-     * Executes an mTLS POST request over Tor.
+     * Executes an authenticated quorum POST over mTLS.
      */
-    public QuorumResponse post(String onionUrl, String txHash, String payload) throws IOException {
+    public QuorumResponse post(String peerUrl, String txHash, String payload) throws IOException {
+        try {
+            URI uri = URI.create(peerUrl);
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                throw new IOException("Peer URL has no host: " + peerUrl);
+            }
+            if (!"https".equalsIgnoreCase(uri.getScheme())) {
+                throw new IOException("Quorum peers must use HTTPS with mTLS.");
+            }
+            if (!host.endsWith(".onion")) {
+                return postDirect(uri, txHash, payload);
+            }
+            return postTlsOverTor(uri, txHash, payload);
+        } catch (Exception e) {
+            log.error("[Tor-mTLS] Request to {} failed: {}", peerUrl, e.getMessage());
+            throw new IOException("Quorum transport failure: " + e.getMessage(), e);
+        }
+    }
+
+    private QuorumResponse postDirect(URI uri, String txHash, String payload) throws IOException, InterruptedException {
         try {
             ensureSslInitialized();
+        } catch (Exception exception) {
+            throw new IOException("Unable to initialize quorum mTLS context", exception);
+        }
+        String path = pathWithQuery(uri);
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/json")
+                .header("Digest", digest(payload))
+                .header("X-Tx-Hash", txHash)
+                .POST(HttpRequest.BodyPublishers.ofString(payload));
+        attestationService.signedHeaders(path, txHash).forEach(builder::header);
+        HttpResponse<String> response = directHttpsClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        return new QuorumResponse(response.statusCode());
+    }
 
-            java.net.URI uri = java.net.URI.create(onionUrl);
-            String host = uri.getHost();
-            int port = uri.getPort() == -1 ? 443 : uri.getPort();
-            String path = uri.getRawPath();
+    private QuorumResponse postTlsOverTor(URI uri, String txHash, String payload) throws Exception {
+        ensureSslInitialized();
 
-            log.debug("[Tor-mTLS] Connecting to {} via Tor SOCKS UDS...", onionUrl);
+        String host = uri.getHost();
+        int port = uri.getPort() == -1 ? 443 : uri.getPort();
+        String path = pathWithQuery(uri);
 
-            // 1. Establish SOCKS5 Tunnel over UDS
-            try (SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
-                channel.connect(UnixDomainSocketAddress.of(torSocksPath));
+        log.debug("[Tor-mTLS] Connecting to {} via Tor SOCKS UDS using TLS...", uri);
 
-                performSocks5Handshake(channel, host, port);
+        try (SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+            channel.connect(UnixDomainSocketAddress.of(torSocksPath));
+            performSocks5Handshake(channel, host, port);
 
-                // 2. Wrap Socket in TLS
-                try (java.net.Socket rawSocket = channel.socket();
-                     java.net.Socket sslSocket = sslSocketFactory.createSocket(rawSocket, host, port, true)) {
+            try (java.net.Socket rawSocket = channel.socket();
+                 java.net.Socket sslSocket = sslSocketFactory.createSocket(rawSocket, host, port, true)) {
+                SSLSocket tlsSocket = (SSLSocket) sslSocket;
+                SSLParameters sslParameters = tlsSocket.getSSLParameters();
+                sslParameters.setProtocols(new String[] { "TLSv1.3" });
+                sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
+                sslParameters.setServerNames(List.of(new SNIHostName(host)));
+                tlsSocket.setSSLParameters(sslParameters);
 
-                    ((SSLSocket) sslSocket).startHandshake();
-                    log.debug("[Tor-mTLS] mTLS Handshake successful with {}", host);
+                tlsSocket.startHandshake();
+                log.debug("[Tor-mTLS] mTLS Handshake successful with {}", host);
 
-                    // 3. Send HTTP Request
-                    PrintWriter writer = new PrintWriter(new OutputStreamWriter(sslSocket.getOutputStream(), StandardCharsets.UTF_8));
-                    writer.print("POST " + path + " HTTP/1.1\r\n");
-                    writer.print("Host: " + host + "\r\n");
-                    writer.print("Connection: close\r\n");
-                    writer.print("Content-Type: application/json\r\n");
-                    writer.print("X-Tx-Hash: " + txHash + "\r\n");
-                    writer.print("Content-Length: " + payload.length() + "\r\n");
-                    writer.print("\r\n");
-                    writer.print(payload);
-                    writer.flush();
+                PrintWriter writer = new PrintWriter(new OutputStreamWriter(tlsSocket.getOutputStream(), StandardCharsets.UTF_8));
+                writeHttpRequest(writer, host, path, txHash, payload);
 
-                    // 4. Read Response
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(sslSocket.getInputStream(), StandardCharsets.UTF_8));
-                    String line = reader.readLine();
-                    if (line == null) throw new IOException("Remote shard closed connection");
-
-                    int statusCode = Integer.parseInt(line.split(" ")[1]);
-                    return new QuorumResponse(statusCode);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(tlsSocket.getInputStream(), StandardCharsets.UTF_8));
+                String line = reader.readLine();
+                if (line == null) {
+                    throw new IOException("Remote shard closed connection");
                 }
+
+                return new QuorumResponse(parseStatus(line));
             }
-        } catch (Exception e) {
-            log.error("[Tor-mTLS] Request to {} failed: {}", onionUrl, e.getMessage());
-            throw new IOException("Tor mTLS failure: " + e.getMessage(), e);
         }
     }
 
@@ -153,7 +198,7 @@ public class TorMtlsService {
         while (buf.hasRemaining()) channel.write(buf);
 
         buf = ByteBuffer.allocate(2);
-        channel.read(buf);
+        readFully(channel, buf);
         if (buf.get(0) != 0x05 || buf.get(1) != 0x00) throw new IOException("SOCKS5 Greeting failed");
 
         // CONNECT CMD
@@ -171,8 +216,82 @@ public class TorMtlsService {
 
         // Response
         buf = ByteBuffer.allocate(1024);
-        channel.read(buf);
+        readFully(channel, buf, 2);
         if (buf.get(1) != 0x00) throw new IOException("SOCKS5 Connect failed, code: " + buf.get(1));
+    }
+
+    private void writeHttpRequest(SocketChannel channel, String host, String path, String txHash, String payload)
+            throws IOException {
+        StringBuilder request = new StringBuilder();
+        appendRequestHeaders(request, host, path, txHash, payload);
+        ByteBuffer buffer = ByteBuffer.wrap(request.toString().getBytes(StandardCharsets.UTF_8));
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
+        }
+    }
+
+    private void writeHttpRequest(PrintWriter writer, String host, String path, String txHash, String payload) {
+        StringBuilder request = new StringBuilder();
+        appendRequestHeaders(request, host, path, txHash, payload);
+        writer.print(request);
+        writer.flush();
+    }
+
+    private void appendRequestHeaders(StringBuilder request, String host, String path, String txHash, String payload) {
+        byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+        request.append("POST ").append(path).append(" HTTP/1.1\r\n");
+        request.append("Host: ").append(host).append("\r\n");
+        request.append("Connection: close\r\n");
+        request.append("Content-Type: application/json\r\n");
+        request.append("Digest: ").append(digest(payload)).append("\r\n");
+        request.append("X-Tx-Hash: ").append(txHash).append("\r\n");
+        for (Map.Entry<String, String> header : attestationService.signedHeaders(path, txHash).entrySet()) {
+            request.append(header.getKey()).append(": ").append(header.getValue()).append("\r\n");
+        }
+        request.append("Content-Length: ").append(payloadBytes.length).append("\r\n");
+        request.append("\r\n");
+        request.append(payload);
+    }
+
+    private int parseStatus(String statusLine) throws IOException {
+        String[] parts = statusLine.split(" ");
+        if (parts.length < 2) {
+            throw new IOException("Invalid HTTP status line: " + statusLine);
+        }
+        return Integer.parseInt(parts[1]);
+    }
+
+    private String pathWithQuery(URI uri) {
+        String path = uri.getRawPath();
+        if (path == null || path.isBlank()) {
+            path = "/";
+        }
+        return uri.getRawQuery() == null ? path : path + "?" + uri.getRawQuery();
+    }
+
+    private String digest(String payload) {
+        try {
+            byte[] bytes = MessageDigest.getInstance("SHA-256")
+                    .digest(payload.getBytes(StandardCharsets.UTF_8));
+            return "SHA-256=" + Base64.getEncoder().encodeToString(bytes);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable.", exception);
+        }
+    }
+
+    private void readFully(SocketChannel channel, ByteBuffer buffer) throws IOException {
+        readFully(channel, buffer, buffer.remaining());
+    }
+
+    private void readFully(SocketChannel channel, ByteBuffer buffer, int minimumBytes) throws IOException {
+        int readTotal = 0;
+        while (readTotal < minimumBytes) {
+            int read = channel.read(buffer);
+            if (read < 0) {
+                throw new IOException("SOCKS5 proxy closed connection");
+            }
+            readTotal += read;
+        }
     }
 
     public record QuorumResponse(int statusCode) {}

@@ -44,6 +44,7 @@ public class CreateInternalPaymentRequestUseCase {
         this.paymentRequestNotificationService = paymentRequestNotificationService;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public InternalPaymentRequestDTO create(Long requesterUserId, BigDecimal amount, String receiverWalletName) {
         try {
             FinancialAmountValidator.requirePositiveBtc(amount, "amount");

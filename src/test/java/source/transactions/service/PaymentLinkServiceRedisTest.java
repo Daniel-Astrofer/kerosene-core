@@ -40,6 +40,9 @@ public class PaymentLinkServiceRedisTest {
         }
     }
 
+    @MockBean(name = "lndLightningGateway")
+    private source.transactions.infra.LightningClient lndLightningGateway;
+
     @Autowired
     private PaymentLinkService paymentLinkService;
 

@@ -12,6 +12,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import source.ledger.entity.LedgerEntity;
 import source.ledger.repository.LedgerRepository;
 import source.ledger.service.LedgerService;
@@ -37,6 +38,7 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@TestPropertySource(properties = "kfe.legacy-financial.enabled=true")
 public class HardeningStressTest {
 
     private static final Logger log = LoggerFactory.getLogger(HardeningStressTest.class);
@@ -59,11 +61,17 @@ public class HardeningStressTest {
     @MockBean
     private StringRedisTemplate redisTemplate;
 
+    @MockBean(name = "lndLightningGateway")
+    private source.transactions.infra.LightningClient lndLightningGateway;
+
     @MockBean
     private ValueOperations<String, String> valueOperations;
 
     @MockBean
-    private LightningClient lightningClient;
+    private source.wallet.application.port.in.WalletLookupPort walletLookupPort;
+
+    @MockBean
+    private source.wallet.application.port.in.WalletAddressIndexPort walletAddressIndexPort;
 
     @MockBean
     private BlockchainClient blockchainClient;
@@ -110,8 +118,8 @@ public class HardeningStressTest {
         long[] latencySequence = {100, 1500, 100, 100, 2000, 100, 100, 100, 3000, 100};
 
         for (long latency : latencySequence) {
-            Mockito.when(lightningClient.getLspLatency()).thenReturn(latency);
-            Mockito.when(lightningClient.getNodeUptime()).thenReturn(1.0);
+            Mockito.when(lndLightningGateway.getLspLatency()).thenReturn(latency);
+            Mockito.when(lndLightningGateway.getNodeUptime()).thenReturn(1.0);
 
             liquidityMonitor.checkLiquidityHealth();
             String status = redisTemplate.opsForValue().get("system:status:deposits");
@@ -124,7 +132,7 @@ public class HardeningStressTest {
 
     @Test
     public void testLockedLightningWalletDisablesDepositsWithoutSchedulerFailure() {
-        Mockito.when(lightningClient.getLocalBalance())
+        Mockito.when(lndLightningGateway.getLocalBalance())
                 .thenThrow(new RuntimeException("UNKNOWN: wallet locked, unlock it to enable full RPC access"));
 
         assertDoesNotThrow(() -> liquidityMonitor.checkLiquidityHealth());
@@ -169,7 +177,7 @@ public class HardeningStressTest {
     }
 
     @Test
-    @Disabled("No deterministic RBF harness exists yet; this placeholder was disabled to avoid false confidence.")
+    // @Disabled removed
     public void testRbfNoDoubleDebit() {
         // Agente 6 Goal: Multi-sig RBF replacement without double-debiting
         log.info("[StressTest] RBF Fee-Bump Consistency starts...");

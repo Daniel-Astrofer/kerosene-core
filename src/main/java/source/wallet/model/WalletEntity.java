@@ -9,7 +9,12 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "wallets", schema = "financial", indexes = {
-        @Index(name = "idx_user_wallet_name", columnList = "user_id, name", unique = true) })
+        @Index(name = "idx_user_wallet_name", columnList = "user_id, name", unique = true),
+        @Index(name = "idx_wallet_destination_hash", columnList = "destination_hash", unique = true),
+        @Index(name = "idx_wallet_lightning_address", columnList = "lightning_address"),
+        @Index(name = "idx_wallet_deposit_address", columnList = "deposit_address"),
+        @Index(name = "idx_wallet_passphrase_hash", columnList = "address")
+})
 public class WalletEntity {
 
     @Id

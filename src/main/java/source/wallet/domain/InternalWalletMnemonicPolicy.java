@@ -32,19 +32,22 @@ public class InternalWalletMnemonicPolicy {
         PORTUGUESE_MNEMONIC = pt;
     }
 
-    public void validate(String mnemonic) {
-        if (mnemonic == null || mnemonic.isBlank()) {
+    public void validate(char[] mnemonic) {
+        if (mnemonic == null || mnemonic.length == 0) {
             throw new AuthExceptions.InvalidPassphrase(AuthConstants.ERR_PASSWORD_NULL);
         }
 
-        String normalizedPhrase = normalize(mnemonic.toCharArray());
+        String normalizedPhrase = normalize(mnemonic);
         List<String> words = Arrays.asList(normalizedPhrase.split(" "));
 
-        if (isValidEnglish(words) || isValidPortuguese(words)) {
-            return;
+        try {
+            if (isValidEnglish(words) || isValidPortuguese(words)) {
+                return;
+            }
+            deriveAndThrowError(words);
+        } finally {
+            Arrays.fill(mnemonic, '\0');
         }
-
-        deriveAndThrowError(words);
     }
 
     private String normalize(char[] input) {

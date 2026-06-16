@@ -48,7 +48,7 @@ class WalletUseCaseTest {
 
     @Test
     void createWalletDelegatesToCreateUseCase() {
-        WalletRequestDTO request = new WalletRequestDTO("test-passphrase-bip39", "TestWallet", null);
+        WalletRequestDTO request = new WalletRequestDTO("test-passphrase-bip39".toCharArray(), "TestWallet", null);
         WalletResponseDTO expected = response("TESTWALLET");
         when(createWalletUseCase.createWallet(request, 1L)).thenReturn(expected);
 
@@ -60,7 +60,7 @@ class WalletUseCaseTest {
 
     @Test
     void deleteWalletDelegatesToDeleteUseCase() {
-        WalletRequestDTO request = new WalletRequestDTO("test-passphrase-bip39", "TestWallet", null);
+        WalletRequestDTO request = new WalletRequestDTO("test-passphrase-bip39".toCharArray(), "TestWallet", null);
 
         walletUseCase.deleteWallet(request, 1L);
 
@@ -91,7 +91,7 @@ class WalletUseCaseTest {
 
     @Test
     void updateWalletDelegatesToUpdateUseCase() {
-        WalletUpdateDTO request = new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", "UpdatedWallet", null);
+        WalletUpdateDTO request = new WalletUpdateDTO("test-passphrase-bip39".toCharArray(), "TestWallet", "UpdatedWallet", null);
 
         walletUseCase.updateWallet(request, 1L);
 

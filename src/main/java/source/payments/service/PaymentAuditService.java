@@ -21,6 +21,7 @@ public class PaymentAuditService {
         this.auditEventRepository = auditEventRepository;
     }
 
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public PaymentAuditEventEntity record(Long actorUserId, UUID paymentIntentId, String eventType, Map<String, ?> payload) {
         String canonicalPayload = canonicalPayload(payload);
         String payloadHash = sha256(canonicalPayload);
@@ -59,7 +60,7 @@ public class PaymentAuditService {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
-        } catch (Exception exception) {
+        } catch (java.security.NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is required for payment audit.", exception);
         }
     }

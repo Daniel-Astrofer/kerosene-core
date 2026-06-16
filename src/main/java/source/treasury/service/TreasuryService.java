@@ -1,6 +1,10 @@
 package source.treasury.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import source.ledger.repository.LedgerEntryRepository;
 import source.transactions.infra.LightningClient;
 import source.transactions.repository.ExternalTransferRepository;
 import source.treasury.domain.service.LiquidityRebalancePolicy;
@@ -13,22 +17,37 @@ import java.util.List;
 @Service
 public class TreasuryService {
 
+    private static final Logger log = LoggerFactory.getLogger(TreasuryService.class);
+    private static final int BTC_SCALE = 8;
     private static final BigDecimal SATOSHIS_PER_BITCOIN = new BigDecimal("100000000");
-    private static final List<String> RESERVED_STATUSES = List.of("PENDING", "MEMPOOL", "CONFIRMED");
+    private static final BigDecimal ZERO_BTC = BigDecimal.ZERO.setScale(BTC_SCALE, RoundingMode.UNNECESSARY);
+    private static final List<String> RESERVED_STATUSES = List.of(
+            "PENDING",
+            "PROVIDER_PENDING",
+            "MEMPOOL",
+            "CONFIRMED",
+            "AUTO_RESOLUTION_PENDING");
+    private static final List<String> UNSETTLED_FEE_STATUSES = List.of(
+            "PENDING",
+            "PROVIDER_PENDING",
+            "AUTO_RESOLUTION_PENDING");
 
     private final ReserveBalanceService reserveBalanceService;
     private final LightningClient lightningClient;
     private final ExternalTransferRepository externalTransferRepository;
+    private final LedgerEntryRepository ledgerEntryRepository;
     private final LiquidityRebalancePolicy liquidityRebalancePolicy;
 
     public TreasuryService(
             ReserveBalanceService reserveBalanceService,
-            LightningClient lightningClient,
+            @Qualifier("lndLightningGateway") LightningClient lightningClient,
             ExternalTransferRepository externalTransferRepository,
+            LedgerEntryRepository ledgerEntryRepository,
             LiquidityRebalancePolicy liquidityRebalancePolicy) {
         this.reserveBalanceService = reserveBalanceService;
         this.lightningClient = lightningClient;
         this.externalTransferRepository = externalTransferRepository;
+        this.ledgerEntryRepository = ledgerEntryRepository;
         this.liquidityRebalancePolicy = liquidityRebalancePolicy;
     }
 
@@ -37,16 +56,32 @@ public class TreasuryService {
 
         long outboundLiquiditySats = Math.max(0L, lightningClient.getLocalBalance());
         long inboundLiquiditySats = Math.max(0L, lightningClient.getRemoteBalance());
-        BigDecimal reservedOnchainBtc = normalize(
-                externalTransferRepository.sumReservedOutboundByNetworkAndStatuses("ONCHAIN", RESERVED_STATUSES));
-        BigDecimal reservedLightningBtc = normalize(
-                externalTransferRepository.sumReservedOutboundByNetworkAndStatuses("LIGHTNING", RESERVED_STATUSES));
+        BigDecimal totalOnchainBtc = normalizeAsset(snapshot.totalOnchainBtc(), "total on-chain reserve");
+        BigDecimal reservedOnchainBtc = normalizeObligation(
+                externalTransferRepository.sumProjectedOutboundRailOutflowByNetworkAndStatuses(
+                        "ONCHAIN", RESERVED_STATUSES),
+                "reserved on-chain rail outflow");
+        BigDecimal reservedLightningBtc = normalizeObligation(
+                externalTransferRepository.sumProjectedOutboundRailOutflowByNetworkAndStatuses(
+                        "LIGHTNING", RESERVED_STATUSES),
+                "reserved Lightning rail outflow");
+        BigDecimal isolatedPlatformFeesBtc = normalizeObligation(
+                normalizeObligation(ledgerEntryRepository.calculatePlatformProfitPending(), "pending platform profit")
+                        .add(normalizeObligation(
+                                externalTransferRepository.sumUnsettledPlatformFeesByStatuses(UNSETTLED_FEE_STATUSES),
+                                "unsettled platform fees")),
+                "isolated platform fees");
 
-        BigDecimal availableOnchainBtc = nonNegative(snapshot.totalOnchainBtc().subtract(reservedOnchainBtc));
-        BigDecimal availableLightningBtc = nonNegative(satsToBtc(outboundLiquiditySats).subtract(reservedLightningBtc));
+        BigDecimal availableOnchainBtc = nonNegativeAvailable(totalOnchainBtc
+                .subtract(isolatedPlatformFeesBtc)
+                .subtract(reservedOnchainBtc));
+        BigDecimal availableLightningBtc = nonNegativeAvailable(satsToBtc(outboundLiquiditySats)
+                .subtract(reservedLightningBtc));
 
         BigDecimal outboundLiquidityBtc = satsToBtc(outboundLiquiditySats);
-        boolean reserveBacksLightning = snapshot.totalOnchainBtc().compareTo(outboundLiquidityBtc) >= 0;
+        BigDecimal projectedLightningLiquidityBtc = nonNegativeAvailable(outboundLiquidityBtc
+                .subtract(reservedLightningBtc));
+        boolean reserveBacksLightning = availableOnchainBtc.compareTo(projectedLightningLiquidityBtc) >= 0;
         boolean healthyInbound = !liquidityRebalancePolicy.requiresLoopOut(outboundLiquiditySats, inboundLiquiditySats);
         boolean lightningAllowed = reserveBacksLightning && availableLightningBtc.signum() > 0;
         String liquidityState = !reserveBacksLightning
@@ -54,7 +89,7 @@ public class TreasuryService {
                 : (!healthyInbound ? "REBALANCE_REQUIRED" : "HEALTHY");
 
         return new TreasuryOverviewDTO(
-                snapshot.totalOnchainBtc(),
+                totalOnchainBtc,
                 snapshot.lightningBtc(),
                 satsToBtc(inboundLiquiditySats),
                 satsToBtc(outboundLiquiditySats),
@@ -67,6 +102,9 @@ public class TreasuryService {
     }
 
     public void assertLightningOutboundAvailable(long amountSats) {
+        if (amountSats <= 0L) {
+            throw new IllegalArgumentException("Lightning payment amount must be positive.");
+        }
         TreasuryOverviewDTO overview = overview();
         BigDecimal requested = satsToBtc(amountSats);
         if (!overview.lightningSendsAllowed()) {
@@ -77,15 +115,29 @@ public class TreasuryService {
         }
     }
 
-    private BigDecimal normalize(BigDecimal value) {
-        return value != null ? value.setScale(8, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(8, RoundingMode.HALF_UP);
+    private BigDecimal normalizeAsset(BigDecimal value, String source) {
+        BigDecimal safeValue = value != null ? value : BigDecimal.ZERO;
+        if (safeValue.signum() < 0) {
+            log.warn("[Treasury] Negative {} ignored while calculating availability.", source);
+            return ZERO_BTC;
+        }
+        return safeValue.setScale(BTC_SCALE, RoundingMode.DOWN);
+    }
+
+    private BigDecimal normalizeObligation(BigDecimal value, String source) {
+        BigDecimal safeValue = value != null ? value : BigDecimal.ZERO;
+        if (safeValue.signum() < 0) {
+            log.warn("[Treasury] Negative {} ignored while calculating reserved obligations.", source);
+            return ZERO_BTC;
+        }
+        return safeValue.setScale(BTC_SCALE, RoundingMode.CEILING);
     }
 
     private BigDecimal satsToBtc(long sats) {
-        return new BigDecimal(sats).divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.HALF_UP);
+        return new BigDecimal(sats).divide(SATOSHIS_PER_BITCOIN, BTC_SCALE, RoundingMode.UNNECESSARY);
     }
 
-    private BigDecimal nonNegative(BigDecimal value) {
-        return value.signum() >= 0 ? normalize(value) : BigDecimal.ZERO.setScale(8, RoundingMode.HALF_UP);
+    private BigDecimal nonNegativeAvailable(BigDecimal value) {
+        return value.signum() >= 0 ? normalizeAsset(value, "available balance") : ZERO_BTC;
     }
 }

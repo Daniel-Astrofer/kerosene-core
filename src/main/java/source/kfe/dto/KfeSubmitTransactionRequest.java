@@ -17,5 +17,21 @@ public record KfeSubmitTransactionRequest(
         @Min(1) long amountSats,
         @Min(0) long networkFeeSats,
         String externalReference,
-        String memo) {
+        String memo,
+        String totpCode,
+        String passkeyAssertionJson,
+        String confirmationPassphrase) {
+
+    public KfeSubmitTransactionRequest(
+            String idempotencyKey,
+            KfeRail rail,
+            KfeDirection direction,
+            UUID sourceWalletId,
+            UUID destinationWalletId,
+            long amountSats,
+            long networkFeeSats,
+            String externalReference,
+            String memo) {
+        this(idempotencyKey, rail, direction, sourceWalletId, destinationWalletId, amountSats, networkFeeSats, externalReference, memo, null, null, null);
+    }
 }

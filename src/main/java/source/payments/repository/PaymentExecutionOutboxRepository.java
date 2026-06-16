@@ -19,6 +19,8 @@ public interface PaymentExecutionOutboxRepository extends JpaRepository<PaymentE
 
     Optional<PaymentExecutionOutboxEntity> findByPaymentIntentId(UUID paymentIntentId);
 
+    List<PaymentExecutionOutboxEntity> findByPaymentIntentIdIn(List<UUID> paymentIntentIds);
+
     Optional<PaymentExecutionOutboxEntity> findByIdempotencyKey(String idempotencyKey);
 
     List<PaymentExecutionOutboxEntity> findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(

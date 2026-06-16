@@ -76,17 +76,22 @@ public class TOTPValidator implements TOTPVerifier {
 
     @Override
     public String totpDecryptedToString(String totpSecret, SecretKey secretKey) {
-
         if (totpSecret == null) {
             throw new IllegalStateException("TOTP secret is missing from Redis. Registration session may have expired.");
         }
-        byte[] totpCoded = Base64.getDecoder().decode(totpSecret);
         try {
+            byte[] totpCoded = Base64.getDecoder().decode(totpSecret);
             byte[] totp = cryptography.decrypt(totpCoded, secretKey);
-            return new String(totp, StandardCharsets.UTF_8);
+            if (totp != null) {
+                return new String(totp, StandardCharsets.UTF_8);
+            }
         } catch (Exception e) {
-            throw new RuntimeException("Decryption error: ");
+            // Fall through to plain Base32 validation
         }
+        if (totpSecret.matches("^[A-Z2-7\\s]+=*$")) {
+            return totpSecret.replaceAll("\\s+", "");
+        }
+        throw new RuntimeException("Decryption error: invalid TOTP secret format");
     }
 
     @Override

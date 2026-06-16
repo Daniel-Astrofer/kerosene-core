@@ -11,10 +11,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.common.dto.ApiResponse;
+import source.kfe.application.financial.FinancialApi;
 import source.kfe.dto.KfeAddressResponse;
+import source.kfe.dto.KfeColdWalletPsbtRequest;
+import source.kfe.dto.KfeColdWalletPsbtResponse;
 import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.dto.KfeUtxoResponse;
 import source.kfe.dto.KfeWalletResponse;
-import source.kfe.service.KfeWalletService;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,17 +26,17 @@ import java.util.UUID;
 @RequestMapping("/kfe/wallets")
 public class KfeWalletController {
 
-    private final KfeWalletService walletService;
+    private final FinancialApi financialApi;
 
-    public KfeWalletController(KfeWalletService walletService) {
-        this.walletService = walletService;
+    public KfeWalletController(FinancialApi financialApi) {
+        this.financialApi = financialApi;
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<KfeWalletResponse>> create(
             @Valid @RequestBody KfeCreateWalletRequest request,
             Authentication authentication) {
-        KfeWalletResponse response = walletService.createWallet(authenticatedUserId(authentication), request);
+        KfeWalletResponse response = financialApi.createWallet(authenticatedUserId(authentication), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("KFE wallet created.", response));
     }
@@ -42,7 +45,7 @@ public class KfeWalletController {
     public ResponseEntity<ApiResponse<List<KfeWalletResponse>>> list(Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
                 "KFE wallets retrieved.",
-                walletService.listWallets(authenticatedUserId(authentication))));
+                financialApi.wallets(authenticatedUserId(authentication))));
     }
 
     @PostMapping("/{walletId}/addresses/rotate")
@@ -51,7 +54,26 @@ public class KfeWalletController {
             Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success(
                 "KFE wallet address rotated.",
-                walletService.rotateAddress(authenticatedUserId(authentication), walletId)));
+                financialApi.rotateAddress(authenticatedUserId(authentication), walletId)));
+    }
+
+    @GetMapping("/{walletId}/utxos")
+    public ResponseEntity<ApiResponse<List<KfeUtxoResponse>>> listUtxos(
+            @PathVariable UUID walletId,
+            Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "KFE wallet UTXOs retrieved.",
+                financialApi.walletUtxos(authenticatedUserId(authentication), walletId)));
+    }
+
+    @PostMapping("/{walletId}/cold-wallet/psbt")
+    public ResponseEntity<ApiResponse<KfeColdWalletPsbtResponse>> createColdWalletPsbt(
+            @PathVariable UUID walletId,
+            @Valid @RequestBody KfeColdWalletPsbtRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "KFE cold wallet PSBT created.",
+                financialApi.createColdWalletPsbt(authenticatedUserId(authentication), walletId, request)));
     }
 
     private Long authenticatedUserId(Authentication authentication) {

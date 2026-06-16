@@ -12,8 +12,8 @@ class BitcoinNodeServiceRailContractTest {
 
     @Test
     void lndServiceExposesOnlyLightningGatewayContracts() {
-        assertTrue(LightningInvoiceGateway.class.isAssignableFrom(BitcoinNodeService.class));
-        assertTrue(LightningPaymentGateway.class.isAssignableFrom(BitcoinNodeService.class));
-        assertFalse(CustodyGateway.class.isAssignableFrom(BitcoinNodeService.class));
+        assertTrue(LightningInvoiceGateway.class.isAssignableFrom(LndLightningNodeClient.class));
+        assertTrue(LightningPaymentGateway.class.isAssignableFrom(LndLightningNodeClient.class));
+        assertFalse(CustodyGateway.class.isAssignableFrom(LndLightningNodeClient.class));
     }
 }

@@ -157,10 +157,10 @@ public class BtcPayServerCustodyGateway implements CustodyGateway {
         if (lndRestLightningClient == null) {
             throw new IllegalStateException("LND REST is required for outbound Lightning payments.");
         }
-        LndRestLightningClient.LightningPaymentResult payment = lndRestLightningClient.payInvoice(
+        LndRestLightningClient.LightningPaymentResult payment = lndRestLightningClient.payInvoiceAsync(
                 command.paymentRequest(),
                 command.amountSats(),
-                command.maxFeeSats());
+                command.maxFeeSats()).join();
         return new PaymentResult(
                 null,
                 null,

@@ -1,16 +1,16 @@
 package source.config.production;
 
 import org.springframework.util.ClassUtils;
-import source.transactions.application.externalpayments.ExternalPaymentsCustodyPort;
-import source.transactions.infra.ConfigurableCustodyGateway;
-import source.transactions.infra.LightningInvoiceGateway;
-import source.transactions.infra.LightningPaymentGateway;
+import source.kfe.rail.ConfigurableCustodyGateway;
+import source.kfe.rail.KfeOnchainPaymentGateway;
+import source.kfe.rail.LightningInvoiceGateway;
+import source.kfe.rail.LightningPaymentGateway;
 
 public class ExternalRailProviderProductionSafetyCheck extends AbstractProductionSafetyCheck {
 
     private static final String LIGHTNING_INVOICE_BEAN = "externalLightningInvoiceGateway";
     private static final String LIGHTNING_PAYMENT_BEAN = "externalLightningPaymentGateway";
-    private static final String ONCHAIN_BEAN = "bitcoinCorePsbtExternalPaymentsCustodyPort";
+    private static final String ONCHAIN_BEAN = "bitcoinCorePsbtKfeOnchainPaymentGateway";
     private static final String ONCHAIN_PROVIDER_NAME = "BITCOIN_CORE_QUORUM";
 
     public ExternalRailProviderProductionSafetyCheck(ProductionSafetyCheck next) {
@@ -37,10 +37,10 @@ public class ExternalRailProviderProductionSafetyCheck extends AbstractProductio
             inspectLightningGateway(context, "Lightning payment rail", paymentGateway);
         }
 
-        ExternalPaymentsCustodyPort onchainPort = requireBean(
+        KfeOnchainPaymentGateway onchainPort = requireBean(
                 context,
                 ONCHAIN_BEAN,
-                ExternalPaymentsCustodyPort.class,
+                KfeOnchainPaymentGateway.class,
                 "On-chain outbound rail");
         if (onchainPort != null && !ONCHAIN_PROVIDER_NAME.equalsIgnoreCase(safeProviderName(onchainPort))) {
             context.addViolation("On-chain outbound rail must use " + ONCHAIN_PROVIDER_NAME + " in prod");
@@ -105,7 +105,7 @@ public class ExternalRailProviderProductionSafetyCheck extends AbstractProductio
             if (gateway instanceof LightningPaymentGateway paymentGateway) {
                 return paymentGateway.providerName();
             }
-            if (gateway instanceof ExternalPaymentsCustodyPort custodyPort) {
+            if (gateway instanceof KfeOnchainPaymentGateway custodyPort) {
                 return custodyPort.providerName();
             }
             return "";

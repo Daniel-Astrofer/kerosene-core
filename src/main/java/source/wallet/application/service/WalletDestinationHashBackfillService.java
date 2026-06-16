@@ -41,9 +41,9 @@ public class WalletDestinationHashBackfillService {
 
             for (WalletEntity wallet : wallets) {
                 wallet.refreshDestinationHash();
-                walletPersistencePort.save(wallet);
                 updated++;
             }
+            walletPersistencePort.saveAll(wallets);
 
             if (wallets.size() < BATCH_SIZE) {
                 break;

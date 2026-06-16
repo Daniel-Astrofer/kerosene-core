@@ -11,7 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import source.transactions.service.BitcoinNodeService;
+import source.transactions.service.LndLightningNodeClient;
 import source.transactions.exception.ExternalPaymentsExceptions;
 
 import java.time.LocalDateTime;
@@ -19,7 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component("configurableCustodyGateway")
-@ConditionalOnMissingBean(BitcoinNodeService.class)
+@ConditionalOnMissingBean(LndLightningNodeClient.class)
 public class ConfigurableCustodyGateway implements CustodyGateway {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ConfigurableCustodyGateway.class);

@@ -2,6 +2,7 @@ package source.ledger.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,7 +34,7 @@ public class ReconciliationAuditService {
 
     public ReconciliationAuditService(LedgerRepository ledgerRepository,
                                       BlockchainClient blockchainClient,
-                                      LightningClient lightningClient,
+                                      @Qualifier("lndLightningGateway") LightningClient lightningClient,
                                       StringRedisTemplate redisTemplate,
                                       source.security.VaultKeyProvider vaultKeyProvider,
                                       @Value("${audit.solvency.enforced:true}") boolean solvencyAuditEnforced) {

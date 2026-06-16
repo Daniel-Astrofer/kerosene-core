@@ -22,6 +22,8 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
 
     private static final Logger log = LoggerFactory.getLogger(CaptureReserveSnapshotInteractor.class);
     private static final BigDecimal SATOSHIS_PER_BITCOIN = new BigDecimal("100000000");
+    private static final long MAX_BITCOIN_SUPPLY_SATS = 21_000_000L * 100_000_000L;
+    private static final int MAX_DESCRIPTOR_SCAN_RANGE = 100_000;
 
     private final BlockchainReservePort blockchainReservePort;
     private final LightningReservePort lightningReservePort;
@@ -58,18 +60,24 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
             String xpub = normalize(wallet.xpub());
             if (xpub != null && seenXpubs.add(xpub)) {
                 int lastDerived = wallet.lastDerivedIndex() != null ? wallet.lastDerivedIndex() : -1;
-                int scanRange = Math.max(walletXpubGapLimit, lastDerived + 1 + walletXpubGapLimit);
-                walletMonitoredSats += safeGet(
-                        () -> blockchainReservePort.getConfirmedBalanceForXpub(xpub, scanRange, true),
-                        "wallet xpub " + wallet.id());
+                int scanRange = walletScanRange(lastDerived);
+                walletMonitoredSats = safeAddSats(
+                        walletMonitoredSats,
+                        safeGet(
+                                () -> blockchainReservePort.getConfirmedBalanceForXpub(xpub, scanRange, true),
+                                "wallet xpub " + wallet.id()),
+                        "wallet monitored balance");
                 continue;
             }
 
             String depositAddress = normalize(wallet.depositAddress());
             if (depositAddress != null && seenAddresses.add(depositAddress)) {
-                walletMonitoredSats += safeGet(
-                        () -> blockchainReservePort.getConfirmedBalanceForAddress(depositAddress),
-                        "deposit address " + depositAddress);
+                walletMonitoredSats = safeAddSats(
+                        walletMonitoredSats,
+                        safeGet(
+                                () -> blockchainReservePort.getConfirmedBalanceForAddress(depositAddress),
+                                "deposit address " + depositAddress),
+                        "wallet monitored balance");
             }
         }
 
@@ -77,14 +85,17 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
                 .map(config -> normalize(config.auditXpub()))
                 .filter(seenXpubs::add)
                 .map(xpub -> safeGet(
-                        () -> blockchainReservePort.getConfirmedBalanceForXpub(xpub, treasuryAuditScanRange, true),
+                        () -> blockchainReservePort.getConfirmedBalanceForXpub(
+                                xpub,
+                                clampScanRange(treasuryAuditScanRange, "treasury audit scan range"),
+                                true),
                         "treasury audit xpub"))
                 .orElse(0L);
 
         // Self-custody XPUB balances are audited separately but must not inflate
         // the platform treasury reserve.
-        long totalOnchainSats = hotWalletSats + treasuryXpubSats;
-        long totalAssetsSats = totalOnchainSats + lightningNodeSats;
+        long totalOnchainSats = safeAddSats(hotWalletSats, treasuryXpubSats, "total on-chain reserve");
+        long totalAssetsSats = safeAddSats(totalOnchainSats, lightningNodeSats, "total reserve assets");
 
         return new ReserveSnapshot(
                 satsToBtc(hotWalletSats),
@@ -97,15 +108,64 @@ public class CaptureReserveSnapshotInteractor implements CaptureReserveSnapshotU
 
     private long safeGet(java.util.function.LongSupplier supplier, String source) {
         try {
-            return Math.max(0L, supplier.getAsLong());
+            return sanitizeSats(supplier.getAsLong(), source);
         } catch (Exception ex) {
             log.warn("[ReserveBalance] Failed to resolve {} balance: {}", source, ex.getMessage());
             return 0L;
         }
     }
 
+    private long sanitizeSats(long value, String source) {
+        if (value < 0L) {
+            log.warn("[ReserveBalance] Negative {} balance ignored: {}", source, value);
+            return 0L;
+        }
+        if (value > MAX_BITCOIN_SUPPLY_SATS) {
+            log.warn("[ReserveBalance] Impossible {} balance ignored: {} sats", source, value);
+            return 0L;
+        }
+        return value;
+    }
+
+    private long safeAddSats(long left, long right, String source) {
+        try {
+            long total = Math.addExact(left, right);
+            if (total > MAX_BITCOIN_SUPPLY_SATS) {
+                log.warn("[ReserveBalance] Impossible aggregate {} ignored: {} sats", source, total);
+                return 0L;
+            }
+            return total;
+        } catch (ArithmeticException exception) {
+            log.warn("[ReserveBalance] Overflow while aggregating {}. Returning zero to fail closed.", source);
+            return 0L;
+        }
+    }
+
+    private int walletScanRange(int lastDerivedIndex) {
+        int gapLimit = clampScanRange(walletXpubGapLimit, "wallet xpub gap limit");
+        long lastDerived = Math.max(-1L, lastDerivedIndex);
+        long requested = Math.max((long) gapLimit, lastDerived + 1L + gapLimit);
+        if (requested > MAX_DESCRIPTOR_SCAN_RANGE) {
+            log.warn("[ReserveBalance] Wallet XPUB scan range clamped from {} to {}", requested, MAX_DESCRIPTOR_SCAN_RANGE);
+            return MAX_DESCRIPTOR_SCAN_RANGE;
+        }
+        return (int) requested;
+    }
+
+    private int clampScanRange(int value, String source) {
+        if (value < 1) {
+            log.warn("[ReserveBalance] {} below minimum; using 1", source);
+            return 1;
+        }
+        if (value > MAX_DESCRIPTOR_SCAN_RANGE) {
+            log.warn("[ReserveBalance] {} clamped from {} to {}", source, value, MAX_DESCRIPTOR_SCAN_RANGE);
+            return MAX_DESCRIPTOR_SCAN_RANGE;
+        }
+        return value;
+    }
+
     private BigDecimal satsToBtc(long sats) {
-        return new BigDecimal(sats).divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.HALF_UP);
+        return new BigDecimal(sats).divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.UNNECESSARY);
     }
 
     private String normalize(String value) {

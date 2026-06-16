@@ -145,7 +145,7 @@ class InboundTransferMonitorServiceTest {
         transfer.setTransferType("INBOUND_INVOICE");
         transfer.setStatus("PENDING");
         transfer.setPaymentHash("hash-expired");
-        transfer.setExpiresAt(LocalDateTime.now().minusSeconds(1));
+        transfer.setExpiresAt(LocalDateTime.now().minusMinutes(1));
 
         when(custodyGateway.isLive()).thenReturn(false);
 

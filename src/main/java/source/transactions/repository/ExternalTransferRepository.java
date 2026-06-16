@@ -48,12 +48,29 @@ public interface ExternalTransferRepository extends JpaRepository<ExternalTransf
     BigDecimal sumReservedOutboundByNetworkAndStatuses(String network, Collection<String> statuses);
 
     @Query("""
+            select coalesce(sum(t.amountBtc), 0) + coalesce(sum(t.networkFeeBtc), 0)
+            from ExternalTransferEntity t
+            where t.network = :network
+              and t.transferType = 'OUTBOUND_PAYMENT'
+              and t.status in :statuses
+            """)
+    BigDecimal sumProjectedOutboundRailOutflowByNetworkAndStatuses(String network, Collection<String> statuses);
+
+    @Query("""
+            select coalesce(sum(t.platformFeeBtc), 0)
+            from ExternalTransferEntity t
+            where t.transferType = 'OUTBOUND_PAYMENT'
+              and t.status in :statuses
+            """)
+    BigDecimal sumUnsettledPlatformFeesByStatuses(Collection<String> statuses);
+
+    @Query("""
             select t.network as network,
                    count(t) as eventCount,
                    coalesce(sum(abs(t.amountBtc)), 0) as volumeBtc,
                    coalesce(sum(t.networkFeeBtc), 0) as feeBtc,
-                   coalesce(sum(case when t.amountBtc > 0 then t.amountBtc else 0 end), 0) as inflowBtc,
-                   coalesce(sum(case when t.amountBtc < 0 then abs(t.amountBtc) else 0 end), 0) as outflowBtc
+                   coalesce(sum(case when t.transferType <> 'OUTBOUND_PAYMENT' then coalesce(t.amountBtc, 0) else 0 end), 0) as inflowBtc,
+                   coalesce(sum(case when t.transferType = 'OUTBOUND_PAYMENT' then coalesce(t.amountBtc, 0) else 0 end), 0) as outflowBtc
             from ExternalTransferEntity t
             group by t.network
             """)

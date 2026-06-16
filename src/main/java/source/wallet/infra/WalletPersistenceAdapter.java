@@ -23,6 +23,11 @@ public class WalletPersistenceAdapter implements WalletPersistencePort {
     }
 
     @Override
+    public List<WalletEntity> saveAll(Iterable<WalletEntity> wallets) {
+        return walletRepository.saveAll(wallets);
+    }
+
+    @Override
     public Optional<WalletEntity> findById(Long id) {
         return walletRepository.findById(id);
     }

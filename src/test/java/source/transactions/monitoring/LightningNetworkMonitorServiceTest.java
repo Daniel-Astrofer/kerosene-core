@@ -3,7 +3,7 @@ package source.transactions.monitoring;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import source.transactions.infra.lnd.proto.lnrpc.GetInfoResponse;
-import source.transactions.service.BitcoinNodeService;
+import source.transactions.service.LndLightningNodeClient;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -13,7 +13,7 @@ class LightningNetworkMonitorServiceTest {
 
     @Test
     void reportsLndSnapshotFromGrpcNode() {
-        BitcoinNodeService node = mock(BitcoinNodeService.class);
+        LndLightningNodeClient node = mock(LndLightningNodeClient.class);
         when(node.isLive()).thenReturn(true);
         when(node.getInfo()).thenReturn(GetInfoResponse.newBuilder()
                 .setIdentityPubkey("02abcdef")
@@ -40,6 +40,9 @@ class LightningNetworkMonitorServiceTest {
         assertEquals("LND_GRPC", snapshot.primarySource());
         assertEquals(840000, snapshot.node().get("blockHeight"));
         assertEquals(10_000L, snapshot.node().get("localBalanceSats"));
+        assertEquals(30_000L, snapshot.node().get("channelLiquiditySats"));
+        assertEquals(1.0d / 3.0d, (double) snapshot.node().get("outboundLiquidityRatio"), 0.000001d);
+        assertEquals(2.0d / 3.0d, (double) snapshot.node().get("inboundLiquidityRatio"), 0.000001d);
     }
 
     @Test
@@ -52,25 +55,25 @@ class LightningNetworkMonitorServiceTest {
         assertEquals("LND_GRPC", snapshot.primarySource());
     }
 
-    private ObjectProvider<BitcoinNodeService> provider(BitcoinNodeService node) {
+    private ObjectProvider<LndLightningNodeClient> provider(LndLightningNodeClient node) {
         return new ObjectProvider<>() {
             @Override
-            public BitcoinNodeService getObject(Object... args) {
+            public LndLightningNodeClient getObject(Object... args) {
                 return node;
             }
 
             @Override
-            public BitcoinNodeService getIfAvailable() {
+            public LndLightningNodeClient getIfAvailable() {
                 return node;
             }
 
             @Override
-            public BitcoinNodeService getIfUnique() {
+            public LndLightningNodeClient getIfUnique() {
                 return node;
             }
 
             @Override
-            public BitcoinNodeService getObject() {
+            public LndLightningNodeClient getObject() {
                 return node;
             }
         };

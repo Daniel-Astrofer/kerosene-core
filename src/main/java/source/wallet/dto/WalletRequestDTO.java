@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record WalletRequestDTO(
-        @NotBlank(message = "A passphrase é obrigatória") String passphrase,
+        @NotBlank(message = "A passphrase é obrigatória") char[] passphrase,
 
         @NotBlank(message = "O nome da carteira é obrigatório") @Size(min = 3, max = 50, message = "O nome deve ter entre 3 e 50 caracteres") String name,
 
@@ -14,7 +14,7 @@ public record WalletRequestDTO(
 
         String walletMode) {
 
-    public WalletRequestDTO(String passphrase, String name, String xpub) {
+    public WalletRequestDTO(char[] passphrase, String name, String xpub) {
         this(passphrase, name, xpub, null);
     }
 }

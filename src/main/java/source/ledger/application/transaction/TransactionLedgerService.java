@@ -15,6 +15,7 @@ public class TransactionLedgerService {
         this.ledgerService = ledgerService;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void executeInternalTransfer(TransactionContext context) {
         FinancialAmountValidator.requirePositiveBtc(context.getTransaction().getAmount(), "amount");
         String effectiveContext = buildContext(context);

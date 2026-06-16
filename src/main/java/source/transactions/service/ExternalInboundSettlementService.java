@@ -134,9 +134,9 @@ public class ExternalInboundSettlementService {
                             + " BTC | observed=" + normalizedGross.toPlainString() + " BTC");
             return false;
         }
-        BigDecimal depositFee = walletCardProfileService.calculateDepositFee(
+        BigDecimal depositFee = externalPaymentsMath.normalizeBtc(walletCardProfileService.calculateDepositFee(
                 transfer.getUserId(),
-                normalizedGross);
+                normalizedGross));
         BigDecimal netCredit = externalPaymentsMath.normalizeBtc(normalizedGross.subtract(depositFee));
         if (netCredit.signum() <= 0) {
             log.warn("[ExternalInboundSettlement] Transfer {} net credit is non-positive.", transfer.getId());
@@ -165,6 +165,7 @@ public class ExternalInboundSettlementService {
                 settlementReference,
                 buildCompletionContext(transfer, normalizedGross, depositFee, netCredit),
                 LocalDateTime.now()));
+        ledgerPort.recordPlatformFee(transfer.getId(), transfer.getUserId(), normalizedGross, depositFee);
 
         transfer.setAmountBtc(normalizedGross);
         transfer.setPlatformFeeBtc(depositFee);

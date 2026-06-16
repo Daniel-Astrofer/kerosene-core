@@ -123,7 +123,7 @@ class CreateWalletInteractorTest {
                 });
 
         WalletResponseDTO response = createWalletInteractor.createWallet(
-                new WalletRequestDTO("management-secret", "TestWallet", "xpub661Example", "SELF_CUSTODY"),
+                new WalletRequestDTO("management-secret".toCharArray(), "TestWallet", "xpub661Example", "SELF_CUSTODY"),
                 1L);
 
         assertEquals(77L, response.id());
@@ -143,7 +143,7 @@ class CreateWalletInteractorTest {
         assertThrows(
                 WalletExceptions.WalletNameAlreadyExists.class,
                 () -> createWalletInteractor.createWallet(
-                        new WalletRequestDTO("test-passphrase-bip39", "TestWallet", null, "KEROSENE"),
+                        new WalletRequestDTO("test-passphrase-bip39".toCharArray(), "TestWallet", null, "KEROSENE"),
                         1L));
     }
 }

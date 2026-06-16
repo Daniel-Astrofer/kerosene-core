@@ -58,7 +58,7 @@ public class PaymentConfirmService {
                         "PAYMENT_INTENT_NOT_FOUND",
                         "Não encontramos esta cotação."));
 
-        validateIdempotency(intent, request.idempotencyKey());
+        validateIdempotencyKey(intent, request.idempotencyKey());
         if (paymentStateMachine.isTerminal(intent)) {
             return responseMapper.toStatusResponse(intent);
         }
@@ -67,7 +67,7 @@ public class PaymentConfirmService {
                 && paymentStateMachine.isInFlight(intent)) {
             return responseMapper.toStatusResponse(intent);
         }
-        validateQuote(intent, request);
+        validatePaymentQuote(intent, request);
 
         intent.setIdempotencyKey(request.idempotencyKey());
         paymentStateMachine.confirm(intent);
@@ -77,10 +77,10 @@ public class PaymentConfirmService {
                 "receiverAmountSats", intent.getReceiverAmountSats()));
 
         if (intent.getRail() != PaymentEnums.PaymentRail.INTERNAL) {
-            return enqueueExternal(senderUserId, intent, request.idempotencyKey());
+            return enqueueExternalPayment(senderUserId, intent, request.idempotencyKey());
         }
 
-        settleInternal(senderUserId, intent);
+        settleInternalTransfer(senderUserId, intent);
         PaymentIntentEntity saved = paymentIntentRepository.save(intent);
         return responseMapper.toStatusResponse(saved);
     }
@@ -94,7 +94,7 @@ public class PaymentConfirmService {
         return responseMapper.toStatusResponse(intent);
     }
 
-    private void validateIdempotency(PaymentIntentEntity intent, String idempotencyKey) {
+    private void validateIdempotencyKey(PaymentIntentEntity intent, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw PaymentException.badRequest(
                     "PAYMENT_IDEMPOTENCY_KEY_REQUIRED",
@@ -114,7 +114,7 @@ public class PaymentConfirmService {
                 });
     }
 
-    private void validateQuote(PaymentIntentEntity intent, PaymentConfirmRequest request) {
+    private void validatePaymentQuote(PaymentIntentEntity intent, PaymentConfirmRequest request) {
         if (intent.getStatus() != PaymentEnums.PaymentIntentStatus.QUOTED) {
             throw PaymentException.conflict(
                     "PAYMENT_INTENT_NOT_CONFIRMABLE",
@@ -135,8 +135,8 @@ public class PaymentConfirmService {
         }
     }
 
-    private PaymentStatusResponse enqueueExternal(Long senderUserId, PaymentIntentEntity intent, String idempotencyKey) {
-        WalletEntity senderWallet = primaryWallet(senderUserId);
+    private PaymentStatusResponse enqueueExternalPayment(Long senderUserId, PaymentIntentEntity intent, String idempotencyKey) {
+        WalletEntity senderWallet = resolvePrimaryWallet(senderUserId);
         intent.setLockedWalletId(senderWallet.getId());
         paymentStateMachine.startProcessing(intent);
         paymentAuditService.record(senderUserId, intent.getId(), "BALANCE_LOCKED", java.util.Map.of(
@@ -146,8 +146,8 @@ public class PaymentConfirmService {
         try {
             ledgerService.updateBalance(
                     senderWallet.getId(),
-                    satsToBtc(intent.getTotalDebitSats()).negate(),
-                    ledgerContext("PAYMENT_EXTERNAL_LOCK", intent));
+                    convertSatoshisToBitcoin(intent.getTotalDebitSats()).negate(),
+                    buildLedgerContext("PAYMENT_EXTERNAL_LOCK", intent));
         } catch (LedgerExceptions.InsufficientBalanceException exception) {
             throw PaymentException.badRequest(
                     "PAYMENT_INSUFFICIENT_FUNDS",
@@ -162,25 +162,25 @@ public class PaymentConfirmService {
         return responseMapper.toStatusResponse(saved);
     }
 
-    private void settleInternal(Long senderUserId, PaymentIntentEntity intent) {
+    private void settleInternalTransfer(Long senderUserId, PaymentIntentEntity intent) {
         if (intent.getReceiverUserId() == null) {
             throw PaymentException.badRequest(
                     "RECEIVER_NOT_READY",
                     "Este usuário ainda não está pronto para receber fundos.");
         }
-        WalletEntity senderWallet = primaryWallet(senderUserId);
-        WalletEntity receiverWallet = primaryWallet(intent.getReceiverUserId());
+        WalletEntity senderWallet = resolvePrimaryWallet(senderUserId);
+        WalletEntity receiverWallet = resolvePrimaryWallet(intent.getReceiverUserId());
 
         paymentStateMachine.startProcessing(intent);
         paymentAuditService.record(senderUserId, intent.getId(), "BALANCE_LOCKED", java.util.Map.of(
                 "walletId", senderWallet.getId(),
                 "amountSats", intent.getTotalDebitSats()));
 
-        BigDecimal receiverAmountBtc = satsToBtc(intent.getReceiverAmountSats());
-        BigDecimal totalDebitBtc = satsToBtc(intent.getTotalDebitSats()).negate();
+        BigDecimal receiverAmountBtc = convertSatoshisToBitcoin(intent.getReceiverAmountSats());
+        BigDecimal totalDebitBtc = convertSatoshisToBitcoin(intent.getTotalDebitSats()).negate();
         try {
-            ledgerService.updateBalance(senderWallet.getId(), totalDebitBtc, ledgerContext("PAYMENT_INTERNAL_DEBIT", intent));
-            ledgerService.updateBalance(receiverWallet.getId(), receiverAmountBtc, ledgerContext("PAYMENT_INTERNAL_CREDIT", intent));
+            ledgerService.updateBalance(senderWallet.getId(), totalDebitBtc, buildLedgerContext("PAYMENT_INTERNAL_DEBIT", intent));
+            ledgerService.updateBalance(receiverWallet.getId(), receiverAmountBtc, buildLedgerContext("PAYMENT_INTERNAL_CREDIT", intent));
         } catch (LedgerExceptions.InsufficientBalanceException exception) {
             throw PaymentException.badRequest(
                     "PAYMENT_INSUFFICIENT_FUNDS",
@@ -194,7 +194,7 @@ public class PaymentConfirmService {
                 "receiverAmountSats", intent.getReceiverAmountSats()));
     }
 
-    private WalletEntity primaryWallet(Long userId) {
+    private WalletEntity resolvePrimaryWallet(Long userId) {
         List<WalletEntity> wallets = walletRepository.findByUserId(userId).stream()
                 .filter(wallet -> Boolean.TRUE.equals(wallet.getIsActive()))
                 .sorted(Comparator
@@ -209,11 +209,11 @@ public class PaymentConfirmService {
         return wallets.get(0);
     }
 
-    private BigDecimal satsToBtc(long sats) {
+    private BigDecimal convertSatoshisToBitcoin(long sats) {
         return BigDecimal.valueOf(sats).divide(SATS_PER_BTC, 8, RoundingMode.HALF_UP);
     }
 
-    private String ledgerContext(String operation, PaymentIntentEntity intent) {
+    private String buildLedgerContext(String operation, PaymentIntentEntity intent) {
         return operation
                 + ":paymentIntent=" + intent.getId()
                 + ":idem=" + LogSanitizer.fingerprint(intent.getIdempotencyKey());

@@ -95,6 +95,15 @@ public class BitcoinAccountsController {
                         request.oneTime() == null || request.oneTime())));
     }
 
+    @GetMapping("/accounts/{accountId}/receive-requests")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> listReceiveRequests(
+            Authentication authentication,
+            @PathVariable UUID accountId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Receive requests retrieved.",
+                receivingRequestService.listForAccount(userId(authentication), accountId)));
+    }
+
     @GetMapping("/receive/{publicCode}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> publicReceive(@PathVariable String publicCode) {
         return ResponseEntity.ok(ApiResponse.success(

@@ -13,6 +13,7 @@ import source.transactions.application.transaction.CheckPendingTransactionsUseCa
 import source.transactions.application.transaction.CreateUnsignedTransactionUseCase;
 import source.transactions.application.transaction.EstimateTransactionFeeUseCase;
 import source.transactions.application.transaction.GetTransactionStatusUseCase;
+import source.transactions.application.externalpayments.ExternalPaymentsMath;
 
 import java.math.BigDecimal;
 
@@ -25,6 +26,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final CheckPendingTransactionsUseCase checkPendingTransactionsUseCase;
     private final BroadcastTransactionUseCase broadcastTransactionUseCase;
     private final ExternalPaymentsService externalPaymentsService;
+    private final ExternalPaymentsMath externalPaymentsMath;
 
     public TransactionServiceImpl(
             EstimateTransactionFeeUseCase estimateTransactionFeeUseCase,
@@ -32,13 +34,15 @@ public class TransactionServiceImpl implements TransactionService {
             GetTransactionStatusUseCase getTransactionStatusUseCase,
             CheckPendingTransactionsUseCase checkPendingTransactionsUseCase,
             BroadcastTransactionUseCase broadcastTransactionUseCase,
-            ExternalPaymentsService externalPaymentsService) {
+            ExternalPaymentsService externalPaymentsService,
+            ExternalPaymentsMath externalPaymentsMath) {
         this.estimateTransactionFeeUseCase = estimateTransactionFeeUseCase;
         this.createUnsignedTransactionUseCase = createUnsignedTransactionUseCase;
         this.getTransactionStatusUseCase = getTransactionStatusUseCase;
         this.checkPendingTransactionsUseCase = checkPendingTransactionsUseCase;
         this.broadcastTransactionUseCase = broadcastTransactionUseCase;
         this.externalPaymentsService = externalPaymentsService;
+        this.externalPaymentsMath = externalPaymentsMath;
     }
 
     @Override
@@ -85,7 +89,7 @@ public class TransactionServiceImpl implements TransactionService {
         return new TransactionResponseDTO(
                 transfer.externalReference(),
                 transfer.status() != null ? transfer.status().toLowerCase() : "pending",
-                transfer.networkFeeBtc().multiply(new BigDecimal("100000000")).longValue(),
+                externalPaymentsMath.btcToSats(transfer.networkFeeBtc()),
                 transfer.amountBtc(),
                 request.getFromWalletName(),
                 request.getToAddress(),

@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import source.transactions.service.BitcoinNodeService;
+import source.transactions.service.LndLightningNodeClient;
 
 /**
  * BTCPay Server / Lightning balance adapter.
@@ -23,7 +23,7 @@ import source.transactions.service.BitcoinNodeService;
  * inventing reserves.
  */
 @Component
-@ConditionalOnMissingBean(BitcoinNodeService.class)
+@ConditionalOnMissingBean(LndLightningNodeClient.class)
 public class BtcPayLightningClient implements LightningClient {
 
     private static final Logger log = LoggerFactory.getLogger(BtcPayLightningClient.class);

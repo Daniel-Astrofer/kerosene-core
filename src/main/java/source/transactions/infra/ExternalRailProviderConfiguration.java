@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import source.transactions.application.externalpayments.ExternalPaymentsCustodyPort;
-import source.transactions.service.BitcoinNodeService;
+import source.transactions.service.LndLightningNodeClient;
 
 @Configuration
 public class ExternalRailProviderConfiguration {
@@ -21,7 +21,7 @@ public class ExternalRailProviderConfiguration {
     @ConditionalOnMissingBean(name = "externalLightningInvoiceGateway")
     public LightningInvoiceGateway externalLightningInvoiceGateway(
             Environment environment,
-            ObjectProvider<BitcoinNodeService> lndGateway,
+            ObjectProvider<LndLightningNodeClient> lndGateway,
             ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
             ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
         return chooseProvider(
@@ -37,7 +37,7 @@ public class ExternalRailProviderConfiguration {
     @ConditionalOnMissingBean(name = "externalLightningPaymentGateway")
     public LightningPaymentGateway externalLightningPaymentGateway(
             Environment environment,
-            ObjectProvider<BitcoinNodeService> lndGateway,
+            ObjectProvider<LndLightningNodeClient> lndGateway,
             ObjectProvider<BtcPayServerCustodyGateway> btcpayGateway,
             ObjectProvider<ConfigurableCustodyGateway> configurableGateway) {
         return chooseProvider(

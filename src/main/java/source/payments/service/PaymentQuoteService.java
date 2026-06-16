@@ -73,7 +73,7 @@ public class PaymentQuoteService {
 
     @Transactional
     public PaymentQuoteResponse quote(Long senderUserId, PaymentQuoteRequest request) {
-        requireSupportedAsset(request.asset());
+        validateSupportedAsset(request.asset());
         String fiatCurrency = normalizeCurrency(request.fiatCurrency());
         BigDecimal requestedFiat = parseFiat(request.amountFiat());
         BigDecimal fxRate = tickerService.getPrice(fiatCurrency);
@@ -84,16 +84,16 @@ public class PaymentQuoteService {
         }
 
         Destination destination = resolveDestination(senderUserId, request);
-        long requestedSats = fiatToSats(requestedFiat, fxRate);
+        long requestedSats = convertFiatToSatoshis(requestedFiat, fxRate);
         if (requestedSats <= 0) {
             throw PaymentException.badRequest(
                     "PAYMENT_AMOUNT_TOO_LOW",
                     "O valor informado é baixo demais para envio.");
         }
 
-        long networkFeeSats = estimateNetworkFeeSats(request.rail(), request.speed());
+        long networkFeeSats = calculateEstimatedNetworkFee(request.rail(), request.speed());
         BigDecimal platformRate = platformFeeRate(senderUserId);
-        Amounts amounts = calculateAmounts(request.feeMode(), request.rail(), requestedSats, networkFeeSats, platformRate);
+        Amounts amounts = computePaymentAmounts(request.feeMode(), request.rail(), requestedSats, networkFeeSats, platformRate);
         validateAmounts(request.rail(), amounts);
 
         List<String> warnings = warningsFor(request.rail());
@@ -157,14 +157,14 @@ public class PaymentQuoteService {
     private Destination resolveLightning(String receiverIdentifier, String externalDestination) {
         if (hasText(externalDestination)) {
             String normalized = clean(externalDestination);
-            if (!looksLikeLightningDestination(normalized)) {
+            if (!isLightningDestination(normalized)) {
                 throw PaymentException.badRequest(
                         "LIGHTNING_INVALID_DESTINATION",
                         "Este destino Lightning não parece válido.");
             }
             return new Destination(null, "Destino Lightning", normalized);
         }
-        UserDataBase receiver = requireReadyReceiver(receiverIdentifier);
+        UserDataBase receiver = validateAndGetReceiver(receiverIdentifier);
         if (!receivingCapabilityService.canReceiveLightning(receiver.getId())) {
             throw PaymentException.badRequest(
                     "LIGHTNING_RECEIVER_METHOD_NOT_FOUND",
@@ -175,7 +175,7 @@ public class PaymentQuoteService {
 
     private Destination resolveOnchain(String receiverIdentifier, String externalDestination) {
         if (hasText(externalDestination)) {
-            String normalized = normalizeOnchainDestination(externalDestination);
+            String normalized = formatOnchainDestination(externalDestination);
             if (!externalPaymentsMath.isValidBitcoinAddress(normalized)) {
                 throw PaymentException.badRequest(
                         "ONCHAIN_INVALID_ADDRESS",
@@ -183,7 +183,7 @@ public class PaymentQuoteService {
             }
             return new Destination(null, "Carteira Bitcoin", normalized);
         }
-        UserDataBase receiver = requireReadyReceiver(receiverIdentifier);
+        UserDataBase receiver = validateAndGetReceiver(receiverIdentifier);
         if (!receivingCapabilityService.canReceiveOnchain(receiver.getId())) {
             throw PaymentException.badRequest(
                     "ONCHAIN_RECEIVER_METHOD_NOT_FOUND",
@@ -192,7 +192,7 @@ public class PaymentQuoteService {
         return new Destination(receiver.getId(), displayName(receiver), null);
     }
 
-    private UserDataBase requireReadyReceiver(String receiverIdentifier) {
+    private UserDataBase validateAndGetReceiver(String receiverIdentifier) {
         UserDataBase receiver = receivingCapabilityService.resolveUser(receiverIdentifier)
                 .orElseThrow(() -> PaymentException.notFound(
                         "RECEIVER_NOT_FOUND",
@@ -205,7 +205,7 @@ public class PaymentQuoteService {
         return receiver;
     }
 
-    private Amounts calculateAmounts(
+    private Amounts computePaymentAmounts(
             PaymentEnums.FeeMode feeMode,
             PaymentEnums.PaymentRail rail,
             long requestedSats,
@@ -247,7 +247,7 @@ public class PaymentQuoteService {
         }
     }
 
-    private long estimateNetworkFeeSats(PaymentEnums.PaymentRail rail, PaymentEnums.OnchainSpeed speed) {
+    private long calculateEstimatedNetworkFee(PaymentEnums.PaymentRail rail, PaymentEnums.OnchainSpeed speed) {
         return switch (rail) {
             case INTERNAL -> 0L;
             case LIGHTNING -> Math.max(0L, lightningDefaultFeeSats);
@@ -278,7 +278,7 @@ public class PaymentQuoteService {
         return BigDecimal.valueOf(baseSats).multiply(rate).setScale(0, RoundingMode.UP).longValueExact();
     }
 
-    private long fiatToSats(BigDecimal requestedFiat, BigDecimal fxRate) {
+    private long convertFiatToSatoshis(BigDecimal requestedFiat, BigDecimal fxRate) {
         return requestedFiat
                 .divide(fxRate, 8, RoundingMode.DOWN)
                 .multiply(SATS_PER_BTC)
@@ -296,7 +296,7 @@ public class PaymentQuoteService {
         }
     }
 
-    private String normalizeOnchainDestination(String destination) {
+    private String formatOnchainDestination(String destination) {
         String normalized = clean(destination);
         if (normalized.toLowerCase(Locale.ROOT).startsWith("bitcoin:")) {
             String withoutScheme = normalized.substring("bitcoin:".length());
@@ -306,7 +306,7 @@ public class PaymentQuoteService {
         return normalized;
     }
 
-    private boolean looksLikeLightningDestination(String destination) {
+    private boolean isLightningDestination(String destination) {
         String normalized = destination.trim().toLowerCase(Locale.ROOT);
         return normalized.startsWith("lnbc")
                 || normalized.startsWith("lntb")
@@ -327,7 +327,7 @@ public class PaymentQuoteService {
         return "@" + user.getUsername();
     }
 
-    private void requireSupportedAsset(String asset) {
+    private void validateSupportedAsset(String asset) {
         if (!"BTC".equalsIgnoreCase(clean(asset))) {
             throw PaymentException.badRequest(
                     "PAYMENT_ASSET_NOT_SUPPORTED",

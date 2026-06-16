@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import source.kfe.model.KfeExecutionOutboxEntity;
@@ -21,6 +22,16 @@ public interface KfeExecutionOutboxRepository extends JpaRepository<KfeExecution
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from KfeExecutionOutboxEntity o where o.id = :id")
     Optional<KfeExecutionOutboxEntity> findByIdForUpdate(@Param("id") UUID id);
+
+    @Query("""
+            select o from KfeExecutionOutboxEntity o
+            where o.status = 'UNKNOWN'
+              and o.operation in :operations
+            order by o.updatedAt asc
+            """)
+    List<KfeExecutionOutboxEntity> findInboundReconciliationCandidates(
+            @Param("operations") Collection<String> operations,
+            Pageable pageable);
 
     @Query("""
             select o from KfeExecutionOutboxEntity o

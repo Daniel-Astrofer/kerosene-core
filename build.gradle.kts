@@ -6,6 +6,7 @@ plugins {
     // Supply Chain Defense: varre CVEs conhecidos em todas as dependências (NVD)
     id("org.owasp.dependencycheck") version "10.0.4"
     id("com.google.protobuf") version "0.9.4"
+    jacoco
 }
 
 
@@ -76,16 +77,32 @@ dependencies {
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
     // gRPC for MPC Sidecar
-    implementation("io.grpc:grpc-netty-shaded:1.62.2")
-    implementation("io.grpc:grpc-protobuf:1.62.2")
-    implementation("io.grpc:grpc-stub:1.62.2")
+    implementation("io.grpc:grpc-netty-shaded:1.64.0")
+    implementation("io.grpc:grpc-protobuf:1.64.0")
+    implementation("io.grpc:grpc-stub:1.64.0")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     compileOnly("jakarta.annotation:jakarta.annotation-api:2.1.1")
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
 }
 
+sourceSets {
+    test {
+        java.srcDir("../tests/java")
+    }
+}
+
 tasks.withType<Test> {
 	useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        csv.required.set(false)
+    }
 }
 
 tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {

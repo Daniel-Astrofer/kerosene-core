@@ -1,6 +1,5 @@
 package source.auth.application.orchestrator.signup;
 
-import org.bitcoinj.crypto.MnemonicCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,12 +17,10 @@ import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 import source.security.VaultKeyProvider;
 import source.notification.model.UserNotificationPayload;
-import source.wallet.application.port.in.CreateWalletUseCase;
-import source.wallet.dto.WalletRequestDTO;
-import source.wallet.service.WalletContract;
-import source.ledger.service.LedgerContract;
+import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.model.KfeWalletKind;
+import source.kfe.service.KfeWalletService;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,11 +48,7 @@ class FinalizeSignupAccountTest {
     @Mock
     private VaultKeyProvider vaultKeyProvider;
     @Mock
-    private CreateWalletUseCase walletUseCase;
-    @Mock
-    private WalletContract walletContract;
-    @Mock
-    private LedgerContract ledgerContract;
+    private KfeWalletService kfeWalletService;
 
     private FinalizeSignupAccount service;
 
@@ -70,9 +62,7 @@ class FinalizeSignupAccountTest {
                 userNotifier,
                 cosignerSecretService,
                 vaultKeyProvider,
-                walletUseCase,
-                walletContract,
-                ledgerContract);
+                kfeWalletService);
     }
 
     @Test
@@ -87,7 +77,7 @@ class FinalizeSignupAccountTest {
         });
         when(passkeyGateway.findByUserId(7L)).thenReturn(List.of());
         when(passkeyGateway.save(any(PasskeyCredential.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(walletContract.findByUserId(7L)).thenReturn(List.of());
+        when(kfeWalletService.listWallets(7L)).thenReturn(List.of());
 
         UserDataBase created = service.execute("session-1");
 
@@ -109,15 +99,15 @@ class FinalizeSignupAccountTest {
         assertEquals("Conta criada", notificationCaptor.getValue().title());
         assertEquals("Sua conta foi criada com sucesso.", notificationCaptor.getValue().body());
 
-        ArgumentCaptor<WalletRequestDTO> walletRequestCaptor =
-                ArgumentCaptor.forClass(WalletRequestDTO.class);
-        verify(walletUseCase).createWallet(walletRequestCaptor.capture(), eq(7L));
-        WalletRequestDTO walletRequest = walletRequestCaptor.getValue();
-        assertEquals("ACCOUNT 01", walletRequest.name());
-        assertEquals("KEROSENE", walletRequest.walletMode());
+        ArgumentCaptor<KfeCreateWalletRequest> walletRequestCaptor =
+                ArgumentCaptor.forClass(KfeCreateWalletRequest.class);
+        verify(kfeWalletService).createWallet(eq(7L), walletRequestCaptor.capture());
+        KfeCreateWalletRequest walletRequest = walletRequestCaptor.getValue();
+        assertEquals(KfeWalletKind.INTERNAL, walletRequest.kind());
+        assertEquals("ACCOUNT 01", walletRequest.label());
         assertNull(walletRequest.xpub());
-        assertFalse("hashed-password".equals(walletRequest.passphrase()));
-        assertValidBip39Mnemonic(walletRequest.passphrase());
+        assertNull(walletRequest.initialAddress());
+        assertEquals(Boolean.TRUE, walletRequest.issueInitialAddress());
     }
 
     @Test
@@ -132,7 +122,7 @@ class FinalizeSignupAccountTest {
         });
         when(passkeyGateway.findByUserId(7L)).thenReturn(List.of());
         when(passkeyGateway.save(any(PasskeyCredential.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(walletContract.findByUserId(7L)).thenReturn(List.of());
+        when(kfeWalletService.listWallets(7L)).thenReturn(List.of());
 
         UserDataBase created = service.execute("session-1");
 
@@ -156,17 +146,6 @@ class FinalizeSignupAccountTest {
         state.setPasskeyPublicKeyCose("cHVibGljLWtleQ==");
         state.setPasskeyDeviceName("Phone");
         return state;
-    }
-
-    private void assertValidBip39Mnemonic(String mnemonic) {
-        assertNotNull(mnemonic);
-        List<String> words = Arrays.asList(mnemonic.split(" "));
-        assertEquals(12, words.size());
-        try {
-            MnemonicCode.INSTANCE.check(words);
-        } catch (Exception exception) {
-            throw new AssertionError("Expected onboarding wallet mnemonic to be valid BIP39.", exception);
-        }
     }
 
     private void setUserId(UserDataBase user, Long id) {

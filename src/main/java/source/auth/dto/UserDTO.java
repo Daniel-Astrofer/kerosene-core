@@ -6,9 +6,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserDTO implements UserDTOContract {
 
+    @NotBlank(message = "Username cannot be empty")
+    @Size(min = 3, max = 100, message = "Username must be between 3 and 100 characters")
     private String username;
 
     /**

@@ -27,6 +27,75 @@ import static org.mockito.Mockito.when;
 class PaymentExternalExecutionProcessorTest {
 
     @Test
+    void outboxNotFoundDoesNothing() {
+        PaymentExecutionOutboxRepository outboxRepository = mock(PaymentExecutionOutboxRepository.class);
+        when(outboxRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.any(UUID.class))).thenReturn(Optional.empty());
+
+        PaymentExternalExecutionProcessor processor = new PaymentExternalExecutionProcessor(
+                outboxRepository, mock(PaymentIntentRepository.class), mock(WalletRepository.class),
+                mock(LedgerContract.class), mock(PaymentAuditService.class), new PaymentStateMachine(), List.of());
+
+        processor.process(UUID.randomUUID());
+
+        verifyNoInteractions(mock(PaymentIntentRepository.class));
+    }
+
+    @Test
+    void outboxNotClaimedDoesNothing() {
+        PaymentExecutionOutboxRepository outboxRepository = mock(PaymentExecutionOutboxRepository.class);
+        PaymentExecutionOutboxEntity outbox = outbox(processingIntent());
+        outbox.setStatus("PENDING");
+        outbox.setClaimedBy(null);
+        when(outboxRepository.findByIdForUpdate(org.mockito.ArgumentMatchers.any(UUID.class))).thenReturn(Optional.of(outbox));
+
+        PaymentExternalExecutionProcessor processor = new PaymentExternalExecutionProcessor(
+                outboxRepository, mock(PaymentIntentRepository.class), mock(WalletRepository.class),
+                mock(LedgerContract.class), mock(PaymentAuditService.class), new PaymentStateMachine(), List.of());
+
+        processor.process(UUID.randomUUID());
+
+        verifyNoInteractions(mock(PaymentIntentRepository.class));
+    }
+
+    @Test
+    void intentNotFoundMarksOutboxFinal() {
+        PaymentExecutionOutboxRepository outboxRepository = mock(PaymentExecutionOutboxRepository.class);
+        PaymentIntentRepository intentRepository = mock(PaymentIntentRepository.class);
+        PaymentExecutionOutboxEntity outbox = outbox(processingIntent());
+        when(outboxRepository.findByIdForUpdate(outbox.getId())).thenReturn(Optional.of(outbox));
+        when(intentRepository.findByIdForUpdate(outbox.getPaymentIntentId())).thenReturn(Optional.empty());
+
+        PaymentExternalExecutionProcessor processor = new PaymentExternalExecutionProcessor(
+                outboxRepository, intentRepository, mock(WalletRepository.class),
+                mock(LedgerContract.class), mock(PaymentAuditService.class), new PaymentStateMachine(), List.of());
+
+        processor.process(outbox.getId());
+
+        assertEquals("FAILED_FINAL", outbox.getStatus());
+        assertEquals("PAYMENT_INTENT_NOT_PROCESSING: O envio nao esta mais em processamento.", outbox.getLastError());
+    }
+
+    @Test
+    void intentNotProcessingMarksOutboxFinal() {
+        PaymentExecutionOutboxRepository outboxRepository = mock(PaymentExecutionOutboxRepository.class);
+        PaymentIntentRepository intentRepository = mock(PaymentIntentRepository.class);
+        PaymentIntentEntity intent = processingIntent();
+        intent.setStatus(PaymentEnums.PaymentIntentStatus.FAILED);
+        PaymentExecutionOutboxEntity outbox = outbox(intent);
+        when(outboxRepository.findByIdForUpdate(outbox.getId())).thenReturn(Optional.of(outbox));
+        when(intentRepository.findByIdForUpdate(intent.getId())).thenReturn(Optional.of(intent));
+
+        PaymentExternalExecutionProcessor processor = new PaymentExternalExecutionProcessor(
+                outboxRepository, intentRepository, mock(WalletRepository.class),
+                mock(LedgerContract.class), mock(PaymentAuditService.class), new PaymentStateMachine(), List.of());
+
+        processor.process(outbox.getId());
+
+        assertEquals("FAILED_FINAL", outbox.getStatus());
+        assertEquals("PAYMENT_INTENT_NOT_PROCESSING: O envio nao esta mais em processamento.", outbox.getLastError());
+    }
+
+    @Test
     void missingExecutorRefundsLockedBalanceAndFailsIntent() {
         PaymentExecutionOutboxRepository outboxRepository = mock(PaymentExecutionOutboxRepository.class);
         PaymentIntentRepository intentRepository = mock(PaymentIntentRepository.class);
@@ -332,8 +401,8 @@ class PaymentExternalExecutionProcessorTest {
         outbox.setIdempotencyKey("idem-ext");
         outbox.setStatus("PROCESSING");
         outbox.setClaimedBy("worker-1");
-        outbox.setClaimedAt(Instant.now().minusSeconds(1));
-        outbox.setNextAttemptAt(Instant.now().minusSeconds(1));
+        outbox.setClaimedAt(Instant.now().minusSeconds(60));
+        outbox.setNextAttemptAt(Instant.now().minusSeconds(60));
         return outbox;
     }
 }

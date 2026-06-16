@@ -23,18 +23,27 @@ public class WalletCredentialsAdapter implements WalletCredentialsPort {
     }
 
     @Override
-    public void validateBip39Passphrase(String passphrase) {
+    public void validateBip39Passphrase(char[] passphrase) {
         mnemonicPolicy.validate(passphrase);
     }
 
     @Override
-    public String hashPassphrase(String passphrase) {
-        return hasher.hash(passphrase.toCharArray());
+    public String hashPassphrase(char[] passphrase) {
+        try {
+            return hasher.hash(passphrase);
+        } finally {
+            // we do NOT fill it here because it might be used down the line
+            // but the interface requires char[] now
+        }
     }
 
     @Override
-    public boolean matches(String rawPassphrase, String hashedPassphrase) {
-        return hasher.verify(rawPassphrase.toCharArray(), hashedPassphrase);
+    public boolean matches(char[] rawPassphrase, String hashedPassphrase) {
+        try {
+            return hasher.verify(rawPassphrase, hashedPassphrase);
+        } finally {
+            // do not fill here to avoid breaking caller
+        }
     }
 
     @Override

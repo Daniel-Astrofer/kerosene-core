@@ -1,5 +1,6 @@
 package source.treasury.infra.reserve;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import source.transactions.infra.LightningClient;
 import source.treasury.application.port.out.LightningReservePort;
@@ -9,7 +10,7 @@ public class LightningReserveAdapter implements LightningReservePort {
 
     private final LightningClient lightningClient;
 
-    public LightningReserveAdapter(LightningClient lightningClient) {
+    public LightningReserveAdapter(@Qualifier("lndLightningGateway") LightningClient lightningClient) {
         this.lightningClient = lightningClient;
     }
 

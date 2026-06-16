@@ -8,6 +8,7 @@ import org.bitcoinj.params.RegTestParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import source.common.validation.FinancialAmountValidator;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -51,13 +52,20 @@ public class ExternalPaymentsMath {
     }
 
     public long btcToSats(BigDecimal btc) {
+        if (btc == null) {
+            return 0L;
+        }
+        if (btc.signum() < 0) {
+            throw new IllegalArgumentException("BTC amount cannot be negative.");
+        }
+        FinancialAmountValidator.requireBtcPrecision(btc, "btc");
         return btc.multiply(new BigDecimal("100000000"))
-                .setScale(0, RoundingMode.DOWN)
-                .longValue();
+                .setScale(0, RoundingMode.UNNECESSARY)
+                .longValueExact();
     }
 
     public BigDecimal satsToBtc(long sats) {
-        return new BigDecimal(sats).divide(new BigDecimal("100000000"), 8, RoundingMode.HALF_UP);
+        return new BigDecimal(sats).divide(new BigDecimal("100000000"), 8, RoundingMode.UNNECESSARY);
     }
 
     public BigDecimal normalizeBtc(BigDecimal value) {

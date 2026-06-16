@@ -69,16 +69,24 @@ public class PaymentExternalReconciliationService {
             initialDelayString = "${payments.reconciliation.initial-delay-ms:90000}")
     public void reconcileDuePayments() {
         try {
-            paymentIntentRepository.findTop50ByStatusInOrderByUpdatedAtAsc(RECONCILABLE_STATUSES)
-                    .forEach(intent -> {
-                        try {
-                            reconcile(intent.getId());
-                        } catch (RuntimeException exception) {
-                            log.warn("[PaymentReconciliation] intentId={} failed: {}",
-                                    intent.getId(),
-                                    exception.getMessage());
-                        }
-                    });
+            List<PaymentIntentEntity> intents = paymentIntentRepository.findTop50ByStatusInOrderByUpdatedAtAsc(RECONCILABLE_STATUSES);
+            if (intents.isEmpty()) {
+                return;
+            }
+            List<UUID> intentIds = intents.stream().map(PaymentIntentEntity::getId).collect(Collectors.toList());
+            Map<UUID, PaymentExecutionOutboxEntity> outboxes = outboxRepository.findByPaymentIntentIdIn(intentIds)
+                    .stream()
+                    .collect(Collectors.toMap(PaymentExecutionOutboxEntity::getPaymentIntentId, Function.identity()));
+
+            intents.forEach(intent -> {
+                try {
+                    reconcile(intent.getId(), outboxes.get(intent.getId()));
+                } catch (RuntimeException exception) {
+                    log.warn("[PaymentReconciliation] intentId={} failed: {}",
+                            intent.getId(),
+                            exception.getMessage());
+                }
+            });
         } catch (DataAccessException exception) {
             log.warn("[PaymentReconciliation] Storage unavailable. Worker will retry later: {}",
                     exception.getMostSpecificCause().getMessage());
@@ -86,21 +94,26 @@ public class PaymentExternalReconciliationService {
     }
 
     @Transactional
-    public void reconcile(UUID paymentIntentId) {
+    public void reconcile(UUID paymentIntentId, PaymentExecutionOutboxEntity outbox) {
         PaymentIntentEntity intent = paymentIntentRepository.findByIdForUpdate(paymentIntentId).orElse(null);
         if (intent == null || !RECONCILABLE_STATUSES.contains(intent.getStatus())) {
             return;
         }
 
-        PaymentExecutionOutboxEntity outbox = outboxRepository.findByPaymentIntentId(intent.getId()).orElse(null);
         Optional<PaymentRailStatusClient> client = Optional.ofNullable(clientsByRail.get(intent.getRail()));
         if (client.isEmpty()) {
             markProviderStatusUnavailable(intent, outbox);
+            if (outbox != null) {
+                outboxRepository.save(outbox);
+            }
             return;
         }
 
         PaymentRailStatusClient.StatusResult result = client.get().status(intent, outbox);
         applyStatusResult(intent, outbox, result);
+        if (outbox != null) {
+            outboxRepository.save(outbox);
+        }
         paymentAuditService.record(intent.getSenderUserId(), intent.getId(), "PAYMENT_RECONCILED", Map.of(
                 "rail", intent.getRail().name(),
                 "outcome", result.outcome().name(),

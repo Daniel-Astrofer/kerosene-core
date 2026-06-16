@@ -1,7 +1,5 @@
 package source.auth.application.orchestrator.signup;
 
-import org.bitcoinj.crypto.MnemonicCode;
-import org.bitcoinj.crypto.MnemonicException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,15 +22,10 @@ import source.notification.model.UserNotificationPayload;
 import source.security.VaultKeyProvider;
 import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
-import source.wallet.application.port.in.CreateWalletUseCase;
-import source.wallet.application.port.in.WalletLookupPort;
-import source.wallet.dto.WalletRequestDTO;
-import source.wallet.model.WalletEntity;
-import source.ledger.service.LedgerContract;
-import source.ledger.exceptions.LedgerExceptions;
+import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.model.KfeWalletKind;
+import source.kfe.service.KfeWalletService;
 
-import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -54,10 +47,7 @@ public class FinalizeSignupAccount {
     private final UserNotifier userNotifier;
     private final CosignerSecretService cosignerSecretService;
     private final VaultKeyProvider vaultKeyProvider;
-    private final CreateWalletUseCase walletUseCase;
-    private final WalletLookupPort walletLookupPort;
-    private final LedgerContract ledgerContract;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final KfeWalletService kfeWalletService;
 
     public FinalizeSignupAccount(
             SignupStateStore stateStore,
@@ -66,18 +56,14 @@ public class FinalizeSignupAccount {
             UserNotifier userNotifier,
             CosignerSecretService cosignerSecretService,
             VaultKeyProvider vaultKeyProvider,
-            CreateWalletUseCase walletUseCase,
-            WalletLookupPort walletLookupPort,
-            LedgerContract ledgerContract) {
+            KfeWalletService kfeWalletService) {
         this.stateStore = stateStore;
         this.userService = userService;
         this.passkeyGateway = passkeyGateway;
         this.userNotifier = userNotifier;
         this.cosignerSecretService = cosignerSecretService;
         this.vaultKeyProvider = vaultKeyProvider;
-        this.walletUseCase = walletUseCase;
-        this.walletLookupPort = walletLookupPort;
-        this.ledgerContract = ledgerContract;
+        this.kfeWalletService = kfeWalletService;
     }
 
     @Transactional
@@ -193,43 +179,32 @@ public class FinalizeSignupAccount {
     }
 
     public void ensureUserFinancialsReady(UserDataBase user, SignupState optionalState) {
-        List<WalletEntity> wallets = walletLookupPort.findByUserId(user.getId());
-        if (wallets.isEmpty() && optionalState != null) {
-            WalletRequestDTO request = new WalletRequestDTO(
-                    generateInternalWalletMnemonic(),
-                    DEFAULT_ONBOARDING_WALLET_NAME,
-                    null,
-                    "KEROSENE");
-            walletUseCase.createWallet(request, user.getId());
-            log.info("[Onboarding] Primary wallet created for userId={}", user.getId());
-        } else {
-            for (WalletEntity wallet : wallets) {
-                try {
-                    if (!ledgerContract.existsByWalletId(wallet.getId())) {
-                        ledgerContract.createLedger(wallet, "Automated healing for missing ledger");
-                        log.info("[Onboarding] Healed missing ledger for walletId={} userId={}",
-                                wallet.getId(), user.getId());
-                    }
-                } catch (LedgerExceptions.LedgerAlreadyExistsException ignored) {
-                    // Already has a ledger, that's fine.
-                } catch (Exception e) {
-                    log.error("[Onboarding] Failed to heal ledger for walletId={} userId={}",
-                            wallet.getId(), user.getId(), e);
-                }
-            }
+        if (!kfeWalletService.listWallets(user.getId()).isEmpty() || optionalState == null) {
+            return;
         }
+        String initialAddress = blankToNull(optionalState.getBtcDepositAddress());
+        kfeWalletService.createWallet(
+                user.getId(),
+                new KfeCreateWalletRequest(
+                        KfeWalletKind.INTERNAL,
+                        DEFAULT_ONBOARDING_WALLET_NAME,
+                        null,
+                        null,
+                        null,
+                        null,
+                        initialAddress,
+                        null,
+                        null,
+                        initialAddress != null ? "SIGNUP_STATE_DEPOSIT_ADDRESS" : null,
+                        initialAddress == null));
+        log.info("[Onboarding] Primary KFE wallet created for userId={}", user.getId());
     }
 
-    private String generateInternalWalletMnemonic() {
-        byte[] entropy = new byte[16];
-        try {
-            secureRandom.nextBytes(entropy);
-            return String.join(" ", MnemonicCode.INSTANCE.toMnemonic(entropy));
-        } catch (MnemonicException.MnemonicLengthException exception) {
-            throw new IllegalStateException("Unable to generate onboarding wallet seed.", exception);
-        } finally {
-            Arrays.fill(entropy, (byte) 0);
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
         }
+        return value.trim();
     }
 
     private void schedulePostCommitCleanup(String sessionId, Long userId) {

@@ -14,8 +14,8 @@ import source.config.production.ProductionProfileDetector;
 import source.config.production.ProductionSafetyCheckChain;
 import source.security.MasterKeyMemoryStore;
 import source.security.vault.VaultRaftHealthService;
-import source.transactions.infra.CustodyGateway;
-import source.transactions.infra.ExternalRailProviderRegistry;
+import source.kfe.rail.CustodyGateway;
+import source.kfe.rail.ExternalRailProviderRegistry;
 
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
@@ -50,11 +50,11 @@ public class OperationalHealthService {
     private static final List<TableRef> REQUIRED_TABLES = List.of(
             new TableRef("auth", "users_credentials"),
             new TableRef("auth", "passkey_credentials"),
-            new TableRef("financial", "wallets"),
-            new TableRef("financial", "ledger"),
-            new TableRef("financial", "network_transfers"),
-            new TableRef("financial", "blockchain_address_watch"),
-            new TableRef("financial", "network_transfer_events"),
+            new TableRef("financial", "wallets_core"),
+            new TableRef("financial", "balances_core"),
+            new TableRef("financial", "transactions_master"),
+            new TableRef("financial", "financial_execution_outbox"),
+            new TableRef("financial", "financial_audit_log"),
             new TableRef("public", "notifications"));
 
     private final JdbcTemplate jdbcTemplate;

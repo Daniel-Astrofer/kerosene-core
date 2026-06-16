@@ -258,12 +258,15 @@ public class AdminAccessService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        adminKeyRepository.findByUserIdAndStatus(userId, AdminKeyStatus.ACTIVE).forEach(existing -> {
+        List<AdminKeyEntity> existingKeys = adminKeyRepository.findByUserIdAndStatus(userId, AdminKeyStatus.ACTIVE);
+        existingKeys.forEach(existing -> {
             existing.setStatus(AdminKeyStatus.REVOKED);
             existing.setRevokedAt(now);
             existing.setRotatedAt(now);
-            adminKeyRepository.save(existing);
         });
+        if (!existingKeys.isEmpty()) {
+            adminKeyRepository.saveAll(existingKeys);
+        }
 
         AdminKeyEntity key = new AdminKeyEntity();
         key.setUser(user);
@@ -290,8 +293,10 @@ public class AdminAccessService {
         active.forEach(key -> {
             key.setStatus(AdminKeyStatus.REVOKED);
             key.setRevokedAt(now);
-            adminKeyRepository.save(key);
         });
+        if (!active.isEmpty()) {
+            adminKeyRepository.saveAll(active);
+        }
         return new AdminKeyStatusDTO(false, "REVOKED", null, null, now);
     }
 

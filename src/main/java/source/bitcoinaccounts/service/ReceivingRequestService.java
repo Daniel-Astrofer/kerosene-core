@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 
@@ -101,7 +102,31 @@ public class ReceivingRequestService {
 
         auditService.recordUser(userId, "RECEIVE_REQUEST_CREATED", "RECEIVING_REQUEST",
                 request.getId().toString(), Map.of("cardId", card.getId().toString(), "oneTime", oneTime));
-        return toView(request, address, true);
+        return toOwnerView(request, address, accountId);
+    }
+
+    @Transactional
+    public List<Map<String, Object>> listForAccount(Long userId, UUID accountId) {
+        InternalBtcCardEntity card = accountService.requireInternalCard(userId, accountId);
+        List<ReceivingRequestEntity> expiredRequests = new ArrayList<>();
+        List<Map<String, Object>> views = new ArrayList<>();
+
+        for (ReceivingRequestEntity request : requestRepository
+                .findTop50ByCardIdAndStatusNotOrderByCreatedAtDesc(
+                        card.getId(), BitcoinAccountEnums.ReceivingRequestStatus.HIDDEN)) {
+            if (request.getStatus() == BitcoinAccountEnums.ReceivingRequestStatus.ACTIVE && isExpired(request)) {
+                request.setStatus(BitcoinAccountEnums.ReceivingRequestStatus.EXPIRED);
+                expiredRequests.add(request);
+            }
+            ReceivingAddressEntity address = addressRepository.findById(request.getAddressId())
+                    .orElseThrow(() -> new IllegalArgumentException("Receiving address not found."));
+            views.add(toOwnerView(request, address, accountId));
+        }
+
+        if (!expiredRequests.isEmpty()) {
+            requestRepository.saveAll(expiredRequests);
+        }
+        return views;
     }
 
     @Transactional
@@ -330,24 +355,32 @@ public class ReceivingRequestService {
                 BitcoinAccountEnums.ReceivingRequestStatus.ACTIVE,
                 BitcoinAccountEnums.ReceivingRequestStatus.MEMPOOL_SEEN,
                 BitcoinAccountEnums.ReceivingRequestStatus.CONFIRMING);
+        List<ReceivingRequestEntity> toUpdate = new ArrayList<>();
         for (ReceivingRequestEntity request : requestRepository
                 .findTop200ByStatusInAndExpiresAtBeforeOrderByExpiresAtAsc(active, LocalDateTime.now())) {
             if (request.getStatus() == BitcoinAccountEnums.ReceivingRequestStatus.ACTIVE) {
                 request.setStatus(BitcoinAccountEnums.ReceivingRequestStatus.EXPIRED);
-                requestRepository.save(request);
+                toUpdate.add(request);
             }
+        }
+        if (!toUpdate.isEmpty()) {
+            requestRepository.saveAll(toUpdate);
         }
     }
 
     @Transactional
     public void purgeReadableReceiveData(LocalDateTime cutoff) {
+        List<ReceivingRequestEntity> toUpdate = new ArrayList<>();
         for (ReceivingRequestEntity request : requestRepository.findTop200ByPurgeAfterBefore(cutoff)) {
             if (request.getStatus() == BitcoinAccountEnums.ReceivingRequestStatus.PAID
                     || request.getStatus() == BitcoinAccountEnums.ReceivingRequestStatus.HIDDEN
                     || request.getStatus() == BitcoinAccountEnums.ReceivingRequestStatus.EXPIRED) {
                 request.setSelfServiceReason("purged_after_24h_mobile_local_source_of_truth");
-                requestRepository.save(request);
+                toUpdate.add(request);
             }
+        }
+        if (!toUpdate.isEmpty()) {
+            requestRepository.saveAll(toUpdate);
         }
     }
 
@@ -403,6 +436,8 @@ public class ReceivingRequestService {
         view.put("publicCode", request.getPublicCode());
         view.put("amountSats", request.getAmountSats());
         view.put("expiresAt", request.getExpiresAt());
+        view.put("createdAt", request.getCreatedAt());
+        view.put("paidAt", request.getPaidAt());
         view.put("oneTime", request.isOneTime());
         view.put("status", request.getStatus());
         view.put("network", bitcoinNetwork);
@@ -415,6 +450,12 @@ public class ReceivingRequestService {
             view.put("addressId", request.getAddressId());
             view.put("selfServiceReason", request.getSelfServiceReason());
         }
+        return view;
+    }
+
+    private Map<String, Object> toOwnerView(ReceivingRequestEntity request, ReceivingAddressEntity address, UUID accountId) {
+        Map<String, Object> view = toView(request, address, true);
+        view.put("accountId", accountId);
         return view;
     }
 

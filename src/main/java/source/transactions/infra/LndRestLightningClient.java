@@ -75,22 +75,24 @@ public class LndRestLightningClient implements LightningClient {
         return 0L;
     }
 
-    public LightningPaymentResult payInvoice(String paymentRequest, long amountSats, long maxFeeSats) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("payment_request", paymentRequest);
-        payload.put("timeout_seconds", paymentTimeoutSeconds);
-        payload.put("fee_limit_sat", String.valueOf(Math.max(0L, maxFeeSats)));
-        payload.put("no_inflight_updates", true);
-        if (amountSats > 0L) {
-            payload.put("amt", String.valueOf(amountSats));
-        }
+    public java.util.concurrent.CompletableFuture<LightningPaymentResult> payInvoiceAsync(String paymentRequest, long amountSats, long maxFeeSats) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("payment_request", paymentRequest);
+            payload.put("timeout_seconds", paymentTimeoutSeconds);
+            payload.put("fee_limit_sat", String.valueOf(Math.max(0L, maxFeeSats)));
+            payload.put("no_inflight_updates", true);
+            if (amountSats > 0L) {
+                payload.put("amt", String.valueOf(amountSats));
+            }
 
-        JsonNode response = post("/v2/router/send", payload);
-        return new LightningPaymentResult(
-                text(response, "payment_hash"),
-                longField(response, "fee_sat", "fee"),
-                text(response, "status"),
-                response.toString());
+            JsonNode response = post("/v2/router/send", payload);
+            return new LightningPaymentResult(
+                    text(response, "payment_hash"),
+                    longField(response, "fee_sat", "fee"),
+                    text(response, "status"),
+                    response.toString());
+        });
     }
 
     private JsonNode get(String path) {

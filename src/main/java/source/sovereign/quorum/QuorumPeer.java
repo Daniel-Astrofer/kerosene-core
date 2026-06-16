@@ -10,6 +10,9 @@ public record QuorumPeer(String baseUrl) {
         if (baseUrl.isBlank()) {
             throw new IllegalArgumentException("Quorum peer URL must not be blank");
         }
+        if (!baseUrl.startsWith("https://")) {
+            throw new IllegalArgumentException("Quorum peers must use explicit https:// URLs.");
+        }
     }
 
     public String endpoint(String path) {

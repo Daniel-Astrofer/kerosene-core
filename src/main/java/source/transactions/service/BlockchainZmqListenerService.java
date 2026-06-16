@@ -26,6 +26,7 @@ import source.transactions.application.externalpayments.ExternalTransfersPort;
 import source.transactions.infra.BlockchainClient;
 import source.transactions.model.BlockchainAddressWatchEntity;
 import source.transactions.model.ExternalTransferEntity;
+import source.transactions.monitoring.BitcoinBlockchainMonitorService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -48,12 +49,18 @@ public class BlockchainZmqListenerService {
     private final NetworkTransferLifecycleService lifecycleService;
     private final NetworkTransferEventService networkTransferEventService;
     private final ReceivingRequestService receivingRequestService;
+    private final BitcoinBlockchainMonitorService bitcoinBlockchainMonitorService;
     private final String rawTxEndpoint;
     private final String hashBlockEndpoint;
     private final NetworkParameters networkParameters;
     private final int minimumConfirmations;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "bitcoin-zmq-listener");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final ExecutorService syncExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "bitcoin-sync-trigger");
         thread.setDaemon(true);
         return thread;
     });
@@ -66,6 +73,7 @@ public class BlockchainZmqListenerService {
             NetworkTransferLifecycleService lifecycleService,
             NetworkTransferEventService networkTransferEventService,
             ObjectProvider<ReceivingRequestService> receivingRequestService,
+            ObjectProvider<BitcoinBlockchainMonitorService> bitcoinBlockchainMonitorService,
             @Value("${bitcoin.rpc.zmq.rawtx}") String rawTxEndpoint,
             @Value("${bitcoin.rpc.zmq.hashblock}") String hashBlockEndpoint,
             @Value("${bitcoin.network:mainnet}") String bitcoinNetwork,
@@ -76,6 +84,7 @@ public class BlockchainZmqListenerService {
         this.lifecycleService = lifecycleService;
         this.networkTransferEventService = networkTransferEventService;
         this.receivingRequestService = receivingRequestService.getIfAvailable();
+        this.bitcoinBlockchainMonitorService = bitcoinBlockchainMonitorService.getIfAvailable();
         this.rawTxEndpoint = rawTxEndpoint != null ? rawTxEndpoint.trim() : "";
         this.hashBlockEndpoint = hashBlockEndpoint != null ? hashBlockEndpoint.trim() : "";
         this.networkParameters = resolveNetworkParameters(bitcoinNetwork);
@@ -93,6 +102,7 @@ public class BlockchainZmqListenerService {
         if (!running.compareAndSet(false, true)) {
             return;
         }
+        triggerInitialSyncSearch();
         executor.submit(this::listen);
     }
 
@@ -100,6 +110,20 @@ public class BlockchainZmqListenerService {
     public void stop() {
         running.set(false);
         executor.shutdownNow();
+        syncExecutor.shutdownNow();
+    }
+
+    private void triggerInitialSyncSearch() {
+        if (bitcoinBlockchainMonitorService == null) {
+            return;
+        }
+        syncExecutor.submit(() -> {
+            try {
+                bitcoinBlockchainMonitorService.monitorPrunedNodeSync();
+            } catch (Exception ex) {
+                log.warn("[BlockchainZmq] Initial Bitcoin sync trigger failed: {}", ex.getMessage());
+            }
+        });
     }
 
     private void listen() {

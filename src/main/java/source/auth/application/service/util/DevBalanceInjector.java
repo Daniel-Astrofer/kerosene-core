@@ -6,11 +6,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.model.entity.UserDataBase;
-import source.ledger.service.LedgerService;
-import source.wallet.application.port.in.WalletLookupPort;
-import source.wallet.model.WalletEntity;
+import source.kfe.model.KfeWalletEntity;
+import source.kfe.repository.KfeWalletRepository;
+import source.kfe.service.KfeBalanceService;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 public class DevBalanceInjector {
@@ -25,17 +26,17 @@ public class DevBalanceInjector {
         ERROR
     }
 
-    private final WalletLookupPort walletLookupPort;
-    private final LedgerService ledgerService;
+    private final KfeWalletRepository walletRepository;
+    private final KfeBalanceService balanceService;
     private final UserRepository userRepository;
     private final boolean enabled;
 
-    public DevBalanceInjector(WalletLookupPort walletLookupPort,
-                               LedgerService ledgerService,
+    public DevBalanceInjector(KfeWalletRepository walletRepository,
+                               KfeBalanceService balanceService,
                                UserRepository userRepository,
                                @Value("${app.dev.inject-test-balance:false}") boolean enabled) {
-        this.walletLookupPort = walletLookupPort;
-        this.ledgerService = ledgerService;
+        this.walletRepository = walletRepository;
+        this.balanceService = balanceService;
         this.userRepository = userRepository;
         this.enabled = enabled;
     }
@@ -62,15 +63,18 @@ public class DevBalanceInjector {
         }
 
         try {
-            WalletEntity wallet = walletLookupPort.findPrimaryWallet(user.getId());
+            KfeWalletEntity wallet = walletRepository.findByUserIdOrderByCreatedAtDesc(user.getId())
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
             if (wallet == null) {
                 log.warn("[DEV] User {} has no wallets to inject balance.", user.getUsername());
                 return ClaimOutcome.NO_WALLET;
             }
 
             BigDecimal amount = new BigDecimal("100.00000000");
-
-            ledgerService.updateBalance(wallet.getId(), amount, "DEV_INITIAL_GRANT");
+            long sats = amount.movePointRight(8).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+            balanceService.creditAvailable(wallet.getId(), "BTC", sats);
 
             user.setTestBalanceClaimed(true);
             userRepository.save(user);

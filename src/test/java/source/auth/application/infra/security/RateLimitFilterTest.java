@@ -39,6 +39,79 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void shouldNotLetSpoofedAuthorizationHeaderBypassPublicAuthIdentityBucket() throws Exception {
+        RedisServicer redisServicer = mock(RedisServicer.class);
+        when(redisServicer.increment(anyString())).thenReturn(1L);
+
+        RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest firstRequest = jsonRequest("/auth/login", "{\"username\":\"alice\"}");
+        firstRequest.addHeader("Authorization", "Bearer attacker-rotated-1");
+        MockHttpServletRequest secondRequest = jsonRequest("/auth/login", "{\"username\":\"alice\"}");
+        secondRequest.addHeader("Authorization", "Bearer attacker-rotated-2");
+
+        filter.doFilter(firstRequest, new MockHttpServletResponse(), chain);
+        filter.doFilter(secondRequest, new MockHttpServletResponse(), chain);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(redisServicer, times(2)).increment(captor.capture());
+
+        assertEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
+        verify(chain, times(2)).doFilter(any(), any());
+    }
+
+    @Test
+    void shouldBucketAuthenticatedFundRequestsByAuthorizationBeforeIdempotencyKey() throws Exception {
+        RedisServicer redisServicer = mock(RedisServicer.class);
+        when(redisServicer.increment(anyString())).thenReturn(1L);
+
+        RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest firstRequest = jsonRequest(
+                "/transactions/network/onchain/send",
+                "{\"idempotencyKey\":\"idem-1\",\"fromWalletName\":\"main\"}");
+        firstRequest.addHeader("Authorization", "Bearer stable-jwt");
+        MockHttpServletRequest secondRequest = jsonRequest(
+                "/transactions/network/onchain/send",
+                "{\"idempotencyKey\":\"idem-2\",\"fromWalletName\":\"main\"}");
+        secondRequest.addHeader("Authorization", "Bearer stable-jwt");
+
+        filter.doFilter(firstRequest, new MockHttpServletResponse(), chain);
+        filter.doFilter(secondRequest, new MockHttpServletResponse(), chain);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(redisServicer, times(2)).increment(captor.capture());
+
+        assertEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
+        verify(chain, times(2)).doFilter(any(), any());
+    }
+
+    @Test
+    void shouldBucketPublicAuthRequestsWithoutIdentityByNetwork() throws Exception {
+        RedisServicer redisServicer = mock(RedisServicer.class);
+        when(redisServicer.increment(anyString())).thenReturn(1L);
+
+        RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
+        FilterChain chain = mock(FilterChain.class);
+
+        MockHttpServletRequest firstRequest = jsonRequest("/auth/login", "{\"payload\":\"one\"}");
+        firstRequest.addHeader("Authorization", "Bearer attacker-rotated-1");
+        MockHttpServletRequest secondRequest = jsonRequest("/auth/login", "{\"payload\":\"two\"}");
+        secondRequest.addHeader("Authorization", "Bearer attacker-rotated-2");
+
+        filter.doFilter(firstRequest, new MockHttpServletResponse(), chain);
+        filter.doFilter(secondRequest, new MockHttpServletResponse(), chain);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(redisServicer, times(2)).increment(captor.capture());
+
+        assertEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
+        verify(chain, times(2)).doFilter(any(), any());
+    }
+
+    @Test
     void shouldRejectWhenPublicRouteExceedsLimit() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
         when(redisServicer.increment(anyString())).thenReturn(11L);

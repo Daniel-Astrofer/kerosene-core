@@ -1,7 +1,10 @@
 package source.kfe.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import source.common.service.AddressDerivationService;
 import source.kfe.dto.KfeAddressResponse;
 import source.kfe.dto.KfeCreateWalletRequest;
@@ -12,17 +15,21 @@ import source.kfe.model.KfeWalletAddressStatus;
 import source.kfe.model.KfeWalletEntity;
 import source.kfe.model.KfeWalletKind;
 import source.kfe.model.KfeWalletStatus;
+import source.kfe.rail.KfeRailException;
 import source.kfe.repository.KfeWalletAddressRepository;
 import source.kfe.repository.KfeWalletRepository;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
 public class KfeWalletService {
 
+    private static final Logger log = LoggerFactory.getLogger(KfeWalletService.class);
     private static final String ASSET_BTC = "BTC";
+    private static final int FAILURE_REASON_MAX_LENGTH = 180;
 
     private final KfeWalletRepository walletRepository;
     private final KfeWalletAddressRepository addressRepository;
@@ -34,6 +41,8 @@ public class KfeWalletService {
     private final KfeResponseMapper responseMapper;
     private final KfeDashboardPublisher dashboardPublisher;
     private final AddressDerivationService addressDerivationService;
+    private final KfeReceiveAddressIssuer receiveAddressIssuer;
+    private final TransactionTemplate transactionTemplate;
 
     public KfeWalletService(
             KfeWalletRepository walletRepository,
@@ -45,7 +54,9 @@ public class KfeWalletService {
             KfeMpcKeyService mpcKeyService,
             KfeResponseMapper responseMapper,
             KfeDashboardPublisher dashboardPublisher,
-            AddressDerivationService addressDerivationService) {
+            AddressDerivationService addressDerivationService,
+            KfeReceiveAddressIssuer receiveAddressIssuer,
+            TransactionTemplate transactionTemplate) {
         this.walletRepository = walletRepository;
         this.addressRepository = addressRepository;
         this.balanceService = balanceService;
@@ -56,12 +67,33 @@ public class KfeWalletService {
         this.responseMapper = responseMapper;
         this.dashboardPublisher = dashboardPublisher;
         this.addressDerivationService = addressDerivationService;
+        this.receiveAddressIssuer = receiveAddressIssuer;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
     public KfeWalletResponse createWallet(Long userId, KfeCreateWalletRequest request) {
         validateCreateRequest(request);
 
+        PendingWallet pending = Objects.requireNonNull(transactionTemplate.execute(status ->
+                createPendingWallet(userId, request)));
+        String proposalHash = walletCreateProposalHash(userId, pending);
+        KfeQuorumGateway.Result quorum = requireWalletCreateQuorum(userId, pending, proposalHash);
+        String mpcPublicKey = provisionMpcPublicKey(userId, pending);
+
+        try {
+            return Objects.requireNonNull(transactionTemplate.execute(status ->
+                    activateWallet(userId, request, pending.walletId(), proposalHash, quorum, mpcPublicKey)));
+        } catch (RuntimeException exception) {
+            markWalletCreationFailed(
+                    userId,
+                    pending.walletId(),
+                    KfeWalletStatus.KEYGEN_FAILED,
+                    "Wallet activation failed: " + safeReason(exception));
+            throw exception;
+        }
+    }
+
+    private PendingWallet createPendingWallet(Long userId, KfeCreateWalletRequest request) {
         KfeWalletEntity wallet = new KfeWalletEntity();
         wallet.setUserId(userId);
         wallet.setKind(request.kind());
@@ -76,19 +108,75 @@ public class KfeWalletService {
         wallet.setQuorumPolicyHash(quorumPolicyHash(request.kind()));
         wallet = walletRepository.save(wallet);
         balanceService.createEmptyBalance(wallet.getId(), wallet.getAsset());
+        dashboardPublisher.publishAfterCommit(userId);
+        return new PendingWallet(wallet.getId(), wallet.getKind(), wallet.getQuorumPolicyHash());
+    }
 
-        String proposalHash = hashService.sha256("KFE_WALLET_CREATE|" + userId + "|" + wallet.getId()
-                + "|" + wallet.getKind() + "|" + wallet.getQuorumPolicyHash());
-        KfeQuorumGateway.Result quorum = quorumGateway.requireHealthyUnanimousConsensus(proposalHash);
-
-        if (wallet.getKind() == KfeWalletKind.CUSTODIAL_ONCHAIN) {
-            wallet.setMpcPublicKey(mpcKeyService.keygenWallet(wallet.getId(), userId));
+    private KfeQuorumGateway.Result requireWalletCreateQuorum(
+            Long userId,
+            PendingWallet pending,
+            String proposalHash) {
+        try {
+            return quorumGateway.requireHealthyUnanimousConsensus(proposalHash);
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "[KFE Wallet] Wallet creation quorum unavailable walletId={} kind={}: {}",
+                    pending.walletId(),
+                    pending.kind(),
+                    exception.getMessage());
+            markWalletCreationFailed(
+                    userId,
+                    pending.walletId(),
+                    KfeWalletStatus.QUORUM_BLOCKED,
+                    "Quorum failed: " + safeReason(exception));
+            throw new KfeRailException.ProviderUnavailable(
+                    "KFE wallet quorum is temporarily unavailable. Wallet creation was not completed.",
+                    exception);
         }
+    }
+
+    private String provisionMpcPublicKey(Long userId, PendingWallet pending) {
+        if (pending.kind() != KfeWalletKind.CUSTODIAL_ONCHAIN) {
+            return null;
+        }
+
+        try {
+            String publicKey = mpcKeyService.keygenWallet(pending.walletId(), userId);
+            if (!hasText(publicKey)) {
+                throw new IllegalStateException("MPC sidecar returned an empty public key.");
+            }
+            return publicKey;
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "[KFE Wallet] MPC key generation unavailable walletId={}: {}",
+                    pending.walletId(),
+                    exception.getMessage());
+            markWalletCreationFailed(
+                    userId,
+                    pending.walletId(),
+                    KfeWalletStatus.KEYGEN_FAILED,
+                    "MPC key generation failed: " + safeReason(exception));
+            throw new KfeRailException.ProviderUnavailable(
+                    "KFE MPC key generation is temporarily unavailable. Wallet creation was not completed.",
+                    exception);
+        }
+    }
+
+    private KfeWalletResponse activateWallet(
+            Long userId,
+            KfeCreateWalletRequest request,
+            UUID walletId,
+            String proposalHash,
+            KfeQuorumGateway.Result quorum,
+            String mpcPublicKey) {
+        KfeWalletEntity wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("KFE wallet not found."));
+        wallet.setMpcPublicKey(mpcPublicKey);
         wallet.setStatus(KfeWalletStatus.ACTIVE);
         wallet = walletRepository.save(wallet);
 
         if (hasText(request.initialAddress())) {
-            createProvidedAddress(wallet, request.initialAddress());
+            createProvidedAddress(wallet, request);
         } else if (Boolean.TRUE.equals(request.issueInitialAddress())) {
             issueFreshAddress(wallet, false);
         }
@@ -115,8 +203,33 @@ public class KfeWalletService {
                 .toList();
     }
 
-    @Transactional
     public KfeAddressResponse rotateAddress(Long userId, UUID walletId) {
+        PendingAddressRotation pending = Objects.requireNonNull(transactionTemplate.execute(status ->
+                beginAddressRotation(userId, walletId)));
+        KfeQuorumGateway.Result quorum;
+        try {
+            quorum = quorumGateway.requireHealthyUnanimousConsensus(pending.proposalHash());
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "[KFE Wallet] Address rotation quorum unavailable walletId={}: {}",
+                    walletId,
+                    exception.getMessage());
+            restoreWalletStatus(userId, walletId, KfeWalletStatus.ACTIVE, "Address rotation quorum failed.");
+            throw new KfeRailException.ProviderUnavailable(
+                    "KFE wallet quorum is temporarily unavailable. Address rotation was not completed.",
+                    exception);
+        }
+
+        try {
+            return Objects.requireNonNull(transactionTemplate.execute(status ->
+                    finishAddressRotation(userId, walletId, pending.proposalHash(), quorum)));
+        } catch (RuntimeException exception) {
+            restoreWalletStatus(userId, walletId, KfeWalletStatus.ACTIVE, "Address rotation failed.");
+            throw exception;
+        }
+    }
+
+    private PendingAddressRotation beginAddressRotation(Long userId, UUID walletId) {
         KfeWalletEntity wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("KFE wallet not found."));
         if (wallet.getKind() == KfeWalletKind.WATCH_ONLY) {
@@ -127,8 +240,17 @@ public class KfeWalletService {
         wallet.setStatus(KfeWalletStatus.ROTATING_ADDRESS);
         walletRepository.save(wallet);
         String proposalHash = hashService.sha256("KFE_WALLET_ADDRESS_ROTATE|" + userId + "|" + wallet.getId());
-        KfeQuorumGateway.Result quorum = quorumGateway.requireHealthyUnanimousConsensus(proposalHash);
+        dashboardPublisher.publishAfterCommit(userId);
+        return new PendingAddressRotation(proposalHash);
+    }
 
+    private KfeAddressResponse finishAddressRotation(
+            Long userId,
+            UUID walletId,
+            String proposalHash,
+            KfeQuorumGateway.Result quorum) {
+        KfeWalletEntity wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("KFE wallet not found."));
         KfeWalletAddressEntity address = issueFreshAddress(wallet, true);
         wallet.setStatus(KfeWalletStatus.ACTIVE);
         walletRepository.save(wallet);
@@ -159,17 +281,24 @@ public class KfeWalletService {
             throw new IllegalArgumentException(
                     "CUSTODIAL_ONCHAIN wallets require an XPUB until MPC sidecar exposes native XPUB generation.");
         }
+        if (Boolean.TRUE.equals(request.issueInitialAddress())
+                && !hasText(request.initialAddress())
+                && !hasText(request.xpub())
+                && !receiveAddressIssuer.canIssue()) {
+            throw new IllegalArgumentException(
+                    "Issuing an initial address requires an XPUB, initial address or configured KFE receive issuer.");
+        }
     }
 
     private KfeWalletAddressEntity issueFreshAddress(KfeWalletEntity wallet, boolean retireExisting) {
         if (retireExisting) {
-            addressRepository.findByWalletIdAndStatusOrderByCreatedAtDesc(
-                            wallet.getId(),
-                            KfeWalletAddressStatus.ACTIVE)
-                    .forEach(address -> {
-                        address.retire();
-                        addressRepository.save(address);
-                    });
+            List<KfeWalletAddressEntity> activeAddresses = addressRepository.findByWalletIdAndStatusOrderByCreatedAtDesc(
+                    wallet.getId(),
+                    KfeWalletAddressStatus.ACTIVE);
+            activeAddresses.forEach(KfeWalletAddressEntity::retire);
+            if (!activeAddresses.isEmpty()) {
+                addressRepository.saveAll(activeAddresses);
+            }
         }
 
         if (hasText(wallet.getXpub())) {
@@ -186,11 +315,27 @@ public class KfeWalletService {
                     "KFE_XPUB_DERIVATION");
         }
 
-        throw new IllegalStateException("KFE address rotation requires wallet XPUB or an initial address.");
+        KfeReceiveAddressIssuer.IssuedAddress issued = receiveAddressIssuer.issue(
+                "kfe-wallet-" + wallet.getId());
+        if (issued.derivationIndex() >= 0) {
+            wallet.setLastDerivedIndex(issued.derivationIndex());
+            walletRepository.save(wallet);
+        }
+        return saveAddress(
+                wallet,
+                issued.address(),
+                issued.derivationPath(),
+                issued.derivationIndex() >= 0 ? issued.derivationIndex() : null,
+                issued.providerReference());
     }
 
-    private KfeWalletAddressEntity createProvidedAddress(KfeWalletEntity wallet, String addressValue) {
-        return saveAddress(wallet, addressValue.trim(), null, null, "CLIENT_PROVIDED");
+    private KfeWalletAddressEntity createProvidedAddress(KfeWalletEntity wallet, KfeCreateWalletRequest request) {
+        return saveAddress(
+                wallet,
+                request.initialAddress().trim(),
+                blankToNull(request.initialAddressDerivationPath()),
+                request.initialAddressDerivationIndex(),
+                firstText(request.initialAddressProviderReference(), "CLIENT_PROVIDED"));
     }
 
     private KfeWalletAddressEntity saveAddress(
@@ -221,6 +366,65 @@ public class KfeWalletService {
                 + "|quorum=healthy-unanimous-min-2|pricing=onchain-0.9pct");
     }
 
+    private String walletCreateProposalHash(Long userId, PendingWallet wallet) {
+        return hashService.sha256("KFE_WALLET_CREATE|" + userId + "|" + wallet.walletId()
+                + "|" + wallet.kind() + "|" + wallet.quorumPolicyHash());
+    }
+
+    private void markWalletCreationFailed(Long userId, UUID walletId, KfeWalletStatus status, String reason) {
+        try {
+            transactionTemplate.executeWithoutResult(transactionStatus -> {
+                walletRepository.findByIdAndUserIdForUpdate(walletId, userId).ifPresent(wallet -> {
+                    wallet.setStatus(status);
+                    walletRepository.save(wallet);
+                    auditLogService.record(
+                            "KFE_WALLET_CREATE_FAILED",
+                            null,
+                            wallet.getId(),
+                            null,
+                            null,
+                            Map.of(
+                                    "walletId", wallet.getId().toString(),
+                                    "status", status.name(),
+                                    "reason", safeReason(reason)));
+                    dashboardPublisher.publishAfterCommit(userId);
+                });
+            });
+        } catch (RuntimeException markerException) {
+            log.warn(
+                    "[KFE Wallet] Failed to persist wallet creation failure walletId={}: {}",
+                    walletId,
+                    markerException.getMessage());
+        }
+    }
+
+    private void restoreWalletStatus(Long userId, UUID walletId, KfeWalletStatus status, String reason) {
+        try {
+            transactionTemplate.executeWithoutResult(transactionStatus -> {
+                walletRepository.findByIdAndUserIdForUpdate(walletId, userId).ifPresent(wallet -> {
+                    wallet.setStatus(status);
+                    walletRepository.save(wallet);
+                    auditLogService.record(
+                            "KFE_WALLET_STATUS_RESTORED",
+                            null,
+                            wallet.getId(),
+                            null,
+                            null,
+                            Map.of(
+                                    "walletId", wallet.getId().toString(),
+                                    "status", status.name(),
+                                    "reason", safeReason(reason)));
+                    dashboardPublisher.publishAfterCommit(userId);
+                });
+            });
+        } catch (RuntimeException markerException) {
+            log.warn(
+                    "[KFE Wallet] Failed to restore wallet status walletId={}: {}",
+                    walletId,
+                    markerException.getMessage());
+        }
+    }
+
     private String cleanLabel(String label) {
         String clean = label != null ? label.trim() : "";
         if (clean.isBlank()) {
@@ -233,7 +437,28 @@ public class KfeWalletService {
         return hasText(value) ? value.trim() : null;
     }
 
+    private String firstText(String value, String fallback) {
+        return hasText(value) ? value.trim() : fallback;
+    }
+
+    private String safeReason(RuntimeException exception) {
+        return safeReason(exception.getMessage());
+    }
+
+    private String safeReason(String reason) {
+        String clean = hasText(reason) ? reason.trim() : "unavailable";
+        return clean.length() > FAILURE_REASON_MAX_LENGTH
+                ? clean.substring(0, FAILURE_REASON_MAX_LENGTH)
+                : clean;
+    }
+
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private record PendingWallet(UUID walletId, KfeWalletKind kind, String quorumPolicyHash) {
+    }
+
+    private record PendingAddressRotation(String proposalHash) {
     }
 }

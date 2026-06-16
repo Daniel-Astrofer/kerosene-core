@@ -11,10 +11,13 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class RedisService implements RedisServicer {
 
+    private static final Logger logger = LoggerFactory.getLogger(RedisService.class);
     private final Cryptography cryptography;
     private final RedisContract repository;
     private final Hasher hasher;
@@ -47,7 +50,7 @@ public class RedisService implements RedisServicer {
             userDTO.setTotpSecret(base64);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error encrypting TOTP secret", e);
             throw new RuntimeException("Error encrypting TOTP secret");
         }
         repository.save(key, userDTO, 120);

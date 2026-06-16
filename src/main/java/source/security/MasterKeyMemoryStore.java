@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -21,16 +20,17 @@ public class MasterKeyMemoryStore {
     private static final Logger logger = LoggerFactory.getLogger(MasterKeyMemoryStore.class);
 
     private final ReentrantReadWriteLock keyLock = new ReentrantReadWriteLock();
-    private volatile SecretKey masterKey;
+    private volatile byte[] masterKeyBytes;
 
     public SecretKey getMasterKey() {
         keyLock.readLock().lock();
         try {
-            if (masterKey == null) {
+            byte[] current = masterKeyBytes;
+            if (current == null) {
                 throw new IllegalStateException(
                         "[VaultKeyProvider] Master key is not provisioned in RAM yet.");
             }
-            return masterKey;
+            return new SecretKeySpec(Arrays.copyOf(current, current.length), "AES");
         } finally {
             keyLock.readLock().unlock();
         }
@@ -39,7 +39,7 @@ public class MasterKeyMemoryStore {
     public boolean isReady() {
         keyLock.readLock().lock();
         try {
-            return masterKey != null;
+            return masterKeyBytes != null;
         } finally {
             keyLock.readLock().unlock();
         }
@@ -54,10 +54,10 @@ public class MasterKeyMemoryStore {
 
         keyLock.writeLock().lock();
         try {
-            if (masterKey != null) {
-                zeroKeyBytes(masterKey);
+            if (masterKeyBytes != null) {
+                zeroKeyBytes(masterKeyBytes);
             }
-            masterKey = new SecretKeySpec(keyBytes, "AES");
+            masterKeyBytes = Arrays.copyOf(keyBytes, keyBytes.length);
             logger.info("[MasterKeyMemoryStore] Master key securely locked in RAM.");
         } finally {
             keyLock.writeLock().unlock();
@@ -67,32 +67,21 @@ public class MasterKeyMemoryStore {
     public void destroyMasterKey() {
         keyLock.writeLock().lock();
         try {
-            if (masterKey == null) {
+            if (masterKeyBytes == null) {
                 return;
             }
-            zeroKeyBytes(masterKey);
-            masterKey = null;
+            zeroKeyBytes(masterKeyBytes);
+            masterKeyBytes = null;
             logger.info("[MasterKeyMemoryStore] Master key bytes zeroed and reference nulled.");
         } finally {
             keyLock.writeLock().unlock();
         }
     }
 
-    private void zeroKeyBytes(SecretKey key) {
-        if (!(key instanceof SecretKeySpec)) {
+    private void zeroKeyBytes(byte[] keyBytes) {
+        if (keyBytes == null) {
             return;
         }
-
-        try {
-            Field field = SecretKeySpec.class.getDeclaredField("key");
-            field.setAccessible(true);
-            byte[] keyBytes = (byte[]) field.get(key);
-            if (keyBytes != null) {
-                Arrays.fill(keyBytes, (byte) 0);
-            }
-        } catch (Exception e) {
-            logger.error("[MasterKeyMemoryStore] CRITICAL: could not zero master key bytes via reflection: {}",
-                    e.getMessage());
-        }
+        Arrays.fill(keyBytes, (byte) 0);
     }
 }

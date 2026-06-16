@@ -16,6 +16,7 @@ import source.wallet.exceptions.WalletExceptions;
 import source.wallet.model.WalletEntity;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,9 +45,9 @@ class DeleteWalletInteractorTest {
     void deleteWalletDeletesWhenPassphraseMatches() {
         WalletEntity wallet = new WalletEntity();
         when(walletReader.findByNameAndUserId("Main", 1L)).thenReturn(wallet);
-        when(walletPersistenceSupport.matchesPassphrase("test-passphrase-bip39", wallet)).thenReturn(true);
+        when(walletPersistenceSupport.matchesPassphrase(aryEq("test-passphrase-bip39".toCharArray()), any(WalletEntity.class))).thenReturn(true);
 
-        deleteWalletInteractor.deleteWallet(new WalletRequestDTO("test-passphrase-bip39", "Main", null), 1L);
+        deleteWalletInteractor.deleteWallet(new WalletRequestDTO("test-passphrase-bip39".toCharArray(), "Main", null), 1L);
 
         verify(walletPersistenceSupport).delete(wallet);
     }
@@ -55,11 +56,11 @@ class DeleteWalletInteractorTest {
     void deleteWalletRejectsInvalidPassphrase() {
         WalletEntity wallet = new WalletEntity();
         when(walletReader.findByNameAndUserId("Main", 1L)).thenReturn(wallet);
-        when(walletPersistenceSupport.matchesPassphrase("wrong-passphrase", wallet)).thenReturn(false);
+        when(walletPersistenceSupport.matchesPassphrase(aryEq("wrong-passphrase".toCharArray()), any(WalletEntity.class))).thenReturn(false);
 
         assertThrows(
                 WalletExceptions.WalletNoExists.class,
-                () -> deleteWalletInteractor.deleteWallet(new WalletRequestDTO("wrong-passphrase", "Main", null), 1L));
+                () -> deleteWalletInteractor.deleteWallet(new WalletRequestDTO("wrong-passphrase".toCharArray(), "Main", null), 1L));
 
         verify(walletPersistenceSupport, never()).delete(any(WalletEntity.class));
     }

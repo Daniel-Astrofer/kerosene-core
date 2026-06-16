@@ -73,6 +73,10 @@ public class VaultBootstrapCoordinator implements SmartLifecycle {
 
         try {
             if (vaultEnabled) {
+                if (proxyPath == null || proxyPath.isBlank()) {
+                    throw new IllegalStateException(
+                            "[VaultBootstrapCoordinator] vault.proxy.path is required when vault.enabled=true.");
+                }
                 logger.info("[VaultBootstrapCoordinator] Vault mode active. Provisioning master key before application startup completes.");
                 provisionDuringStartup();
             } else {

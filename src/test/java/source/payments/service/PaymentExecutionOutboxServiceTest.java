@@ -47,7 +47,7 @@ class PaymentExecutionOutboxServiceTest {
         outbox.setRail("LIGHTNING");
         outbox.setIdempotencyKey(java.util.UUID.randomUUID().toString());
         outbox.setStatus(status);
-        outbox.setNextAttemptAt(Instant.now().minusSeconds(1));
+        outbox.setNextAttemptAt(Instant.now().minusSeconds(60));
         return outbox;
     }
 }

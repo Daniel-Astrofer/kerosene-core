@@ -13,7 +13,12 @@ import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.application.service.cache.contracts.RedisServicer;
+import source.auth.application.orchestrator.login.StartLogin;
+import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
 import source.auth.dto.SignupState;
+import source.auth.dto.passkey.PasskeyRegistrationRequest;
+import source.auth.dto.passkey.PasskeyVerifyRequest;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
@@ -26,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -42,6 +48,7 @@ class PasskeyControllerTest {
     private SignupStateStore signupStateStore;
     private FinalizeSignupAccount finalizeSignupAccount;
     private JwtServicer jwtServicer;
+    private RedisServicer redisService;
     private PasskeyController controller;
 
     @BeforeEach
@@ -54,7 +61,18 @@ class PasskeyControllerTest {
         signupStateStore = mock(SignupStateStore.class);
         finalizeSignupAccount = mock(FinalizeSignupAccount.class);
         jwtServicer = mock(JwtServicer.class);
+        redisService = mock(RedisServicer.class);
 
+        PasskeyOrchestrator passkeyOrchestrator = new PasskeyOrchestrator(
+                passkeyService,
+                passkeyCredentialRepository,
+                userRepository,
+                jwtServicer,
+                signupStateStore,
+                passkeyInventoryService,
+                balanceInjector,
+                finalizeSignupAccount,
+                redisService);
         controller = new PasskeyController(
                 passkeyService,
                 passkeyCredentialRepository,
@@ -63,7 +81,9 @@ class PasskeyControllerTest {
                 signupStateStore,
                 passkeyInventoryService,
                 balanceInjector,
-                finalizeSignupAccount);
+                finalizeSignupAccount,
+                redisService,
+                passkeyOrchestrator);
     }
 
     @Test
@@ -84,6 +104,7 @@ class PasskeyControllerTest {
         UserDataBase user = new UserDataBase();
         setUserId(user, 42L);
         user.setUsername("alice");
+        user.setIsActive(true);
 
         PasskeyVerificationProjection credential = new PasskeyVerificationProjection(
                 credentialId,
@@ -96,7 +117,7 @@ class PasskeyControllerTest {
                 "alice",
                 true);
 
-        PasskeyController.PasskeyVerifyRequest request = new PasskeyController.PasskeyVerifyRequest();
+        PasskeyVerifyRequest request = new PasskeyVerifyRequest();
         request.setCredentialId(Base64.getEncoder().encodeToString(credentialId));
         request.setSignature("signature");
         request.setAuthData("auth-data");
@@ -115,7 +136,7 @@ class PasskeyControllerTest {
                 any(byte[].class),
                 eq("auth-data"),
                 eq("client-data"))).thenReturn(new PasskeyService.PasskeyVerificationResult(true, 1L));
-        when(passkeyCredentialRepository.advanceSignatureCount(eq(credentialId), eq(42L), eq(1L)))
+        when(passkeyCredentialRepository.advanceSignatureCount(any(byte[].class), anyLong(), anyLong()))
                 .thenReturn(1);
         when(jwtServicer.generateToken(42L)).thenReturn("jwt.token.value");
 
@@ -127,6 +148,74 @@ class PasskeyControllerTest {
         verify(userRepository, never()).findByUsername(any());
         verify(passkeyCredentialRepository).findVerificationByCredentialId(any(byte[].class));
         verify(passkeyService).consumeChallengeFromRedis("alice");
+    }
+
+    @Test
+    void passkeyVerifyRejectsInactiveAccount() {
+        byte[] credentialId = new byte[] { 1, 2, 3 };
+        UserDataBase user = new UserDataBase();
+        setUserId(user, 42L);
+        user.setUsername("alice");
+        user.setIsActive(false); // Inactive
+
+        PasskeyVerificationProjection credential = new PasskeyVerificationProjection(
+                credentialId, new byte[32], 0L, "ACTIVE", "localhost", "localhost", 42L, "alice", true);
+
+        PasskeyVerifyRequest request = new PasskeyVerifyRequest();
+        request.setCredentialId(Base64.getEncoder().encodeToString(credentialId));
+
+        when(passkeyCredentialRepository.findVerificationByCredentialId(any(byte[].class)))
+                .thenReturn(Optional.of(credential));
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+        when(passkeyInventoryService.isKnownIncompatibleForCurrentLogin("localhost", "localhost")).thenReturn(false);
+        when(passkeyService.isClientDataOriginAllowed(any())).thenReturn(true);
+        when(passkeyService.consumeChallengeFromRedis("alice")).thenReturn("challenge-hex");
+        when(passkeyService.verifyAuthenticationAssertion(
+                eq("alice"), eq("challenge-hex"), any(), any(byte[].class), any(), any()))
+                .thenReturn(new PasskeyService.PasskeyVerificationResult(true, 1L));
+        when(passkeyCredentialRepository.advanceSignatureCount(any(byte[].class), anyLong(), anyLong())).thenReturn(1);
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertEquals(ErrorCodes.AUTH_INVALID_CREDENTIALS, response.getBody().getErrorCode());
+        assertEquals("Account is inactive", response.getBody().getMessage());
+        verify(jwtServicer, never()).generateToken(any(Long.class));
+    }
+
+    @Test
+    void passkeyVerifyRequiresTotpWhenEnabled() {
+        byte[] credentialId = new byte[] { 1, 2, 3 };
+        UserDataBase user = new UserDataBase();
+        setUserId(user, 42L);
+        user.setUsername("alice");
+        user.setIsActive(true);
+        user.setTOTPSecret("somesecret"); // Totp enabled
+
+        PasskeyVerificationProjection credential = new PasskeyVerificationProjection(
+                credentialId, new byte[32], 0L, "ACTIVE", "localhost", "localhost", 42L, "alice", true);
+
+        PasskeyVerifyRequest request = new PasskeyVerifyRequest();
+        request.setCredentialId(Base64.getEncoder().encodeToString(credentialId));
+
+        when(passkeyCredentialRepository.findVerificationByCredentialId(any(byte[].class)))
+                .thenReturn(Optional.of(credential));
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+        when(passkeyInventoryService.isKnownIncompatibleForCurrentLogin("localhost", "localhost")).thenReturn(false);
+        when(passkeyService.isClientDataOriginAllowed(any())).thenReturn(true);
+        when(passkeyService.consumeChallengeFromRedis("alice")).thenReturn("challenge-hex");
+        when(passkeyService.verifyAuthenticationAssertion(
+                eq("alice"), eq("challenge-hex"), any(), any(byte[].class), any(), any()))
+                .thenReturn(new PasskeyService.PasskeyVerificationResult(true, 1L));
+        when(passkeyCredentialRepository.advanceSignatureCount(any(byte[].class), anyLong(), anyLong())).thenReturn(1);
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertNotNull(response.getBody().getData());
+        assertEquals("Passkey verified. TOTP required.", response.getBody().getMessage());
+        verify(jwtServicer, never()).generateToken(any(Long.class));
+        verify(redisService).setValue(any(String.class), eq("alice"), eq(StartLogin.PRE_AUTH_TTL_SECONDS));
     }
 
     @Test
@@ -222,9 +311,8 @@ class PasskeyControllerTest {
         return state;
     }
 
-    private PasskeyController.PasskeyRegistrationRequest registrationRequest(String clientDataJson) {
-        PasskeyController.PasskeyRegistrationRequest request =
-                new PasskeyController.PasskeyRegistrationRequest();
+    private PasskeyRegistrationRequest registrationRequest(String clientDataJson) {
+        PasskeyRegistrationRequest request = new PasskeyRegistrationRequest();
         request.setClientDataJSON(clientDataJson);
         request.setPublicKeyCose(Base64.getEncoder().encodeToString(new byte[32]));
         request.setSignature("signature");

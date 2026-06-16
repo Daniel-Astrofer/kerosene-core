@@ -17,15 +17,23 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
 
     private final SuicideService suicideService;
     private final Duration failStopWindow;
+    private final boolean hardHaltEnabled;
     private final AtomicInteger consecutiveQuorumFailures = new AtomicInteger(0);
     private volatile boolean failStopMode = false;
     private volatile Instant lastQuorumSuccess = Instant.now();
 
+    public DefaultFailStopPolicy(SuicideService suicideService, long failStopWindowMs) {
+        this(suicideService, failStopWindowMs, false);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     public DefaultFailStopPolicy(
             SuicideService suicideService,
-            @Value("${quorum.fail-stop-window-ms:30000}") long failStopWindowMs) {
+            @Value("${quorum.fail-stop-window-ms:30000}") long failStopWindowMs,
+            @Value("${quorum.fail-stop-hard-halt:false}") boolean hardHaltEnabled) {
         this.suicideService = suicideService;
         this.failStopWindow = Duration.ofMillis(failStopWindowMs);
+        this.hardHaltEnabled = hardHaltEnabled;
     }
 
     @Override
@@ -83,6 +91,11 @@ public class DefaultFailStopPolicy implements FailStopPolicy {
 
         failStopMode = true;
         logger.error("[CRITICAL] Split-brain risk detected. Entering fail-stop mode. Reason: {}", reason);
+        if (!hardHaltEnabled) {
+            logger.error("[Quorum Fail-Stop] Hard JVM halt is disabled. Writes remain suspended until quorum is restored.");
+            return;
+        }
+
         suicideService.triggerInstantSuicide(reason);
     }
 

@@ -17,6 +17,10 @@ public interface ReceivingRequestRepository extends JpaRepository<ReceivingReque
 
     Optional<ReceivingRequestEntity> findTopByAddressIdOrderByCreatedAtDesc(UUID addressId);
 
+    List<ReceivingRequestEntity> findTop50ByCardIdAndStatusNotOrderByCreatedAtDesc(
+            UUID cardId,
+            BitcoinAccountEnums.ReceivingRequestStatus status);
+
     List<ReceivingRequestEntity> findTop200ByStatusInAndExpiresAtBeforeOrderByExpiresAtAsc(
             List<BitcoinAccountEnums.ReceivingRequestStatus> statuses,
             LocalDateTime cutoff);

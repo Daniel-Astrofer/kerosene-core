@@ -37,7 +37,7 @@ class PaymentExternalReconciliationServiceTest {
         when(outboxRepository.findByPaymentIntentId(intent.getId())).thenReturn(Optional.of(outbox));
 
         service(intentRepository, outboxRepository, walletRepository, ledgerService, auditService, List.of())
-                .reconcile(intent.getId());
+                .reconcile(intent.getId(), outbox);
 
         assertEquals(PaymentEnums.PaymentIntentStatus.REQUIRES_RECONCILIATION, intent.getStatus());
         assertEquals("PAYMENT_RECONCILIATION_PROVIDER_NOT_CONFIGURED", intent.getFailureCode());
@@ -64,7 +64,7 @@ class PaymentExternalReconciliationServiceTest {
                 ledgerService,
                 auditService,
                 List.of(statusClient(PaymentRailStatusClient.StatusResult.settled("provider-ref", "SETTLED"))))
-                .reconcile(intent.getId());
+                .reconcile(intent.getId(), outbox);
 
         assertEquals(PaymentEnums.PaymentIntentStatus.SETTLED, intent.getStatus());
         assertEquals("SETTLED", outbox.getStatus());
@@ -91,7 +91,7 @@ class PaymentExternalReconciliationServiceTest {
                 ledgerService,
                 auditService,
                 List.of(statusClient(PaymentRailStatusClient.StatusResult.unknown("provider-ref", "UNKNOWN"))))
-                .reconcile(intent.getId());
+                .reconcile(intent.getId(), outbox);
 
         assertEquals(PaymentEnums.PaymentIntentStatus.REQUIRES_RECONCILIATION, intent.getStatus());
         assertEquals("UNKNOWN", outbox.getStatus());
@@ -120,7 +120,7 @@ class PaymentExternalReconciliationServiceTest {
                 List.of(statusClient(PaymentRailStatusClient.StatusResult.finalFailure(
                         "PROVIDER_FAILED_FINAL",
                         "Provider confirmed final failure."))))
-                .reconcile(intent.getId());
+                .reconcile(intent.getId(), outbox);
 
         assertEquals(PaymentEnums.PaymentIntentStatus.FAILED, intent.getStatus());
         assertEquals("PROVIDER_FAILED_FINAL", intent.getFailureCode());
@@ -188,7 +188,7 @@ class PaymentExternalReconciliationServiceTest {
         outbox.setIdempotencyKey("idem-recon");
         outbox.setStatus("DISPATCHED");
         outbox.setProviderReference("existing-ref");
-        outbox.setNextAttemptAt(Instant.now().minusSeconds(1));
+        outbox.setNextAttemptAt(Instant.now().minusSeconds(60));
         return outbox;
     }
 }

@@ -28,7 +28,7 @@ public class MiningAllocationEntity {
     private Long userId;
 
     @Column(name = "wallet_id", nullable = false)
-    private Long walletId;
+    private UUID walletId;
 
     @Column(name = "rig_id", nullable = false)
     private Long rigId;
@@ -111,11 +111,11 @@ public class MiningAllocationEntity {
         this.userId = userId;
     }
 
-    public Long getWalletId() {
+    public UUID getWalletId() {
         return walletId;
     }
 
-    public void setWalletId(Long walletId) {
+    public void setWalletId(UUID walletId) {
         this.walletId = walletId;
     }
 

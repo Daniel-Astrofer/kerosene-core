@@ -13,5 +13,8 @@ public record KfeCreateWalletRequest(
         String fingerprint,
         String derivationPath,
         String initialAddress,
+        String initialAddressDerivationPath,
+        Integer initialAddressDerivationIndex,
+        String initialAddressProviderReference,
         Boolean issueInitialAddress) {
 }

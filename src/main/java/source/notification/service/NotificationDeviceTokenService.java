@@ -3,10 +3,10 @@ package source.notification.service;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.common.infra.logging.LogSanitizer;
+import source.kfe.service.KfeAuditLogService;
 import source.notification.dto.DeviceTokenRegisterRequest;
 import source.notification.model.entity.NotificationDeviceTokenEntity;
 import source.notification.repository.NotificationDeviceTokenRepository;
-import source.treasury.service.FinancialAuditTrailService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -19,13 +19,13 @@ import java.util.Map;
 public class NotificationDeviceTokenService {
 
     private final NotificationDeviceTokenRepository repository;
-    private final FinancialAuditTrailService auditTrailService;
+    private final KfeAuditLogService auditLogService;
 
     public NotificationDeviceTokenService(
             NotificationDeviceTokenRepository repository,
-            FinancialAuditTrailService auditTrailService) {
+            KfeAuditLogService auditLogService) {
         this.repository = repository;
-        this.auditTrailService = auditTrailService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -49,13 +49,16 @@ public class NotificationDeviceTokenService {
         entity.setRevokedAt(null);
         NotificationDeviceTokenEntity saved = repository.save(entity);
 
-        auditTrailService.recordBestEffort(
+        auditLogService.record(
                 "NOTIFICATION_DEVICE_TOKEN_REGISTERED",
-                "NOTIFICATION_DEVICE_TOKEN",
-                String.valueOf(saved.getId()),
-                userId,
-                saved.getTokenRef(),
+                null,
+                null,
+                null,
+                null,
                 Map.of(
+                        "entityType", "NOTIFICATION_DEVICE_TOKEN",
+                        "entityId", String.valueOf(saved.getId()),
+                        "userId", String.valueOf(userId),
                         "platform", platform,
                         "tokenRef", saved.getTokenRef(),
                         "deviceRef", saved.getDeviceRef() != null ? saved.getDeviceRef() : ""));
@@ -77,13 +80,16 @@ public class NotificationDeviceTokenService {
         repository.findByIdAndUserId(tokenId, userId).ifPresent(entity -> {
             entity.setRevokedAt(LocalDateTime.now());
             repository.save(entity);
-            auditTrailService.recordBestEffort(
+            auditLogService.record(
                     "NOTIFICATION_DEVICE_TOKEN_REVOKED",
-                    "NOTIFICATION_DEVICE_TOKEN",
-                    String.valueOf(entity.getId()),
-                    userId,
-                    entity.getTokenRef(),
+                    null,
+                    null,
+                    null,
+                    null,
                     Map.of(
+                            "entityType", "NOTIFICATION_DEVICE_TOKEN",
+                            "entityId", String.valueOf(entity.getId()),
+                            "userId", String.valueOf(userId),
                             "platform", entity.getPlatform(),
                             "tokenRef", entity.getTokenRef()));
         });

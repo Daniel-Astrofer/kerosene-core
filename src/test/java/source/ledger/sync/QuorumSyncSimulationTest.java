@@ -31,7 +31,7 @@ class QuorumSyncSimulationTest {
         transport = mock(QuorumTransport.class);
         membership = mock(QuorumMembership.class);
         suicideService = mock(SuicideService.class);
-        failStopPolicy = new DefaultFailStopPolicy(suicideService, 30_000);
+        failStopPolicy = new DefaultFailStopPolicy(suicideService, 30_000, true);
 
         when(membership.current()).thenReturn(THREE_NODE_TOPOLOGY);
         quorumSyncService = new QuorumSyncService(transport, membership, failStopPolicy);

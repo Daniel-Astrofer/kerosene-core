@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import source.kfe.dto.KfeAuditRootResponse;
 import source.kfe.model.KfeAuditLogEntity;
+import source.kfe.repository.KfeAuditHashRow;
 import source.kfe.repository.KfeAuditLogRepository;
 
 import java.util.List;
@@ -21,7 +22,8 @@ class KfeAuditAdminServiceTest {
 
     @Test
     void returnsGenesisRootWhenAuditLogIsEmpty() {
-        when(repository.findAllByOrderBySequenceNumberAsc()).thenReturn(List.of());
+        when(repository.findHashRowsAfterSequence(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
 
         KfeAuditRootResponse root = service.root();
 
@@ -34,7 +36,10 @@ class KfeAuditAdminServiceTest {
         KfeAuditLogEntity first = event(1L, "a".repeat(64));
         KfeAuditLogEntity second = event(2L, "b".repeat(64));
         String expected = hashService.sha256(first.getEventHash() + "|" + second.getEventHash());
-        when(repository.findAllByOrderBySequenceNumberAsc()).thenReturn(List.of(first, second));
+        when(repository.findHashRowsAfterSequence(org.mockito.ArgumentMatchers.eq(0L), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(hashRow(first), hashRow(second)));
+        when(repository.findHashRowsAfterSequence(org.mockito.ArgumentMatchers.eq(2L), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
         when(repository.findTopByOrderBySequenceNumberDesc()).thenReturn(Optional.of(second));
 
         KfeAuditRootResponse root = service.latest().root();
@@ -53,5 +58,19 @@ class KfeAuditAdminServiceTest {
         event.setPreviousHash("0".repeat(64));
         event.setEventHash(hash);
         return event;
+    }
+
+    private KfeAuditHashRow hashRow(KfeAuditLogEntity event) {
+        return new KfeAuditHashRow() {
+            @Override
+            public Long getSequenceNumber() {
+                return event.getSequenceNumber();
+            }
+
+            @Override
+            public String getEventHash() {
+                return event.getEventHash();
+            }
+        };
     }
 }

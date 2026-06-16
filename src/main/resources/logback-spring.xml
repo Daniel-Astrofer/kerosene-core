@@ -1,14 +1,117 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configuration>
-    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="kerosene"/>
-    <springProperty scope="context" name="region" source="REGION" defaultValue="DEV"/>
+<configuration scan="false">
 
-    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- ══════════════════════════════════════════════════════════════════
+         KEROSENE — Structured Log Configuration (Financial Platform)
+         Domains: security | transactions | treasury | audit | access | app
+         All logs emit JSON. Routing is driven by the MDC field "logDomain".
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="kerosene"/>
+    <springProperty scope="context" name="region"      source="REGION"                  defaultValue="DEV"/>
+    <springProperty scope="context" name="shard"       source="SHARD_ID"                defaultValue="local"/>
+
+    <!-- ─── Custom field set shared by all appenders ─────────────────── -->
+    <property name="COMMON_FIELDS"
+              value="{&quot;service&quot;:&quot;${serviceName}&quot;,&quot;region&quot;:&quot;${region}&quot;,&quot;shard&quot;:&quot;${shard}&quot;}"/>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         BASE ENCODER TEMPLATE
+         (reused via include — logstash encoder with masking)
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ─── SECURITY DOMAIN ──────────────────────────────────────────── -->
+    <appender name="SECURITY" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>SECURITY</marker>
+            </evaluator>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <customFields>{"service":"${serviceName}","region":"${region}"}</customFields>
-            <includeContext>false</includeContext>
+            <customFields>${COMMON_FIELDS}</customFields>
             <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+            </jsonGeneratorDecorator>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>20</maxDepthPerThrowable>
+                <maxLength>2048</maxLength>
+                <shortenedClassNameLength>40</shortenedClassNameLength>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ─── TRANSACTIONS DOMAIN ──────────────────────────────────────── -->
+    <appender name="TRANSACTIONS" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>TRANSACTIONS</marker>
+            </evaluator>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields>
+            <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+            </jsonGeneratorDecorator>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>20</maxDepthPerThrowable>
+                <maxLength>2048</maxLength>
+                <shortenedClassNameLength>40</shortenedClassNameLength>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ─── TREASURY DOMAIN ──────────────────────────────────────────── -->
+    <appender name="TREASURY" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>TREASURY</marker>
+            </evaluator>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields>
+            <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+            </jsonGeneratorDecorator>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>20</maxDepthPerThrowable>
+                <maxLength>2048</maxLength>
+                <shortenedClassNameLength>40</shortenedClassNameLength>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ─── AUDIT DOMAIN (immutable, highest integrity) ─────────────── -->
+    <appender name="AUDIT" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>AUDIT</marker>
+            </evaluator>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields>
+            <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+            </jsonGeneratorDecorator>
             <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
                 <maxDepthPerThrowable>30</maxDepthPerThrowable>
                 <maxLength>4096</maxLength>
@@ -17,12 +120,148 @@
         </encoder>
     </appender>
 
-    <logger name="org.springframework.web" level="WARN"/>
-    <logger name="org.springframework.security" level="WARN"/>
-    <logger name="org.springframework.messaging" level="WARN"/>
-    <logger name="org.springframework.web.socket" level="WARN"/>
+    <!-- ─── HTTP ACCESS DOMAIN ───────────────────────────────────────── -->
+    <appender name="ACCESS" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>ACCESS</marker>
+            </evaluator>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields>
+            <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+            </jsonGeneratorDecorator>
+        </encoder>
+    </appender>
 
+    <!-- ─── GENERAL APPLICATION APPENDER (fallback / Spring internals) ─ -->
+    <appender name="APPLICATION" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields>
+            <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+            </jsonGeneratorDecorator>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>4096</maxLength>
+                <shortenedClassNameLength>40</shortenedClassNameLength>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         ASYNC WRAPPERS — prevents I/O from blocking request threads
+         ════════════════════════════════════════════════════════════════ -->
+    <appender name="ASYNC_SECURITY" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="SECURITY"/>
+    </appender>
+
+    <appender name="ASYNC_TRANSACTIONS" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="TRANSACTIONS"/>
+    </appender>
+
+    <appender name="ASYNC_TREASURY" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="TREASURY"/>
+    </appender>
+
+    <appender name="ASYNC_AUDIT" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="AUDIT"/>
+    </appender>
+
+    <appender name="ASYNC_ACCESS" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="ACCESS"/>
+    </appender>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         DOMAIN LOGGERS — each package routes to its own named logger
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- Security: auth, passkeys, honeypot, JWT -->
+    <logger name="source.auth"                                    level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_SECURITY"/>
+    </logger>
+    <logger name="source.security"                                level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_SECURITY"/>
+    </logger>
+    <logger name="kerosene.security"                              level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_SECURITY"/>
+    </logger>
+
+    <!-- Transactions: payments, lightning, on-chain -->
+    <logger name="source.transactions"                            level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TRANSACTIONS"/>
+    </logger>
+    <logger name="source.payments"                                level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TRANSACTIONS"/>
+    </logger>
+    <logger name="source.bitcoinaccounts"                         level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TRANSACTIONS"/>
+    </logger>
+    <logger name="source.wallet"                                  level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TRANSACTIONS"/>
+    </logger>
+    <logger name="source.kfe"                                     level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TRANSACTIONS"/>
+    </logger>
+
+    <!-- Treasury: reserve, liquidity, reconciliation -->
+    <logger name="source.treasury"                                level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TREASURY"/>
+    </logger>
+    <logger name="source.mining"                                  level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_TREASURY"/>
+    </logger>
+
+    <!-- Audit: ledger, sovereign (quorum / raft) -->
+    <logger name="source.ledger"                                  level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_AUDIT"/>
+    </logger>
+    <logger name="source.sovereign"                               level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_AUDIT"/>
+    </logger>
+
+    <!-- HTTP Access: request/response logging -->
+    <logger name="source.common.infra.logging.LoggingFilter"     level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_ACCESS"/>
+    </logger>
+
+    <!-- Silence noisy Spring internals -->
+    <logger name="org.springframework.web"          level="WARN"/>
+    <logger name="org.springframework.security"     level="WARN"/>
+    <logger name="org.springframework.messaging"    level="WARN"/>
+    <logger name="org.springframework.web.socket"   level="WARN"/>
+    <logger name="org.hibernate.SQL"                level="WARN"/>
+    <logger name="com.zaxxer.hikari"                level="WARN"/>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         ROOT — catches everything not routed above (Spring, infra, etc.)
+         ════════════════════════════════════════════════════════════════ -->
     <root level="${LOGGING_LEVEL_ROOT:-INFO}">
-        <appender-ref ref="JSON_CONSOLE"/>
+        <appender-ref ref="APPLICATION"/>
     </root>
+
 </configuration>

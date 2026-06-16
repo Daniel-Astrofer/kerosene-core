@@ -11,6 +11,7 @@ import source.auth.application.service.account.AppPinService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
+import source.common.exception.ErrorCodes;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -41,7 +42,7 @@ public class MeController {
             Optional<UserDataBase> userOpt = userServiceContract.buscarPorId(userId);
 
             if (userOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(ApiResponse.error("User not found", "USER_NOT_FOUND"));
+                return ResponseEntity.status(404).body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
             }
 
             UserDataBase user = userOpt.get();
@@ -62,7 +63,7 @@ public class MeController {
             return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
             
         } catch (NumberFormatException e) {
-            return ResponseEntity.status(401).body(ApiResponse.error("Invalid token context", "UNAUTHORIZED"));
+            return ResponseEntity.status(401).body(ApiResponse.error("Invalid token context", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
     }
 }

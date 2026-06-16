@@ -97,7 +97,11 @@ public class PayLightningPaymentUseCase {
         if (request.paymentRequest() == null || request.paymentRequest().isBlank()) {
             throw new IllegalArgumentException("A valid Lightning invoice is required.");
         }
-        treasuryService.assertLightningOutboundAvailable(externalPaymentsMath.btcToSats(request.amount()));
+        BigDecimal paymentAmount = externalPaymentsMath.normalizeBtc(request.amount());
+        BigDecimal reservedNetworkFee = externalPaymentsMath.normalizeBtc(
+                feePolicy.resolveLightningReservedFee(request.maxRoutingFeeBtc()));
+        BigDecimal projectedRailOutflow = externalPaymentsMath.normalizeBtc(paymentAmount.add(reservedNetworkFee));
+        treasuryService.assertLightningOutboundAvailable(externalPaymentsMath.btcToSats(projectedRailOutflow));
 
         WalletEntity wallet = walletPort.requireWallet(userId, request.fromWalletName());
         if (wallet.isSelfCustodyMode()) {
@@ -111,10 +115,10 @@ public class PayLightningPaymentUseCase {
                 request.passkeyAssertionResponseJSON(),
                 request.confirmationPassphrase());
 
-        BigDecimal reservedNetworkFee = feePolicy.resolveLightningReservedFee(request.maxRoutingFeeBtc());
-        BigDecimal platformFee = feePolicy.calculateWithdrawalFee(userId, request.amount());
+        BigDecimal platformFee = externalPaymentsMath.normalizeBtc(
+                feePolicy.calculateWithdrawalFee(userId, paymentAmount));
         BigDecimal reservedTotal = externalPaymentsMath.normalizeBtc(
-                request.amount().add(reservedNetworkFee).add(platformFee));
+                projectedRailOutflow.add(platformFee));
 
         ledgerPort.ensureBalance(wallet.getId(), reservedTotal);
         ledgerPort.updateBalance(
@@ -134,7 +138,7 @@ public class PayLightningPaymentUseCase {
                 null,
                 null,
                 request.paymentRequest(),
-                request.amount(),
+                paymentAmount,
                 reservedNetworkFee,
                 platformFee,
                 reservedTotal,
@@ -146,7 +150,7 @@ public class PayLightningPaymentUseCase {
                 transfer.getId(),
                 "LIGHTNING_PAY",
                 idempotencyRef,
-                "{\"amountSats\":" + externalPaymentsMath.btcToSats(request.amount())
+                "{\"amountSats\":" + externalPaymentsMath.btcToSats(paymentAmount)
                         + ",\"maxFeeSats\":" + externalPaymentsMath.btcToSats(reservedNetworkFee) + "}");
 
         CustodyGateway.PaymentResult payment;
@@ -157,7 +161,7 @@ public class PayLightningPaymentUseCase {
                             wallet.getId(),
                             wallet.getName(),
                             request.paymentRequest(),
-                            externalPaymentsMath.btcToSats(request.amount()),
+                            externalPaymentsMath.btcToSats(paymentAmount),
                             externalPaymentsMath.btcToSats(reservedNetworkFee),
                             request.description(),
                             idempotencyRef,
@@ -177,7 +181,7 @@ public class PayLightningPaymentUseCase {
         if (actualFee.compareTo(reservedNetworkFee) < 0) {
             BigDecimal feeRefund = externalPaymentsMath.normalizeBtc(reservedNetworkFee.subtract(actualFee));
             ledgerPort.updateBalance(wallet.getId(), feeRefund, "LIGHTNING_NETWORK_FEE_REFUND");
-            reservedTotal = reservedTotal.subtract(feeRefund);
+            reservedTotal = externalPaymentsMath.normalizeBtc(reservedTotal.subtract(feeRefund));
         } else if (actualFee.compareTo(reservedNetworkFee) > 0) {
             actualFee = reservedNetworkFee;
         }
@@ -203,7 +207,7 @@ public class PayLightningPaymentUseCase {
                 wallet.getName(),
                 externalReference != null ? externalReference : "LIGHTNING",
                 "EXTERNAL_LIGHTNING_PAYMENT",
-                request.amount(),
+                paymentAmount,
                 actualFee,
                 transfer.getStatus(),
                 payment.paymentHash(),
@@ -220,7 +224,7 @@ public class PayLightningPaymentUseCase {
                         transfer.getId() != null ? transfer.getId().toString() : null,
                         Map.of(
                                 "walletName", wallet.getName(),
-                                "amountBtc", request.amount().toPlainString(),
+                                "amountBtc", paymentAmount.toPlainString(),
                                 "network", "LIGHTNING")));
 
         return externalTransferFactory.toResponseDTO(transfer);

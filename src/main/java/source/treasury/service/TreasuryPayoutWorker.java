@@ -57,7 +57,7 @@ public class TreasuryPayoutWorker {
     private String defaultWorkerId() {
         try {
             return "treasury-payout-" + InetAddress.getLocalHost().getHostName();
-        } catch (Exception exception) {
+        } catch (java.net.UnknownHostException exception) {
             return "treasury-payout-worker";
         }
     }

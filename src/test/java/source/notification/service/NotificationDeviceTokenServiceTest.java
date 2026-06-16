@@ -1,10 +1,10 @@
 package source.notification.service;
 
 import org.junit.jupiter.api.Test;
+import source.kfe.service.KfeAuditLogService;
 import source.notification.dto.DeviceTokenRegisterRequest;
 import source.notification.model.entity.NotificationDeviceTokenEntity;
 import source.notification.repository.NotificationDeviceTokenRepository;
-import source.treasury.service.FinancialAuditTrailService;
 
 import java.util.Optional;
 
@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,8 +24,8 @@ import static org.mockito.Mockito.when;
 class NotificationDeviceTokenServiceTest {
 
     private final NotificationDeviceTokenRepository repository = mock(NotificationDeviceTokenRepository.class);
-    private final FinancialAuditTrailService auditTrailService = mock(FinancialAuditTrailService.class);
-    private final NotificationDeviceTokenService service = new NotificationDeviceTokenService(repository, auditTrailService);
+    private final KfeAuditLogService auditLogService = mock(KfeAuditLogService.class);
+    private final NotificationDeviceTokenService service = new NotificationDeviceTokenService(repository, auditLogService);
 
     @Test
     void registersTokenWithoutPersistingRawToken() {
@@ -44,12 +45,12 @@ class NotificationDeviceTokenServiceTest {
         assertTrue(entity.getTokenRef().startsWith("sha256:"));
         assertTrue(entity.getDeviceRef().startsWith("sha256:"));
         assertNull(entity.getRevokedAt());
-        verify(auditTrailService).recordBestEffort(
+        verify(auditLogService).record(
                 eq("NOTIFICATION_DEVICE_TOKEN_REGISTERED"),
-                eq("NOTIFICATION_DEVICE_TOKEN"),
-                any(),
-                eq(42L),
-                eq(entity.getTokenRef()),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
                 anyMap());
     }
 

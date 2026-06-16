@@ -27,6 +27,7 @@ public class SignupState implements Serializable {
     // Status flags
     private boolean isTotpVerified;
     private boolean isPasskeyRegistered;
+    private boolean isDeviceKeyRegistered;
     private boolean isPaymentConfirmed;
 
     // Generated Bitcoin onboarding deposit address
@@ -120,6 +121,14 @@ public class SignupState implements Serializable {
 
     public void setPasskeyRegistered(boolean passkeyRegistered) {
         this.isPasskeyRegistered = passkeyRegistered;
+    }
+
+    public boolean isDeviceKeyRegistered() {
+        return isDeviceKeyRegistered;
+    }
+
+    public void setDeviceKeyRegistered(boolean deviceKeyRegistered) {
+        this.isDeviceKeyRegistered = deviceKeyRegistered;
     }
 
     public boolean isPaymentConfirmed() {

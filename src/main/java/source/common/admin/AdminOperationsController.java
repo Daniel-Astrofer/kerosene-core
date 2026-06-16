@@ -1,5 +1,7 @@
 package source.common.admin;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -8,56 +10,64 @@ import org.springframework.web.bind.annotation.RestController;
 import source.common.infra.health.OperationalHealthService;
 import source.common.infra.health.OperationalHealthSnapshot;
 import source.common.release.ReleaseManifestService;
+import source.kfe.model.KfeAuditLogEntity;
+import source.kfe.model.KfeExecutionOutboxEntity;
+import source.kfe.model.KfeRail;
+import source.kfe.model.KfeTransactionEntity;
+import source.kfe.model.KfeTransactionStatus;
+import source.kfe.rail.BitcoinCoreRpcClient;
+import source.kfe.rail.BlockchainClient;
+import source.kfe.rail.LightningClient;
+import source.kfe.repository.KfeAuditLogRepository;
+import source.kfe.repository.KfeExecutionOutboxRepository;
+import source.kfe.repository.KfeTransactionRepository;
 import source.security.vault.VaultRaftHealthService;
-import source.transactions.model.NetworkTransferEventEntity;
-import source.transactions.monitoring.BitcoinBlockchainMonitorService;
-import source.transactions.monitoring.LightningNetworkMonitorService;
-import source.transactions.repository.ExternalTransferRepository;
-import source.transactions.repository.NetworkTransferEventRepository;
-import source.transactions.repository.PaymentLinkRepository;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/operations")
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminOperationsController {
 
+    private static final BigDecimal SATOSHIS_PER_BITCOIN = new BigDecimal("100000000");
+
     private final OperationalHealthService operationalHealthService;
-    private final BitcoinBlockchainMonitorService blockchainMonitorService;
-    private final LightningNetworkMonitorService lightningNetworkMonitorService;
+    private final ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClient;
+    private final ObjectProvider<LightningClient> lightningClient;
     private final VaultRaftHealthService vaultRaftHealthService;
     private final ReleaseManifestService releaseManifestService;
     private final MobileDownloadService mobileDownloadService;
-    private final NetworkTransferEventRepository eventRepository;
-    private final ExternalTransferRepository externalTransferRepository;
-    private final PaymentLinkRepository paymentLinkRepository;
+    private final KfeAuditLogRepository auditLogRepository;
+    private final KfeTransactionRepository transactionRepository;
+    private final KfeExecutionOutboxRepository outboxRepository;
 
     public AdminOperationsController(
             OperationalHealthService operationalHealthService,
-            BitcoinBlockchainMonitorService blockchainMonitorService,
-            LightningNetworkMonitorService lightningNetworkMonitorService,
+            ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClient,
+            ObjectProvider<LightningClient> lightningClient,
             VaultRaftHealthService vaultRaftHealthService,
             ReleaseManifestService releaseManifestService,
             MobileDownloadService mobileDownloadService,
-            NetworkTransferEventRepository eventRepository,
-            ExternalTransferRepository externalTransferRepository,
-            PaymentLinkRepository paymentLinkRepository) {
+            KfeAuditLogRepository auditLogRepository,
+            KfeTransactionRepository transactionRepository,
+            KfeExecutionOutboxRepository outboxRepository) {
         this.operationalHealthService = operationalHealthService;
-        this.blockchainMonitorService = blockchainMonitorService;
-        this.lightningNetworkMonitorService = lightningNetworkMonitorService;
+        this.bitcoinCoreRpcClient = bitcoinCoreRpcClient;
+        this.lightningClient = lightningClient;
         this.vaultRaftHealthService = vaultRaftHealthService;
         this.releaseManifestService = releaseManifestService;
         this.mobileDownloadService = mobileDownloadService;
-        this.eventRepository = eventRepository;
-        this.externalTransferRepository = externalTransferRepository;
-        this.paymentLinkRepository = paymentLinkRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.transactionRepository = transactionRepository;
+        this.outboxRepository = outboxRepository;
     }
 
     @GetMapping("/overview")
@@ -65,8 +75,8 @@ public class AdminOperationsController {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("checkedAt", Instant.now());
         payload.put("health", operationalHealthService.dependencies());
-        payload.put("blockchain", blockchainMonitorService.snapshot());
-        payload.put("lightning", lightningNetworkMonitorService.snapshot());
+        payload.put("blockchain", blockchain());
+        payload.put("lightning", lightning());
         payload.put("vaultRaft", vaultRaftHealthService.snapshot());
         payload.put("release", releaseManifestService.snapshot());
         payload.put("mobile", mobileDownloadService.releaseInfo());
@@ -79,13 +89,85 @@ public class AdminOperationsController {
     }
 
     @GetMapping("/blockchain")
-    public BitcoinBlockchainMonitorService.BlockchainMonitorSnapshot blockchain() {
-        return blockchainMonitorService.snapshot();
+    public Map<String, Object> blockchain() {
+        BitcoinCoreRpcClient client = bitcoinCoreRpcClient.getIfAvailable();
+        if (client == null) {
+            return Map.of(
+                    "status", "DOWN",
+                    "primarySource", "BITCOIN_CORE_RPC",
+                    "checkedAt", Instant.now(),
+                    "message", "Bitcoin Core RPC is not configured");
+        }
+
+        try {
+            JsonNode chain = unwrap(client.executeRpc("getblockchaininfo"));
+            JsonNode mempool = unwrap(client.executeRpc("getmempoolinfo"));
+            BlockchainClient.FeeRates feeRates = client.estimateSmartFee(2, 3, 6);
+            Map<String, Object> state = new LinkedHashMap<>();
+            state.put("height", chain.path("blocks").asLong(0));
+            state.put("headers", chain.path("headers").asLong(0));
+            state.put("bestBlockHash", chain.path("bestblockhash").asText(""));
+            state.put("chain", chain.path("chain").asText(""));
+            state.put("initialBlockDownload", chain.path("initialblockdownload").asBoolean(false));
+            state.put("pruned", chain.path("pruned").asBoolean(false));
+
+            Map<String, Object> mempoolState = new LinkedHashMap<>();
+            mempoolState.put("transactions", mempool.path("size").asLong(0));
+            mempoolState.put("bytes", mempool.path("bytes").asLong(0));
+            mempoolState.put("feesSatPerVByte", Map.of(
+                    "fast", feeRates.fastSatPerVByte(),
+                    "halfHour", feeRates.halfHourSatPerVByte(),
+                    "hour", feeRates.hourSatPerVByte()));
+
+            return Map.of(
+                    "status", chain.path("blocks").asLong(0) > 0 ? "UP" : "DEGRADED",
+                    "primarySource", "BITCOIN_CORE_RPC",
+                    "checkedAt", Instant.now(),
+                    "chain", state,
+                    "mempool", mempoolState,
+                    "message", "KFE Bitcoin provider probe completed");
+        } catch (RuntimeException exception) {
+            return Map.of(
+                    "status", "DOWN",
+                    "primarySource", "BITCOIN_CORE_RPC",
+                    "checkedAt", Instant.now(),
+                    "message", "Bitcoin Core RPC probe failed",
+                    "exception", exception.getClass().getSimpleName());
+        }
     }
 
     @GetMapping("/lightning")
-    public LightningNetworkMonitorService.LightningMonitorSnapshot lightning() {
-        return lightningNetworkMonitorService.snapshot();
+    public Map<String, Object> lightning() {
+        LightningClient client = lightningClient.getIfAvailable();
+        if (client == null) {
+            return Map.of(
+                    "status", "DOWN",
+                    "primarySource", "LIGHTNING_PROVIDER",
+                    "checkedAt", Instant.now(),
+                    "message", "Lightning provider is not configured");
+        }
+
+        try {
+            Map<String, Object> state = new LinkedHashMap<>();
+            state.put("localBalanceSats", client.getLocalBalance());
+            state.put("remoteBalanceSats", client.getRemoteBalance());
+            state.put("nodeBalanceSats", client.getLightningNodeBalance());
+            state.put("uptime", client.getNodeUptime());
+            state.put("lspLatencyMs", client.getLspLatency());
+            return Map.of(
+                    "status", client.getNodeUptime() > 0 ? "UP" : "DEGRADED",
+                    "primarySource", "LIGHTNING_PROVIDER",
+                    "checkedAt", Instant.now(),
+                    "node", state,
+                    "message", "KFE Lightning provider probe completed");
+        } catch (RuntimeException exception) {
+            return Map.of(
+                    "status", "DOWN",
+                    "primarySource", "LIGHTNING_PROVIDER",
+                    "checkedAt", Instant.now(),
+                    "message", "Lightning provider probe failed",
+                    "exception", exception.getClass().getSimpleName());
+        }
     }
 
     @GetMapping("/vault-raft")
@@ -106,201 +188,88 @@ public class AdminOperationsController {
     @GetMapping("/logs")
     public List<Map<String, Object>> logs(@RequestParam(defaultValue = "50") int limit) {
         int safeLimit = Math.max(1, Math.min(100, limit));
-        return eventRepository.findTop100ByOrderByCreatedAtDesc()
+        return auditLogRepository.findAllByOrderBySequenceNumberDesc(org.springframework.data.domain.PageRequest.of(0, safeLimit))
                 .stream()
-                .limit(safeLimit)
                 .map(this::toSafeLog)
                 .toList();
     }
 
     @GetMapping("/metrics")
     public Map<String, Object> metrics() {
+        List<KfeTransactionEntity> transactions = transactionRepository.findAll();
+        List<KfeExecutionOutboxEntity> outboxItems = outboxRepository.findAll();
+
+        Map<KfeTransactionStatus, Long> byStatus = transactions.stream()
+                .collect(Collectors.groupingBy(KfeTransactionEntity::getStatus, () -> new EnumMap<>(KfeTransactionStatus.class), Collectors.counting()));
+        Map<KfeRail, Long> byRail = transactions.stream()
+                .collect(Collectors.groupingBy(KfeTransactionEntity::getRail, () -> new EnumMap<>(KfeRail.class), Collectors.counting()));
+        BigDecimal totalVolume = transactions.stream()
+                .map(transaction -> satsToBtc(transaction.getGrossAmountSats()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalFees = transactions.stream()
+                .map(transaction -> satsToBtc(transaction.getKeroseneFeeSats() + transaction.getNetworkFeeSats()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("checkedAt", Instant.now());
-
-        Map<String, Object> transfers = aggregateTransfers();
-        Map<String, Object> paymentLinks = aggregatePaymentLinks();
-
-        BigDecimal transferVolume = decimal(transfers.get("totalVolumeBtc"));
-        BigDecimal linkVolume = decimal(paymentLinks.get("totalAmountBtc"));
-        long transferCount = number(transfers.get("totalCount"));
-        long linkCount = number(paymentLinks.get("linksCreated"));
-        long totalEvents = transferCount + linkCount;
-
-        BigDecimal totalVolume = transferVolume.add(linkVolume);
-        BigDecimal totalFees = decimal(transfers.get("totalFeesBtc"));
-
         payload.put("totalVolumeBtc", totalVolume);
         payload.put("totalFeesBtc", totalFees);
-        payload.put("totalTransactions", totalEvents);
-        payload.put("avgTicketBtc", totalEvents > 0
-                ? totalVolume.divide(BigDecimal.valueOf(totalEvents), 8, java.math.RoundingMode.HALF_UP)
-                : BigDecimal.ZERO);
-        payload.put("confirmedTransactions",
-                number(transfers.get("confirmedCount")) + number(paymentLinks.get("linksPaid")));
-        payload.put("pendingTransactions",
-                number(transfers.get("pendingCount")) + number(paymentLinks.get("linksPending")));
-        payload.put("failedTransactions",
-                number(transfers.get("failedCount")) + number(paymentLinks.get("linksExpired")));
-        payload.put("transfers", transfers);
-        payload.put("paymentLinks", paymentLinks);
+        payload.put("totalTransactions", transactions.size());
+        payload.put("avgTicketBtc", transactions.isEmpty()
+                ? BigDecimal.ZERO
+                : totalVolume.divide(BigDecimal.valueOf(transactions.size()), 8, RoundingMode.HALF_UP));
+        payload.put("confirmedTransactions", byStatus.getOrDefault(KfeTransactionStatus.SETTLED, 0L));
+        payload.put("pendingTransactions", pendingCount(byStatus));
+        payload.put("failedTransactions", byStatus.getOrDefault(KfeTransactionStatus.FAILED, 0L));
+        payload.put("transactionsByStatus", stringifyKeys(byStatus));
+        payload.put("transactionsByRail", stringifyKeys(byRail));
+        payload.put("executionOutboxByStatus", outboxItems.stream()
+                .collect(Collectors.groupingBy(KfeExecutionOutboxEntity::getStatus, Collectors.counting())));
         payload.put("privacyBoundary",
-                "Aggregate operational metrics only; no user timeline, invoice payload, destination, txid, or wallet name.");
+                "Aggregate KFE metrics only; no user timeline, destination, txid, invoice payload, or wallet name.");
         return payload;
     }
 
-    private Map<String, Object> toSafeLog(NetworkTransferEventEntity event) {
+    private Map<String, Object> toSafeLog(KfeAuditLogEntity event) {
         Map<String, Object> row = new LinkedHashMap<>();
+        row.put("sequenceNumber", event.getSequenceNumber());
         row.put("id", event.getId());
         row.put("createdAt", event.getCreatedAt());
-        row.put("severity", event.getSeverity());
         row.put("eventType", event.getEventType());
-        row.put("reference", fingerprint(event.getReference()));
-        row.put("transferRef", fingerprint(event.getTransferId() != null ? event.getTransferId().toString() : null));
-        row.put("userRef", fingerprint(event.getUserId() != null ? event.getUserId().toString() : null));
-        row.put("payloadRef", fingerprint(redact(event.getPayload())));
+        row.put("transactionRef", fingerprint(event.getTransactionId() != null ? event.getTransactionId().toString() : null));
+        row.put("walletRef", fingerprint(event.getWalletId() != null ? event.getWalletId().toString() : null));
+        row.put("payloadHash", event.getPayloadHash());
+        row.put("eventHash", event.getEventHash());
         return row;
+    }
+
+    private long pendingCount(Map<KfeTransactionStatus, Long> byStatus) {
+        return byStatus.getOrDefault(KfeTransactionStatus.INTENT, 0L)
+                + byStatus.getOrDefault(KfeTransactionStatus.VALIDATING, 0L)
+                + byStatus.getOrDefault(KfeTransactionStatus.QUORUM_SYNC, 0L)
+                + byStatus.getOrDefault(KfeTransactionStatus.LOCKED, 0L)
+                + byStatus.getOrDefault(KfeTransactionStatus.EXECUTING, 0L)
+                + byStatus.getOrDefault(KfeTransactionStatus.REQUIRES_RECONCILIATION, 0L);
+    }
+
+    private BigDecimal satsToBtc(long sats) {
+        return BigDecimal.valueOf(sats).divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.HALF_UP);
+    }
+
+    private JsonNode unwrap(JsonNode response) {
+        if (response != null && response.has("result")) {
+            return response.get("result");
+        }
+        return response;
+    }
+
+    private Map<String, Long> stringifyKeys(Map<?, Long> source) {
+        Map<String, Long> result = new LinkedHashMap<>();
+        source.forEach((key, value) -> result.put(String.valueOf(key), value));
+        return result;
     }
 
     private String fingerprint(String value) {
         return source.common.infra.logging.LogSanitizer.fingerprint(value);
-    }
-
-    private String redact(String payload) {
-        if (payload == null || payload.isBlank()) {
-            return "";
-        }
-        String redacted = payload
-                .replaceAll("(?i)(seed|private[_-]?key|token|secret|macaroon|password|passphrase)\\s*[:=]\\s*[^,}\\s]+", "$1=***")
-                .replaceAll("(?i)(authorization|cookie)\\s*[:=]\\s*[^,}\\s]+", "$1=***");
-        return redacted.length() > 512 ? redacted.substring(0, 512) : redacted;
-    }
-
-    private Map<String, Object> aggregateTransfers() {
-        BigDecimal totalVolume = BigDecimal.ZERO;
-        BigDecimal totalFees = BigDecimal.ZERO;
-        BigDecimal inflow = BigDecimal.ZERO;
-        BigDecimal outflow = BigDecimal.ZERO;
-        long totalCount = 0;
-        long onchainCount = 0;
-        long lightningCount = 0;
-        BigDecimal onchainVolume = BigDecimal.ZERO;
-        BigDecimal lightningVolume = BigDecimal.ZERO;
-        BigDecimal onchainFees = BigDecimal.ZERO;
-        BigDecimal lightningFees = BigDecimal.ZERO;
-
-        for (ExternalTransferRepository.NetworkAggregate row
-                : externalTransferRepository.aggregateOperationalMetricsByNetwork()) {
-            String network = normalize(row.getNetwork());
-            long count = row.getEventCount();
-            BigDecimal volume = nz(row.getVolumeBtc());
-            BigDecimal fees = nz(row.getFeeBtc());
-            totalCount += count;
-            totalVolume = totalVolume.add(volume);
-            totalFees = totalFees.add(fees);
-            inflow = inflow.add(nz(row.getInflowBtc()));
-            outflow = outflow.add(nz(row.getOutflowBtc()));
-            if ("ONCHAIN".equals(network)) {
-                onchainCount += count;
-                onchainVolume = onchainVolume.add(volume);
-                onchainFees = onchainFees.add(fees);
-            } else if ("LIGHTNING".equals(network)) {
-                lightningCount += count;
-                lightningVolume = lightningVolume.add(volume);
-                lightningFees = lightningFees.add(fees);
-            }
-        }
-
-        Map<String, Long> statusCounts = new HashMap<>();
-        for (ExternalTransferRepository.StatusAggregate row
-                : externalTransferRepository.aggregateOperationalMetricsByStatus()) {
-            statusCounts.put(normalize(row.getStatus()), row.getEventCount());
-        }
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("totalCount", totalCount);
-        payload.put("totalVolumeBtc", totalVolume);
-        payload.put("totalFeesBtc", totalFees);
-        payload.put("onchainCount", onchainCount);
-        payload.put("onchainVolumeBtc", onchainVolume);
-        payload.put("onchainFeesBtc", onchainFees);
-        payload.put("lightningCount", lightningCount);
-        payload.put("lightningVolumeBtc", lightningVolume);
-        payload.put("lightningFeesBtc", lightningFees);
-        payload.put("inflowBtc", inflow);
-        payload.put("outflowBtc", outflow);
-        payload.put("confirmedCount", sumStatuses(statusCounts, Set.of("COMPLETED", "SETTLED", "CONFIRMED", "PAID")));
-        payload.put("pendingCount", sumStatuses(statusCounts, Set.of("PENDING", "DETECTED", "PROCESSING")));
-        payload.put("failedCount", sumStatuses(statusCounts, Set.of("FAILED", "CANCELLED", "EXPIRED")));
-        return payload;
-    }
-
-    private Map<String, Object> aggregatePaymentLinks() {
-        long total = 0;
-        long paid = 0;
-        long pending = 0;
-        long expired = 0;
-        long cancelled = 0;
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        BigDecimal paidAmount = BigDecimal.ZERO;
-
-        for (PaymentLinkRepository.StatusAggregate row
-                : paymentLinkRepository.aggregateOperationalMetricsByStatus()) {
-            String status = normalize(row.getStatus());
-            long count = row.getLinkCount();
-            BigDecimal amount = nz(row.getAmountBtc());
-            total += count;
-            totalAmount = totalAmount.add(amount);
-            if ("PAID".equals(status) || "COMPLETED".equals(status)) {
-                paid += count;
-                paidAmount = paidAmount.add(amount);
-            } else if ("PENDING".equals(status)) {
-                pending += count;
-            } else if ("EXPIRED".equals(status)) {
-                expired += count;
-            } else if ("CANCELLED".equals(status)) {
-                cancelled += count;
-            }
-        }
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("linksCreated", total);
-        payload.put("linksPaid", paid);
-        payload.put("linksPending", pending);
-        payload.put("linksExpired", expired);
-        payload.put("linksCancelled", cancelled);
-        payload.put("totalAmountBtc", totalAmount);
-        payload.put("paidAmountBtc", paidAmount);
-        return payload;
-    }
-
-    private long sumStatuses(Map<String, Long> statusCounts, Set<String> statuses) {
-        long total = 0;
-        for (String status : statuses) {
-            total += statusCounts.getOrDefault(status, 0L);
-        }
-        return total;
-    }
-
-    private BigDecimal nz(BigDecimal value) {
-        return value != null ? value : BigDecimal.ZERO;
-    }
-
-    private BigDecimal decimal(Object value) {
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
-        return BigDecimal.ZERO;
-    }
-
-    private long number(Object value) {
-        return value instanceof Number number ? number.longValue() : 0L;
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().toUpperCase();
     }
 }

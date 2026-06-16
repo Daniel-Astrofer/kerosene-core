@@ -6,7 +6,7 @@
 #          Restricts outbound TCP from Docker containers to only known-good hosts.
 #          Replacement for the deprecated Java SecurityManager approach.
 #
-# Run:  sudo bash deploy/init-iptables.sh
+# Run:  sudo bash deploy/host/init-iptables.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 

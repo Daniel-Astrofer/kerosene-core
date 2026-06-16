@@ -208,8 +208,8 @@ class ExternalProviderOutboxProcessorTest {
         outbox.setIdempotencyKey("idem-provider-1");
         outbox.setStatus("PROCESSING");
         outbox.setClaimedBy("worker-a");
-        outbox.setClaimedAt(LocalDateTime.now().minusSeconds(1));
-        outbox.setNextAttemptAt(LocalDateTime.now().minusSeconds(1));
+        outbox.setClaimedAt(LocalDateTime.now().minusMinutes(1));
+        outbox.setNextAttemptAt(LocalDateTime.now().minusMinutes(1));
         return outbox;
     }
 

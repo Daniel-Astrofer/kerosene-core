@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Size;
 import source.auth.AuthExceptions;
 import source.ledger.dto.LedgerDTO;
 import source.ledger.dto.InternalTransactionResponseDTO;
@@ -230,15 +231,21 @@ public class LedgerController {
             @Digits(integer = 8, fraction = 8, message = "amount must use BTC precision with at most 8 decimal places")
             BigDecimal amount,
             @NotBlank(message = "receiverWalletName is required")
+            @Size(max = 128, message = "receiverWalletName is too long")
             String receiverWalletName) {
     }
 
     public record PayPaymentRequestReq(
             @NotBlank(message = "idempotencyKey is required")
+            @Size(max = 64, message = "idempotencyKey is too long")
             String idempotencyKey,
+            @Size(max = 128, message = "payerWalletName is too long")
             String payerWalletName,
+            @Size(max = 16, message = "totpCode is too long")
             String totpCode,
+            @Size(max = 8192, message = "passkeyAssertionJson is too long")
             String passkeyAssertionJson,
+            @Size(max = 256, message = "confirmationPassphrase is too long")
             String confirmationPassphrase) {
     }
 

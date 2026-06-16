@@ -3,11 +3,11 @@ package source.transactions.infra;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnMissingBean(BlockchainClient.class)
-@ConditionalOnExpression("'${bitcoin.rpc.enabled:false}' == 'false' && '${bitcoin.esplora.enabled:false}' == 'false'")
+@ConditionalOnProperty(name = {"bitcoin.rpc.enabled", "bitcoin.esplora.enabled"}, havingValue = "false", matchIfMissing = true)
 public class FailClosedBlockchainClient implements BlockchainClient {
 
     @Override

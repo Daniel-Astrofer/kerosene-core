@@ -54,12 +54,7 @@ public class PaymentExecutionOutboxService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public List<PaymentExecutionOutboxEntity> findDue() {
-        return repository.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(
-                DUE_STATUSES,
-                Instant.now());
-    }
+
 
     @Transactional
     public List<PaymentExecutionOutboxEntity> claimDue(String workerId) {

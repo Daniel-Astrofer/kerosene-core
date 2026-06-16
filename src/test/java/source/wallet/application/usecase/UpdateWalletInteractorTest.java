@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,11 +59,11 @@ class UpdateWalletInteractorTest {
         wallet.setWalletMode(WalletMode.KEROSENE);
 
         when(walletReader.findByNameAndUserId("TestWallet", 1L)).thenReturn(wallet);
-        when(walletPersistenceSupport.matchesPassphrase("test-passphrase-bip39", wallet)).thenReturn(true);
+        when(walletPersistenceSupport.matchesPassphrase(aryEq("test-passphrase-bip39".toCharArray()), any(WalletEntity.class))).thenReturn(true);
         when(walletReader.existsByUserIdAndName(1L, "UPDATEDWALLET")).thenReturn(false);
 
         updateWalletInteractor.updateWallet(
-                new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", "UpdatedWallet", "xpub661Example", "SELF_CUSTODY"),
+                new WalletUpdateDTO("test-passphrase-bip39".toCharArray(), "TestWallet", "UpdatedWallet", "xpub661Example", "SELF_CUSTODY"),
                 1L);
 
         assertEquals("UPDATEDWALLET", wallet.getName());
@@ -83,10 +84,10 @@ class UpdateWalletInteractorTest {
         wallet.setLastDerivedIndex(9);
 
         when(walletReader.findByNameAndUserId("TestWallet", 1L)).thenReturn(wallet);
-        when(walletPersistenceSupport.matchesPassphrase("test-passphrase-bip39", wallet)).thenReturn(true);
+        when(walletPersistenceSupport.matchesPassphrase(aryEq("test-passphrase-bip39".toCharArray()), any(WalletEntity.class))).thenReturn(true);
 
         updateWalletInteractor.updateWallet(
-                new WalletUpdateDTO("test-passphrase-bip39", "TestWallet", null, "   ", "KEROSENE"),
+                new WalletUpdateDTO("test-passphrase-bip39".toCharArray(), "TestWallet", null, "   ", "KEROSENE"),
                 1L);
 
         assertEquals(WalletMode.KEROSENE, wallet.getWalletMode());
@@ -100,12 +101,12 @@ class UpdateWalletInteractorTest {
     void updateWalletRejectsInvalidPassphrase() {
         WalletEntity wallet = new WalletEntity();
         when(walletReader.findByNameAndUserId("TestWallet", 1L)).thenReturn(wallet);
-        when(walletPersistenceSupport.matchesPassphrase("wrong-passphrase", wallet)).thenReturn(false);
+        when(walletPersistenceSupport.matchesPassphrase(aryEq("wrong-passphrase".toCharArray()), any(WalletEntity.class))).thenReturn(false);
 
         assertThrows(
                 WalletExceptions.WalletNoExists.class,
                 () -> updateWalletInteractor.updateWallet(
-                        new WalletUpdateDTO("wrong-passphrase", "TestWallet", "UpdatedWallet", null),
+                        new WalletUpdateDTO("wrong-passphrase".toCharArray(), "TestWallet", "UpdatedWallet", null),
                         1L));
 
         verify(walletPersistenceSupport, never()).persist(any(WalletEntity.class));

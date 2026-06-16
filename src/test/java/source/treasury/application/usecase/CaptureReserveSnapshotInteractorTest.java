@@ -23,6 +23,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CaptureReserveSnapshotInteractorTest {
 
+    private static final long MAX_BITCOIN_SUPPLY_SATS = 21_000_000L * 100_000_000L;
+
     @Mock
     private BlockchainReservePort blockchainReservePort;
 
@@ -67,5 +69,37 @@ class CaptureReserveSnapshotInteractorTest {
         assertEquals(new BigDecimal("0.00000550"), snapshot.totalAssetsBtc());
 
         verify(blockchainReservePort).getConfirmedBalanceForXpub("xpub-1", 24, true);
+    }
+
+    @Test
+    void shouldFailClosedForImpossibleBalancesAndClampScanRanges() {
+        when(blockchainReservePort.getHotWalletBalance()).thenReturn(MAX_BITCOIN_SUPPLY_SATS + 1L);
+        when(lightningReservePort.getLightningNodeBalance()).thenReturn(-1L);
+        when(walletMonitoringPort.findAll()).thenReturn(List.of(
+                new MonitoredWallet(1L, "xpub-large-range", Integer.MAX_VALUE, null)));
+        when(blockchainReservePort.getConfirmedBalanceForXpub("xpub-large-range", 100_000, true))
+                .thenReturn(42L);
+        when(treasuryConfigPort.loadGlobalConfig()).thenReturn(Optional.of(
+                new TreasuryConfigState(BigDecimal.ONE, "xpub-treasury", null)));
+        when(blockchainReservePort.getConfirmedBalanceForXpub("xpub-treasury", 100_000, true))
+                .thenReturn(MAX_BITCOIN_SUPPLY_SATS + 1L);
+
+        CaptureReserveSnapshotInteractor interactor = new CaptureReserveSnapshotInteractor(
+                blockchainReservePort,
+                lightningReservePort,
+                walletMonitoringPort,
+                treasuryConfigPort,
+                250_000,
+                250_000);
+
+        ReserveSnapshot snapshot = interactor.captureSnapshot();
+
+        assertEquals(new BigDecimal("0.00000000"), snapshot.hotWalletBtc());
+        assertEquals(new BigDecimal("0.00000042"), snapshot.walletMonitoredOnchainBtc());
+        assertEquals(new BigDecimal("0.00000000"), snapshot.treasuryXpubOnchainBtc());
+        assertEquals(new BigDecimal("0.00000000"), snapshot.totalOnchainBtc());
+        assertEquals(new BigDecimal("0.00000000"), snapshot.totalAssetsBtc());
+        verify(blockchainReservePort).getConfirmedBalanceForXpub("xpub-large-range", 100_000, true);
+        verify(blockchainReservePort).getConfirmedBalanceForXpub("xpub-treasury", 100_000, true);
     }
 }

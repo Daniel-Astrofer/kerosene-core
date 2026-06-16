@@ -35,7 +35,7 @@ public class WalletService implements WalletContract {
     }
 
     public void save(WalletEntity entity) {
-        walletCredentialsPort.validateBip39Passphrase(entity.getPassphraseHash());
+        walletCredentialsPort.validateBip39Passphrase(entity.getPassphraseHash().toCharArray());
         walletPersistenceSupport.persistNew(entity);
     }
 

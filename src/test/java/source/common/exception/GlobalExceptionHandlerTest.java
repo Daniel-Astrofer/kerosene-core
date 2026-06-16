@@ -8,6 +8,7 @@ import source.auth.AuthExceptions;
 import source.common.dto.ApiResponse;
 import source.common.observability.FinancialOperationsMetrics;
 import source.ledger.exceptions.LedgerExceptions;
+import source.payments.exception.PaymentException;
 
 import java.util.Map;
 
@@ -79,6 +80,44 @@ class GlobalExceptionHandlerTest {
         assertEquals("The destination user exists but is not yet ready to receive funds.",
                 response.getBody().getMessage());
         assertEquals("INBOUND_BLOCKED", ((Map<?, ?>) response.getBody().getData()).get("reason"));
+    }
+
+    @Test
+    void shouldPreservePaymentExceptionStatusAndCode() {
+        PaymentException ex = PaymentException.conflict(
+                "QUOTE_EXPIRED",
+                "A cotação expirou. Gere uma nova antes de confirmar.");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handlePaymentException(ex);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("QUOTE_EXPIRED", response.getBody().getErrorCode());
+        assertEquals("A cotação expirou. Gere uma nova antes de confirmar.", response.getBody().getMessage());
+        verify(financialMetrics).increment("validation_rejected", "rejected", "payment_exception");
+    }
+
+    @Test
+    void shouldSanitizeTechnicalPaymentExceptionMessage() {
+        PaymentException ex = PaymentException.badRequest(
+                "PAYMENT_INVALID",
+                "SQLException: select * from payment_intents");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handlePaymentException(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("PAYMENT_INVALID", response.getBody().getErrorCode());
+        assertEquals("The payment request could not be completed.", response.getBody().getMessage());
+    }
+
+    @Test
+    void shouldPreserveKeroseneExceptionCode() {
+        VaultException ex = new VaultException("Vault storage is temporarily unavailable.", ErrorCodes.VAULT_STORAGE_ERROR);
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleKeroseneException(ex);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertEquals(ErrorCodes.VAULT_STORAGE_ERROR, response.getBody().getErrorCode());
+        assertEquals("Vault storage is temporarily unavailable.", response.getBody().getMessage());
     }
 
     private String invokeSanitize(String raw, String fallback) {

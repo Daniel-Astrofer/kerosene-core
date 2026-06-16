@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS financial.balances_core (
 
 CREATE TABLE IF NOT EXISTS financial.transactions_master (
     id UUID PRIMARY KEY,
-    idempotency_key VARCHAR(180) NOT NULL UNIQUE,
+    idempotency_key VARCHAR(180) NOT NULL,
     user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
     source_wallet_id UUID REFERENCES financial.wallets_core(id),
     destination_wallet_id UUID REFERENCES financial.wallets_core(id),
@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS financial.transactions_master (
     failure_message VARCHAR(255),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_user_idempotency UNIQUE (user_id, idempotency_key),
     CONSTRAINT chk_transactions_master_rail
         CHECK (rail IN ('INTERNAL', 'ONCHAIN', 'LIGHTNING')),
     CONSTRAINT chk_transactions_master_direction
@@ -118,12 +119,14 @@ CREATE INDEX IF NOT EXISTS idx_transactions_master_txid
     WHERE blockchain_txid IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS financial.transaction_idempotency (
-    idempotency_key VARCHAR(180) PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    idempotency_key VARCHAR(180) NOT NULL,
     transaction_id UUID REFERENCES financial.transactions_master(id) ON DELETE SET NULL,
     request_hash VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP
+    expires_at TIMESTAMP,
+    PRIMARY KEY (user_id, idempotency_key)
 );
 
 CREATE TABLE IF NOT EXISTS financial.balance_movements (
@@ -229,3 +232,15 @@ SELECT
 FROM financial.wallets_core w
 LEFT JOIN financial.balances_core b
     ON b.wallet_id = w.id AND b.asset = w.asset;
+
+CREATE OR REPLACE FUNCTION financial.prevent_audit_log_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'financial_audit_log is append-only. Updates and deletes are prohibited.';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER enforce_append_only_audit_log
+BEFORE UPDATE OR DELETE ON financial.financial_audit_log
+FOR EACH ROW
+EXECUTE FUNCTION financial.prevent_audit_log_modification();

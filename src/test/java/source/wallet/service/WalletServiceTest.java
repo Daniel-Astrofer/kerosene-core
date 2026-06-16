@@ -20,6 +20,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +58,7 @@ class WalletServiceTest {
 
         walletService.save(wallet);
 
-        verify(walletCredentialsPort).validateBip39Passphrase("test-passphrase-bip39");
+        verify(walletCredentialsPort).validateBip39Passphrase(aryEq("test-passphrase-bip39".toCharArray()));
         verify(walletPersistenceSupport).persistNew(wallet);
     }
 
@@ -186,7 +187,7 @@ class WalletServiceTest {
 
     @Test
     void deleteWalletDelegatesToUseCaseAndReturnsTrue() {
-        WalletRequestDTO request = new WalletRequestDTO("test-passphrase-bip39", "Main", null);
+        WalletRequestDTO request = new WalletRequestDTO("test-passphrase-bip39".toCharArray(), "Main", null);
 
         boolean result = walletService.deleteWallet(7L, request);
 
@@ -196,7 +197,7 @@ class WalletServiceTest {
 
     @Test
     void updateWalletDelegatesToUseCase() {
-        WalletUpdateDTO request = new WalletUpdateDTO("test-passphrase-bip39", "Main", "Updated", null);
+        WalletUpdateDTO request = new WalletUpdateDTO("test-passphrase-bip39".toCharArray(), "Main", "Updated", null);
 
         walletService.updateWallet(7L, request);
 

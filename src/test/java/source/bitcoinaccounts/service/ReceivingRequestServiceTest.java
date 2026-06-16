@@ -14,6 +14,8 @@ import source.bitcoinaccounts.repository.ReceivingAddressRepository;
 import source.bitcoinaccounts.repository.ReceivingRequestRepository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -97,6 +99,45 @@ class ReceivingRequestServiceTest {
         assertNotNull(saved.getPurgeAfter());
         assertTrue(saved.getPurgeAfter().isAfter(LocalDateTime.now().plusHours(5)));
         assertTrue(saved.getPurgeAfter().isBefore(LocalDateTime.now().plusHours(7)));
+    }
+
+    @Test
+    void listForAccountReturnsVisibleRequestsAndRefreshesExpiredActiveRequests() {
+        BitcoinAccountEntity account = new BitcoinAccountEntity();
+        account.setUserId(42L);
+        account.setType(BitcoinAccountEnums.AccountType.INTERNAL_CARD);
+        account.setCustody(BitcoinAccountEnums.CustodyType.KEROSENE_CUSTODIAL);
+
+        InternalBtcCardEntity card = new InternalBtcCardEntity();
+        card.setBitcoinAccountId(account.getId());
+        card.setLedgerAccountId(UUID.randomUUID());
+
+        ReceivingAddressEntity address = new ReceivingAddressEntity();
+        address.setCardId(card.getId());
+        address.setAddress("bcrt1qhistory0000000000000000000000000");
+        address.setDerivationPath("m/84'/1'/0'/0/7");
+        address.setDerivationIndex(7);
+
+        ReceivingRequestEntity request = new ReceivingRequestEntity();
+        request.setCardId(card.getId());
+        request.setAddressId(address.getId());
+        request.setPublicCode("KRS-history");
+        request.setAmountSats(21_000L);
+        request.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+
+        when(accountService.requireInternalCard(42L, account.getId())).thenReturn(card);
+        when(requestRepository.findTop50ByCardIdAndStatusNotOrderByCreatedAtDesc(
+                card.getId(), BitcoinAccountEnums.ReceivingRequestStatus.HIDDEN)).thenReturn(List.of(request));
+        when(addressRepository.findById(address.getId())).thenReturn(Optional.of(address));
+
+        List<Map<String, Object>> result = service.listForAccount(42L, account.getId());
+
+        assertEquals(1, result.size());
+        assertEquals(account.getId(), result.get(0).get("accountId"));
+        assertEquals(address.getAddress(), result.get(0).get("address"));
+        assertEquals(BitcoinAccountEnums.ReceivingRequestStatus.EXPIRED, result.get(0).get("status"));
+        assertEquals(BitcoinAccountEnums.ReceivingRequestStatus.EXPIRED, request.getStatus());
+        verify(requestRepository).saveAll(any());
     }
 
     @Test

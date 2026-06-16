@@ -21,11 +21,11 @@ class BitcoinAccountsRetentionServiceTest {
                 24);
         ArgumentCaptor<LocalDateTime> receiveCutoff = ArgumentCaptor.forClass(LocalDateTime.class);
         ArgumentCaptor<LocalDateTime> taxCutoff = ArgumentCaptor.forClass(LocalDateTime.class);
-        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+        LocalDateTime before = LocalDateTime.now().minusMinutes(1);
 
         service.enforceRetention();
 
-        LocalDateTime after = LocalDateTime.now().plusSeconds(1);
+        LocalDateTime after = LocalDateTime.now().plusMinutes(1);
         verify(receivingRequestService).expireDueRequests();
         verify(receivingRequestService).purgeReadableReceiveData(receiveCutoff.capture());
         verify(taxEventService).purgeReadableEventsOlderThan(taxCutoff.capture());

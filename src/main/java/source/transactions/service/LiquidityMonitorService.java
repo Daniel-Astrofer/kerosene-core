@@ -2,6 +2,7 @@ package source.transactions.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -51,7 +52,7 @@ public class LiquidityMonitorService {
 
     public LiquidityMonitorService(StringRedisTemplate redisTemplate,
                                    BlockchainClient blockchainClient,
-                                   LightningClient lightningClient,
+                                   @Qualifier("lndLightningGateway") LightningClient lightningClient,
                                    FeeCalculator feeCalculator,
                                    RedisAvailabilityGuard redisAvailabilityGuard) {
         this.redisTemplate = redisTemplate;

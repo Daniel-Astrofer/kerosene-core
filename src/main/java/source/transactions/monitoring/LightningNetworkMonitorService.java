@@ -2,7 +2,7 @@ package source.transactions.monitoring;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
-import source.transactions.service.BitcoinNodeService;
+import source.transactions.service.LndLightningNodeClient;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -11,14 +11,14 @@ import java.util.Map;
 @Service
 public class LightningNetworkMonitorService {
 
-    private final ObjectProvider<BitcoinNodeService> bitcoinNodeServiceProvider;
+    private final ObjectProvider<LndLightningNodeClient> bitcoinNodeServiceProvider;
 
-    public LightningNetworkMonitorService(ObjectProvider<BitcoinNodeService> bitcoinNodeServiceProvider) {
+    public LightningNetworkMonitorService(ObjectProvider<LndLightningNodeClient> bitcoinNodeServiceProvider) {
         this.bitcoinNodeServiceProvider = bitcoinNodeServiceProvider;
     }
 
     public LightningMonitorSnapshot snapshot() {
-        BitcoinNodeService node = bitcoinNodeServiceProvider.getIfAvailable();
+        LndLightningNodeClient node = bitcoinNodeServiceProvider.getIfAvailable();
         if (node == null || !node.isLive()) {
             return new LightningMonitorSnapshot(
                     "DOWN",
@@ -42,8 +42,14 @@ public class LightningNetworkMonitorService {
             state.put("numActiveChannels", info.getNumActiveChannels());
             state.put("numInactiveChannels", info.getNumInactiveChannels());
             state.put("numPendingChannels", info.getNumPendingChannels());
-            state.put("localBalanceSats", node.getLocalBalance());
-            state.put("remoteBalanceSats", node.getRemoteBalance());
+            long localBalanceSats = node.getLocalBalance();
+            long remoteBalanceSats = node.getRemoteBalance();
+            long channelLiquiditySats = Math.max(0L, localBalanceSats + remoteBalanceSats);
+            state.put("localBalanceSats", localBalanceSats);
+            state.put("remoteBalanceSats", remoteBalanceSats);
+            state.put("outboundLiquidityRatio", ratio(localBalanceSats, channelLiquiditySats));
+            state.put("inboundLiquidityRatio", ratio(remoteBalanceSats, channelLiquiditySats));
+            state.put("channelLiquiditySats", channelLiquiditySats);
             state.put("walletConfirmedBalanceSats", node.getHotWalletBalance());
 
             boolean synced = info.getSyncedToChain();
@@ -61,6 +67,13 @@ public class LightningNetworkMonitorService {
                     Map.of("exception", exception.getClass().getSimpleName()),
                     "LND gRPC probe failed");
         }
+    }
+
+    private double ratio(long value, long total) {
+        if (total <= 0L || value <= 0L) {
+            return 0.0d;
+        }
+        return Math.min(1.0d, (double) value / (double) total);
     }
 
     public record LightningMonitorSnapshot(

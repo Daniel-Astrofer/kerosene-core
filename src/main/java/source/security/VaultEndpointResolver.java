@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -45,6 +46,10 @@ public class VaultEndpointResolver {
                 logger.warn("[VaultEndpointResolver] Vault hostname file exists but is empty at: {}", vaultUrlFile);
                 return null;
             }
+            if (!isValidOnionHost(onionHost)) {
+                logger.error("[VaultEndpointResolver] Vault hostname file contains an invalid onion hostname.");
+                return null;
+            }
 
             String resolved = "http://" + onionHost;
             logger.info("[VaultEndpointResolver] Vault .onion auto-discovered: {}", resolved);
@@ -62,5 +67,18 @@ public class VaultEndpointResolver {
 
     public String configuredVaultUrlFile() {
         return vaultUrlFile;
+    }
+
+    private boolean isValidOnionHost(String onionHost) {
+        try {
+            URI uri = URI.create("http://" + onionHost.trim());
+            String host = uri.getHost();
+            String rawPath = uri.getRawPath();
+            return host != null
+                    && host.endsWith(".onion")
+                    && (rawPath == null || rawPath.isEmpty() || "/".equals(rawPath));
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 }

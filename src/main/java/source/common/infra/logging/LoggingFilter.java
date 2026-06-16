@@ -14,126 +14,65 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
 
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
+/**
+ * HTTP access log filter — emits one structured JSON event per request.
+ *
+ * <p>All events are tagged with {@link LogDomain#ACCESS} so they route to
+ * the dedicated ACCESS appender and can be tailed independently.
+ *
+ * <p>What is logged (no PII, no bodies):
+ * <ul>
+ *   <li>{@code http.method}, {@code url.path}, {@code http.status_code}</li>
+ *   <li>{@code duration_ms} — wall-clock time for the full filter chain</li>
+ *   <li>{@code req.bytes}, {@code res.bytes} — content lengths</li>
+ *   <li>{@code client.ip} → always {@code MASKED_IP}</li>
+ * </ul>
+ *
+ * <p>Paths skipped: {@code /actuator}, {@code /health/}, {@code /ws} (WebSocket upgrade).
+ */
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE - 10)
 public class LoggingFilter extends OncePerRequestFilter {
 
-    private static final Logger accessLogger = LoggerFactory.getLogger("source.common.infra.logging.LoggingFilter");
-
-    private static final Pattern SENSITIVE_KEYS_PATTERN = Pattern.compile(
-            "\"(password|passphrase|private_key|mnemonic|secret|totp|totpSecret|preAuthToken|sessionId|token|jwt|accessToken|refreshToken|otpUri|backupCodes|signature|credentialId|userHandle|publicKey|publicKeyCose)\"\\s*:\\s*(\"([^\"]*)\"|\\[[^\\]]*\\])",
-            Pattern.CASE_INSENSITIVE);
-    private static final String REDACTED = "***MASKED***";
-    private static final String OMITTED_FOR_SECURITY = "[OMITTED_FOR_SECURITY]";
-    private static final Set<String> SENSITIVE_HEADERS = new HashSet<>(Arrays.asList(
-            "authorization",
-            "x-forwarded-for",
-            "cookie",
-            "set-cookie",
-            "x-new-token"));
+    private static final Logger log = LoggerFactory.getLogger(LoggingFilter.class);
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain chain)
             throws ServletException, IOException {
 
-        // Wrap the request and response to cache their content for logging
-        ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request);
-        ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
-
-        long startTime = System.currentTimeMillis();
+        ContentCachingRequestWrapper req  = new ContentCachingRequestWrapper(request);
+        ContentCachingResponseWrapper res = new ContentCachingResponseWrapper(response);
+        long start = System.currentTimeMillis();
 
         try {
-            filterChain.doFilter(requestWrapper, responseWrapper);
+            chain.doFilter(req, res);
         } finally {
-            long duration = System.currentTimeMillis() - startTime;
-            logAccessAndMask(requestWrapper, responseWrapper, duration);
-            // Must copy body to the actual response
-            responseWrapper.copyBodyToResponse();
+            logAccess(req, res, System.currentTimeMillis() - start);
+            res.copyBodyToResponse();
         }
     }
 
-    private void logAccessAndMask(ContentCachingRequestWrapper request, ContentCachingResponseWrapper response,
-            long duration) {
-        String method = request.getMethod();
-        String uri = request.getRequestURI();
-        int status = response.getStatus();
+    private void logAccess(ContentCachingRequestWrapper req,
+                           ContentCachingResponseWrapper res,
+                           long durationMs) {
+        String uri = req.getRequestURI();
 
         if (uri.startsWith("/actuator") || uri.startsWith("/health/") || uri.startsWith("/ws")) {
             return;
         }
 
-        accessLogger.info("http_access {} {} {} {} {} {} {}",
-                kv("http.method", method),
-                kv("url.path", uri),
-                kv("http.status_code", status),
-                kv("duration_ms", duration),
-                kv("client.ip", LogSanitizer.maskedIp(request.getRemoteAddr())),
-                kv("http.request.body.bytes", request.getContentAsByteArray().length),
-                kv("http.response.body.bytes", response.getContentAsByteArray().length));
-    }
-
-    private Map<String, String> getSafeHeaders(HttpServletRequest request) {
-        Map<String, String> headers = new HashMap<>();
-        Enumeration<String> headerNames = request.getHeaderNames();
-        if (headerNames != null) {
-            while (headerNames.hasMoreElements()) {
-                String headerName = headerNames.nextElement();
-                String headerValue = request.getHeader(headerName);
-
-                if (SENSITIVE_HEADERS.contains(headerName.toLowerCase())) {
-                    headers.put(headerName, REDACTED);
-                } else {
-                    headers.put(headerName, headerValue);
-                }
-            }
-        }
-        return headers;
-    }
-
-    private String getPayload(byte[] buf, String characterEncoding) {
-        if (buf == null || buf.length == 0)
-            return "";
-        try {
-            int length = Math.min(buf.length, 5120); // truncate up to 5KB to avoid memory blowup
-            return new String(buf, 0, length, characterEncoding != null ? characterEncoding : "UTF-8");
-        } catch (UnsupportedEncodingException ex) {
-            return "[Unsupported Encoding]";
-        }
-    }
-
-    private String maskSensitivePayload(String payload) {
-        if (payload == null || payload.isEmpty())
-            return payload;
-        // Replaces the actual value with ***MASKED***
-        return SENSITIVE_KEYS_PATTERN.matcher(payload).replaceAll("\"$1\":\"" + REDACTED + "\"");
-    }
-
-    private String safeBodyForLogging(String uri, String payload) {
-        if (payload == null || payload.isEmpty()) {
-            return payload;
-        }
-        if (isSensitivePath(uri)) {
-            return OMITTED_FOR_SECURITY;
-        }
-        return maskSensitivePayload(payload);
-    }
-
-    private boolean isSensitivePath(String uri) {
-        if (uri == null) {
-            return false;
-        }
-        return uri.startsWith("/auth/")
-                || uri.equals("/auth");
+        log.info(LogDomain.ACCESS, "http_access {} {} {} {} {} {} {}",
+                kv("http.method",           req.getMethod()),
+                kv("url.path",              uri),
+                kv("http.status_code",      res.getStatus()),
+                kv("duration_ms",           durationMs),
+                kv("client.ip",             LogSanitizer.maskedIp(req.getRemoteAddr())),
+                kv("req.bytes",             req.getContentAsByteArray().length),
+                kv("res.bytes",             res.getContentAsByteArray().length));
     }
 }

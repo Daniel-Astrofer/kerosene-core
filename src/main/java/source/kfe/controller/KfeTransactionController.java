@@ -10,11 +10,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.common.dto.ApiResponse;
+import source.kfe.application.financial.FinancialApi;
 import source.kfe.dto.KfeSubmitTransactionRequest;
 import source.kfe.dto.KfeTransactionResponse;
-import source.kfe.repository.KfeTransactionRepository;
-import source.kfe.service.KfeResponseMapper;
-import source.kfe.service.KfeTransactionEngine;
 
 import java.util.UUID;
 
@@ -22,35 +20,32 @@ import java.util.UUID;
 @RequestMapping("/kfe/transactions")
 public class KfeTransactionController {
 
-    private final KfeTransactionEngine transactionEngine;
-    private final KfeTransactionRepository transactionRepository;
-    private final KfeResponseMapper responseMapper;
+    private final FinancialApi financialApi;
 
-    public KfeTransactionController(
-            KfeTransactionEngine transactionEngine,
-            KfeTransactionRepository transactionRepository,
-            KfeResponseMapper responseMapper) {
-        this.transactionEngine = transactionEngine;
-        this.transactionRepository = transactionRepository;
-        this.responseMapper = responseMapper;
+    public KfeTransactionController(FinancialApi financialApi) {
+        this.financialApi = financialApi;
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<KfeTransactionResponse>> submit(
             @Valid @RequestBody KfeSubmitTransactionRequest request,
             Authentication authentication) {
-        KfeTransactionResponse response = transactionEngine.submit(authenticatedUserId(authentication), request);
-        return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
+        Long userId = authenticatedUserId(authentication);
+        try {
+            KfeTransactionResponse response = financialApi.submitTransaction(userId, request);
+            return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
+        } catch (org.springframework.dao.DataIntegrityViolationException | org.hibernate.exception.ConstraintViolationException ex) {
+            String requestHash = financialApi.transactionRequestHash(userId, request);
+            KfeTransactionResponse response = financialApi.existingTransactionByIdempotency(userId, request.idempotencyKey(), requestHash);
+            return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
+        }
     }
 
     @GetMapping("/{transactionId}")
     public ResponseEntity<ApiResponse<KfeTransactionResponse>> get(
             @PathVariable UUID transactionId,
             Authentication authentication) {
-        KfeTransactionResponse response = transactionRepository
-                .findByIdAndUserId(transactionId, authenticatedUserId(authentication))
-                .map(responseMapper::toTransactionResponse)
-                .orElseThrow(() -> new IllegalArgumentException("KFE transaction not found."));
+        KfeTransactionResponse response = financialApi.transaction(authenticatedUserId(authentication), transactionId);
         return ResponseEntity.ok(ApiResponse.success("KFE transaction retrieved.", response));
     }
 

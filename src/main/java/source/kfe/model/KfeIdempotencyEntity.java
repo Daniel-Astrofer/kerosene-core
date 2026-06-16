@@ -13,9 +13,8 @@ import java.util.UUID;
 @Table(name = "transaction_idempotency", schema = "financial")
 public class KfeIdempotencyEntity {
 
-    @Id
-    @Column(name = "idempotency_key", nullable = false, length = 180)
-    private String idempotencyKey;
+    @jakarta.persistence.EmbeddedId
+    private KfeIdempotencyId id;
 
     @Column(name = "transaction_id")
     private UUID transactionId;
@@ -37,12 +36,34 @@ public class KfeIdempotencyEntity {
         createdAt = LocalDateTime.now();
     }
 
+    public KfeIdempotencyId getId() {
+        return id;
+    }
+
+    public void setId(KfeIdempotencyId id) {
+        this.id = id;
+    }
+
     public String getIdempotencyKey() {
-        return idempotencyKey;
+        return id != null ? id.getIdempotencyKey() : null;
     }
 
     public void setIdempotencyKey(String idempotencyKey) {
-        this.idempotencyKey = idempotencyKey;
+        if (this.id == null) {
+            this.id = new KfeIdempotencyId();
+        }
+        this.id.setIdempotencyKey(idempotencyKey);
+    }
+
+    public Long getUserId() {
+        return id != null ? id.getUserId() : null;
+    }
+
+    public void setUserId(Long userId) {
+        if (this.id == null) {
+            this.id = new KfeIdempotencyId();
+        }
+        this.id.setUserId(userId);
     }
 
     public UUID getTransactionId() {

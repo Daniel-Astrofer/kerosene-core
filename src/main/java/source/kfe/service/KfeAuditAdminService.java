@@ -7,9 +7,11 @@ import source.kfe.dto.KfeAuditEventResponse;
 import source.kfe.dto.KfeAuditLatestResponse;
 import source.kfe.dto.KfeAuditRootResponse;
 import source.kfe.model.KfeAuditLogEntity;
+import source.kfe.repository.KfeAuditHashRow;
 import source.kfe.repository.KfeAuditLogRepository;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +19,7 @@ import java.util.UUID;
 public class KfeAuditAdminService {
 
     private static final String EMPTY_ROOT = "0".repeat(64);
+    private static final int ROOT_PAGE_SIZE = 1_000;
 
     private final KfeAuditLogRepository repository;
     private final KfeHashService hashService;
@@ -53,27 +56,45 @@ public class KfeAuditAdminService {
 
     @Transactional(readOnly = true)
     public KfeAuditRootResponse root() {
-        List<KfeAuditLogEntity> events = repository.findAllByOrderBySequenceNumberAsc();
-        if (events.isEmpty()) {
+        List<String> level = new ArrayList<>();
+        Long fromSequence = null;
+        Long toSequence = 0L;
+        long eventCount = 0L;
+
+        while (true) {
+            List<KfeAuditHashRow> rows = repository.findHashRowsAfterSequence(
+                    toSequence,
+                    PageRequest.of(0, ROOT_PAGE_SIZE));
+            if (rows.isEmpty()) {
+                break;
+            }
+            for (KfeAuditHashRow row : rows) {
+                if (fromSequence == null) {
+                    fromSequence = row.getSequenceNumber();
+                }
+                toSequence = row.getSequenceNumber();
+                eventCount++;
+                level.add(row.getEventHash());
+            }
+        }
+
+        if (level.isEmpty()) {
             return new KfeAuditRootResponse(EMPTY_ROOT, 0L, null, null, LocalDateTime.now());
         }
 
-        List<String> level = events.stream()
-                .map(KfeAuditLogEntity::getEventHash)
-                .toList();
         while (level.size() > 1) {
             level = nextLevel(level);
         }
         return new KfeAuditRootResponse(
                 level.getFirst(),
-                events.size(),
-                events.getFirst().getSequenceNumber(),
-                events.getLast().getSequenceNumber(),
+                eventCount,
+                fromSequence,
+                toSequence,
                 LocalDateTime.now());
     }
 
     private List<String> nextLevel(List<String> level) {
-        java.util.ArrayList<String> next = new java.util.ArrayList<>();
+        ArrayList<String> next = new ArrayList<>();
         for (int index = 0; index < level.size(); index += 2) {
             String left = level.get(index);
             String right = index + 1 < level.size() ? level.get(index + 1) : left;

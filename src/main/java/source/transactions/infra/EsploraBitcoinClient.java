@@ -407,10 +407,6 @@ public class EsploraBitcoinClient implements BlockchainClient {
         return text != null && !text.isBlank() ? text : null;
     }
 
-    private long btcToSats(double btc) {
-        return Math.max(0L, Math.round(btc * 100_000_000d));
-    }
-
     private String getUrl(String path) {
         return esploraBaseUrl + path;
     }

@@ -16,6 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import source.common.release.ReleaseAttestationFilter;
+import source.common.security.EndpointPolicyRegistry;
 
 @Configuration
 @EnableWebSecurity
@@ -28,6 +29,7 @@ public class Security {
                         RateLimitFilter rateLimitFilter,
                         ParanoidSecurityFilter paranoidFilter,
                         ObjectProvider<ReleaseAttestationFilter> releaseAttestationFilter,
+                        EndpointPolicyRegistry endpointPolicyRegistry,
                         org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource)
                         throws Exception {
                 http
@@ -50,59 +52,13 @@ public class Security {
 
                                 .authorizeHttpRequests(auth -> auth
 
-                                                .requestMatchers("/").permitAll()
-                                                .requestMatchers("/bitcoin-banking", "/bitcoin-banking/**", "/admin",
-                                                                "/admin/**", "/download", "/status").permitAll()
-                                                .requestMatchers("/index.html").permitAll()
-                                                .requestMatchers("/favicon.png").permitAll()
-                                                .requestMatchers("/manifest.json").permitAll()
-                                                .requestMatchers("/version.json").permitAll()
-                                                .requestMatchers("/flutter.js").permitAll()
-                                                .requestMatchers("/flutter_bootstrap.js").permitAll()
-                                                .requestMatchers("/flutter_service_worker.js").permitAll()
-                                                .requestMatchers("/main.dart.js").permitAll()
-                                                .requestMatchers("/assets/**").permitAll()
-                                                .requestMatchers("/canvaskit/**").permitAll()
-                                                .requestMatchers("/icons/**").permitAll()
-                                                .requestMatchers("/healthz").permitAll()
-                                                .requestMatchers("/health/live").permitAll()
-                                                .requestMatchers("/health/ready").permitAll()
-                                                .requestMatchers("/api/public/**").permitAll()
-                                                .requestMatchers("/bitcoin/receive/**").permitAll()
-                                                .requestMatchers("/system/release").permitAll()
-                                                .requestMatchers("/auth/signup").permitAll()
-                                                .requestMatchers("/auth/signup/totp/verify").permitAll()
-                                                .requestMatchers("/auth/login").permitAll()
-                                                .requestMatchers("/auth/login/totp/verify").permitAll()
-                                                .requestMatchers("/auth/admin/login").permitAll()
-                                                .requestMatchers("/auth/admin/login/*").permitAll()
-                                                .requestMatchers("/auth/passkey/challenge").permitAll()
-                                                .requestMatchers("/auth/passkey/verify").permitAll()
-                                                .requestMatchers("/auth/passkey/onboarding/start").permitAll()
-                                                .requestMatchers("/auth/passkey/onboarding/finish").permitAll()
-                                                .requestMatchers("/auth/recovery/emergency/start").permitAll()
-                                                .requestMatchers("/auth/recovery/emergency/finish").permitAll()
-                                                .requestMatchers("/auth/pow/challenge").permitAll()
-                                                .requestMatchers("/integrations/btcpay/webhook/**").permitAll()
-                                                .requestMatchers(
-                                                                "/actuator/health",
-                                                                "/actuator/health/**",
-                                                                "/sovereignty/ping",
-                                                                "/sovereignty/status",
-                                                                "/v3/api-docs",
-                                                                "/v3/api-docs/**",
-                                                                "/swagger-ui",
-                                                                "/swagger-ui/**",
-                                                                "/swagger-ui.html",
-                                                                "/swagger-resources",
-                                                                "/swagger-resources/**",
-                                                                "/configuration/ui",
-                                                                "/configuration/security",
-                                                                "/webjars/**",
-                                                                "/error",
-                                                                "/ws/**")
+                                                .requestMatchers(endpointPolicyRegistry.publicEndpoints())
                                                 .permitAll()
-                                                .anyRequest().authenticated())
+                                                .requestMatchers(endpointPolicyRegistry.adminEndpoints())
+                                                .hasRole("ADMIN")
+                                                .requestMatchers(endpointPolicyRegistry.authenticatedEndpoints())
+                                                .authenticated()
+                                                .anyRequest().denyAll())
                                 .addFilterBefore(paranoidFilter, UsernamePasswordAuthenticationFilter.class)
                                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -152,6 +108,11 @@ public class Security {
                                 "X-Requested-With",
                                 "X-Idempotency-Key",
                                 "Idempotency-Key",
+                                "X-Tx-Hash",
+                                "X-Shard-Id",
+                                "X-Shard-Timestamp",
+                                "X-Shard-Nonce",
+                                "X-Shard-Signature",
                                 "X-Admin-Token",
                                 "X-Owner-TOTP",
                                 "X-Hardware-Signature",

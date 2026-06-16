@@ -34,6 +34,7 @@ public class PayInternalPaymentRequestUseCase {
         this.paymentRequestNotificationService = paymentRequestNotificationService;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public InternalPaymentRequestDTO pay(
             String linkId,
             Long payerUserId,
