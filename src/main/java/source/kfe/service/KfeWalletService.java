@@ -8,12 +8,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 import source.common.service.AddressDerivationService;
 import source.kfe.dto.KfeAddressResponse;
 import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.dto.KfeWalletNameOption;
 import source.kfe.dto.KfeWalletResponse;
 import source.kfe.model.KfeWalletAddressEntity;
 import source.kfe.model.KfeWalletAddressRole;
 import source.kfe.model.KfeWalletAddressStatus;
 import source.kfe.model.KfeWalletEntity;
 import source.kfe.model.KfeWalletKind;
+import source.kfe.model.KfeWalletName;
 import source.kfe.model.KfeWalletStatus;
 import source.kfe.rail.KfeRailException;
 import source.kfe.repository.KfeWalletAddressRepository;
@@ -98,7 +100,7 @@ public class KfeWalletService {
         wallet.setUserId(userId);
         wallet.setKind(request.kind());
         wallet.setStatus(KfeWalletStatus.CREATING);
-        wallet.setLabel(cleanLabel(request.label()));
+        wallet.setLabel(resolveWalletLabel(request));
         wallet.setAsset(ASSET_BTC);
         wallet.setSpendable(request.kind() != KfeWalletKind.WATCH_ONLY);
         wallet.setXpub(blankToNull(request.xpub()));
@@ -200,6 +202,12 @@ public class KfeWalletService {
     public List<KfeWalletResponse> listWallets(Long userId) {
         return walletRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(responseMapper::toWalletResponse)
+                .toList();
+    }
+
+    public List<KfeWalletNameOption> availableWalletNames() {
+        return List.of(KfeWalletName.values()).stream()
+                .map(name -> new KfeWalletNameOption(name, name.label()))
                 .toList();
     }
 
@@ -425,12 +433,11 @@ public class KfeWalletService {
         }
     }
 
-    private String cleanLabel(String label) {
-        String clean = label != null ? label.trim() : "";
-        if (clean.isBlank()) {
-            throw new IllegalArgumentException("Wallet label is required.");
+    private String resolveWalletLabel(KfeCreateWalletRequest request) {
+        if (request.name() != null) {
+            return request.name().label();
         }
-        return clean.length() > 96 ? clean.substring(0, 96) : clean;
+        return KfeWalletName.fromLabel(request.label()).label();
     }
 
     private String blankToNull(String value) {

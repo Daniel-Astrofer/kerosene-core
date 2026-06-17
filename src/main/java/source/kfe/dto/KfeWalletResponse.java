@@ -11,6 +11,8 @@ public record KfeWalletResponse(
         KfeWalletKind kind,
         KfeWalletStatus status,
         String label,
+        String walletName,
+        String walletTypeDescription,
         String asset,
         boolean spendable,
         boolean xpubConfigured,

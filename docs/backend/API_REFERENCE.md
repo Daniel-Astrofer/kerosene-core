@@ -2,13 +2,15 @@
 
 Referencia operacional dos endpoints HTTP expostos pelo backend Kerosene. O inventario foi derivado dos controllers Spring em `backend/kerosene/src/main/java/source/**`, da cadeia de seguranca, dos filtros HTTP e dos DTOs Java. Cada endpoint declara autenticacao, headers, parametros, corpo de request e formato de response para que a rota possa ser chamada sem depender de uma tabela global.
 
+> Referencia separada por dominio: [api/README.md](api/README.md). Este arquivo permanece como referencia consolidada e base de auditoria full-text.
+
 ## Escopo e cobertura
 
-- Secoes de endpoint HTTP documentadas: `161` (`160` pares metodo/path unicos; `GET /` tem variante JSON e HTML por content negotiation).
+- Secoes de endpoint HTTP documentadas: `162` (`161` pares metodo/path unicos; `GET /` tem variante JSON e HTML por content negotiation).
 - Inclui controllers REST, rotas HTML servidas pelo backend, webhook BTCPay e `POST /audit/trigger`, que usa anotacao fully-qualified no codigo.
 - WebSocket/STOMP e Actuator aparecem em secoes proprias porque nao sao metodos REST de controller de dominio.
 - O formato de erro padrao e `ApiResponse` com `success=false`, `message`, `errorCode`, `data` opcional e `timestamp`; filtros tambem podem retornar erro sem envelope em `413`, `415` e alguns `401/403` do Spring Security.
-- Contagem verificada por headings `### <METHOD> <PATH>` neste documento: `161` secoes, `160` pares unicos.
+- Contagem verificada por headings `### <METHOD> <PATH>` neste documento: `162` secoes, `161` pares unicos.
 
 ## Regras HTTP globais
 

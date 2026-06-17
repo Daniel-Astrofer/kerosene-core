@@ -92,7 +92,8 @@ class KfeWalletServiceTest {
 
         when(walletRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(wallet));
         when(responseMapper.toWalletResponse(wallet)).thenReturn(new KfeWalletResponse(
-                wallet.getId(), KfeWalletKind.CUSTODIAL_ONCHAIN, KfeWalletStatus.ACTIVE, "label", "BTC",
+                wallet.getId(), KfeWalletKind.CUSTODIAL_ONCHAIN, KfeWalletStatus.ACTIVE, "label", "label",
+                "Carteira Onchain", "BTC",
                 true, true, true, "xpub", java.time.LocalDateTime.now(), java.time.LocalDateTime.now()
         ));
 

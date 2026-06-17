@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 import source.kfe.dto.KfeDashboardResponse;
 import source.kfe.dto.KfeDashboardWallet;
 import source.kfe.dto.KfeStatementItem;
+import source.kfe.model.KfeWalletKind;
 import source.kfe.repository.KfeDashboardWalletRow;
 import source.kfe.repository.KfeUserStatementRepository;
 import source.kfe.repository.KfeWalletRepository;
@@ -17,12 +18,15 @@ public class KfeDashboardService {
 
     private final KfeWalletRepository walletRepository;
     private final KfeUserStatementRepository statementRepository;
+    private final KfeResponseMapper responseMapper;
 
     public KfeDashboardService(
             KfeWalletRepository walletRepository,
-            KfeUserStatementRepository statementRepository) {
+            KfeUserStatementRepository statementRepository,
+            KfeResponseMapper responseMapper) {
         this.walletRepository = walletRepository;
         this.statementRepository = statementRepository;
+        this.responseMapper = responseMapper;
     }
 
     @Transactional(readOnly = true)
@@ -58,6 +62,8 @@ public class KfeDashboardService {
                 row.getKind(),
                 row.getStatus(),
                 row.getLabel(),
+                row.getLabel(),
+                responseMapper.walletTypeDescription(walletKind(row.getKind())),
                 row.getAsset(),
                 Boolean.TRUE.equals(row.getSpendable()),
                 value(row.getAvailableSats()),
@@ -72,5 +78,16 @@ public class KfeDashboardService {
 
     private long value(Long value) {
         return value != null ? value : 0L;
+    }
+
+    private KfeWalletKind walletKind(String value) {
+        if (value == null || value.isBlank()) {
+            return KfeWalletKind.INTERNAL;
+        }
+        try {
+            return KfeWalletKind.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return KfeWalletKind.INTERNAL;
+        }
     }
 }

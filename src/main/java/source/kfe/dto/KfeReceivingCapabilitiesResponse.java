@@ -1,6 +1,7 @@
 package source.kfe.dto;
 
 import java.util.List;
+import java.util.UUID;
 
 public record KfeReceivingCapabilitiesResponse(
         boolean canReceiveInternal,
@@ -9,6 +10,7 @@ public record KfeReceivingCapabilitiesResponse(
         String preferredRail,
         List<String> missingRequirements,
         String receiverDisplayName,
+        UUID internalWalletId,
         List<String> availableRails,
         Limits limits) {
 

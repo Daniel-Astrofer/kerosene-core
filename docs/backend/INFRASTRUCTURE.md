@@ -84,14 +84,15 @@ O backend está em `backend/kerosene` e executa em Java 21 com Spring Boot.
 
 ## Superfície da API
 
-A API HTTP está documentada em [API_REFERENCE.md](/home/omega/Kerosene/docs/API_REFERENCE.md). Cobertura documentada atual:
+A API HTTP está documentada por domínio em [api/README.md](api/README.md). A referência consolidada segue disponível em [API_REFERENCE.md](API_REFERENCE.md) para auditoria e revisão full-text.
 
 | Métrica | Valor |
 | --- | --- |
-| Seções de endpoints | `161` |
-| Pares método/caminho únicos | `160` |
-| Duplicata por design | `GET /`, servido como JSON status ou HTML por negociação de conteúdo. |
-| Interfaces não controladoras | WebSocket/STOMP e Actuator são documentados separadamente dos endpoints REST de domínio. |
+| Entradas extraídas de controllers Spring | `178` |
+| Superfícies runtime não-controller | `3` |
+| Entradas documentadas por domínio | `181` (`180` REST + `1` WebSocket/STOMP) |
+| Seções REST na referência consolidada | `162` (`161` pares método/caminho únicos) |
+| Interfaces não controladoras | WebSocket/STOMP e Actuator são documentados junto das superfícies públicas de runtime. |
 
 Endpoints públicos de saúde e release:
 

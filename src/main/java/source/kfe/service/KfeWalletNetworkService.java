@@ -75,8 +75,10 @@ public class KfeWalletNetworkService {
                 .filter(wallet -> wallet.getStatus() == KfeWalletStatus.ACTIVE)
                 .toList();
 
-        boolean internal = activeWallets.stream()
-                .anyMatch(wallet -> wallet.getKind() == KfeWalletKind.INTERNAL && wallet.isSpendable());
+        Optional<KfeWalletEntity> internalWallet = activeWallets.stream()
+                .filter(wallet -> wallet.getKind() == KfeWalletKind.INTERNAL && wallet.isSpendable())
+                .findFirst();
+        boolean internal = internalWallet.isPresent();
         boolean onchain = activeWallets.stream().anyMatch(this::hasActiveReceiveAddress);
         boolean lightning = false;
 
@@ -99,6 +101,7 @@ public class KfeWalletNetworkService {
                 rails.isEmpty() ? null : rails.get(0),
                 List.copyOf(missing),
                 "@" + receiver.get().getUsername(),
+                internalWallet.map(KfeWalletEntity::getId).orElse(null),
                 rails,
                 DEFAULT_LIMITS);
     }
@@ -203,6 +206,7 @@ public class KfeWalletNetworkService {
                 false,
                 null,
                 List.of(reason),
+                null,
                 null,
                 List.of(),
                 DEFAULT_LIMITS);

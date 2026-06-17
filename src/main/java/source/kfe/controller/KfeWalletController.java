@@ -17,6 +17,7 @@ import source.kfe.dto.KfeColdWalletPsbtRequest;
 import source.kfe.dto.KfeColdWalletPsbtResponse;
 import source.kfe.dto.KfeCreateWalletRequest;
 import source.kfe.dto.KfeUtxoResponse;
+import source.kfe.dto.KfeWalletNameOption;
 import source.kfe.dto.KfeWalletResponse;
 
 import java.util.List;
@@ -46,6 +47,13 @@ public class KfeWalletController {
         return ResponseEntity.ok(ApiResponse.success(
                 "KFE wallets retrieved.",
                 financialApi.wallets(authenticatedUserId(authentication))));
+    }
+
+    @GetMapping("/names")
+    public ResponseEntity<ApiResponse<List<KfeWalletNameOption>>> names() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "KFE wallet names retrieved.",
+                financialApi.walletNames()));
     }
 
     @PostMapping("/{walletId}/addresses/rotate")

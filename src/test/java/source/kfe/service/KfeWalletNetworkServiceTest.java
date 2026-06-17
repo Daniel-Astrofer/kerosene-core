@@ -71,6 +71,7 @@ class KfeWalletNetworkServiceTest {
         assertThat(response.canReceiveOnchain()).isTrue();
         assertThat(response.canReceiveLightning()).isFalse();
         assertThat(response.receiverDisplayName()).isEqualTo("@alice");
+        assertThat(response.internalWalletId()).isEqualTo(wallet.getId());
         assertThat(response.availableRails()).containsExactly("INTERNAL", "ONCHAIN");
         assertThat(response.missingRequirements()).containsExactly("KFE_LIGHTNING_RECEIVE_NOT_CONFIGURED");
     }

@@ -1,6 +1,5 @@
 package source.transactions.controller;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +18,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/economy")
-@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")
 public class EconomyController {
 
     private final StringRedisTemplate redisTemplate;

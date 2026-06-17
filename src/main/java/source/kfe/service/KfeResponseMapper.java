@@ -8,6 +8,7 @@ import source.kfe.model.KfeTransactionEntity;
 import source.kfe.model.KfeWalletAddressEntity;
 import source.kfe.model.KfeWalletEntity;
 import source.kfe.model.KfeWalletAddressStatus;
+import source.kfe.model.KfeWalletKind;
 import source.kfe.repository.KfeWalletAddressRepository;
 
 @Component
@@ -29,6 +30,8 @@ public class KfeResponseMapper {
                 wallet.getKind(),
                 wallet.getStatus(),
                 wallet.getLabel(),
+                wallet.getLabel(),
+                walletTypeDescription(wallet.getKind()),
                 wallet.getAsset(),
                 wallet.isSpendable(),
                 hasText(wallet.getXpub()),
@@ -77,5 +80,16 @@ public class KfeResponseMapper {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    public String walletTypeDescription(KfeWalletKind kind) {
+        if (kind == null) {
+            return "Carteira Global";
+        }
+        return switch (kind) {
+            case INTERNAL -> "Carteira Global";
+            case CUSTODIAL_ONCHAIN -> "Carteira Onchain";
+            case WATCH_ONLY -> "Carteira Fria";
+        };
     }
 }

@@ -24,6 +24,7 @@ import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
 import source.kfe.dto.KfeCreateWalletRequest;
 import source.kfe.model.KfeWalletKind;
+import source.kfe.model.KfeWalletName;
 import source.kfe.service.KfeWalletService;
 
 import java.util.Base64;
@@ -39,7 +40,6 @@ public class FinalizeSignupAccount {
     private static final String ACCOUNT_CREATED_TITLE = "Conta criada";
     private static final String ACCOUNT_CREATED_BODY =
             "Sua conta foi criada com sucesso.";
-    private static final String DEFAULT_ONBOARDING_WALLET_NAME = "ACCOUNT 01";
 
     private final SignupStateStore stateStore;
     private final UserServiceContract userService;
@@ -187,7 +187,8 @@ public class FinalizeSignupAccount {
                 user.getId(),
                 new KfeCreateWalletRequest(
                         KfeWalletKind.INTERNAL,
-                        DEFAULT_ONBOARDING_WALLET_NAME,
+                        KfeWalletName.DAILY,
+                        null,
                         null,
                         null,
                         null,

@@ -15,11 +15,13 @@ O Kerosene atingiu uma base técnica sólida com identidade visual forte e infra
 Toda a documentação de produto foi centralizada na pasta `docs/`. Referências desatualizadas (Hydra v5.0) e duplicatas em subpastas do backend foram removidas.
 
 ### Arquivos Canônicos:
-- `docs/API_REFERENCE.md`: Referência completa verificada (161 seções HTTP).
-- `docs/INFRASTRUCTURE.md`: Infra baseada em Docker Compose, scripts e Spring.
-- `docs/APP.md`: Detalhes do app Flutter, rotas e Tor relay.
-- `docs/IMPLEMENTATION_NEXT_STEPS.md`: Roadmap priorizado.
-- `docs/README.md`: Índice central.
+- `docs/backend/api/README.md`: Referência de API separada por domínio, extraída de controllers, DTOs e regras de segurança.
+- `docs/backend/API_REFERENCE.md`: Referência consolidada mantida para auditoria e revisão full-text (162 seções HTTP, 161 pares método/caminho únicos).
+- `docs/backend/INFRASTRUCTURE.md`: Infra baseada em Docker Compose, scripts e Spring.
+- `docs/backend/REPOSITORY_ORGANIZATION.md`: Organização do monorepo e regras de mudança estrutural.
+- `docs/backend/BUSINESS_LOGIC.md`: Domínios financeiros e regras principais do backend.
+- `docs/frontend/APP.md`: Detalhes do app Flutter, rotas e Tor relay.
+- `docs/frontend/FRONTEND_DESIGN_SYSTEM.md`: Tokens, convenções e diretrizes de UI.
 
 ---
 

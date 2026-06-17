@@ -8,6 +8,8 @@ public record KfeDashboardWallet(
         String kind,
         String status,
         String label,
+        String walletName,
+        String walletTypeDescription,
         String asset,
         boolean spendable,
         long availableSats,

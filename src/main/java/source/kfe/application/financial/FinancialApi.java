@@ -9,6 +9,7 @@ import source.kfe.dto.KfeReceivingCapabilitiesResponse;
 import source.kfe.dto.KfeSubmitTransactionRequest;
 import source.kfe.dto.KfeTransactionResponse;
 import source.kfe.dto.KfeUtxoResponse;
+import source.kfe.dto.KfeWalletNameOption;
 import source.kfe.dto.KfeWalletResponse;
 import source.kfe.repository.KfeTransactionRepository;
 import source.kfe.service.KfeResponseMapper;
@@ -69,6 +70,10 @@ public class FinancialApi {
 
     public List<KfeWalletResponse> wallets(Long userId) {
         return walletService.listWallets(userId);
+    }
+
+    public List<KfeWalletNameOption> walletNames() {
+        return walletService.availableWalletNames();
     }
 
     public KfeAddressResponse rotateAddress(Long userId, UUID walletId) {
