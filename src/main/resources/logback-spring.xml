@@ -211,35 +211,17 @@
         <appender-ref ref="ASYNC_SECURITY"/>
     </logger>
 
-    <!-- Transactions: payments, lightning, on-chain -->
-    <logger name="source.transactions"                            level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TRANSACTIONS"/>
-    </logger>
-    <logger name="source.payments"                                level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TRANSACTIONS"/>
-    </logger>
-    <logger name="source.bitcoinaccounts"                         level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TRANSACTIONS"/>
-    </logger>
-    <logger name="source.wallet"                                  level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TRANSACTIONS"/>
-    </logger>
+    <!-- KFE: financial engine, lightning, on-chain -->
     <logger name="source.kfe"                                     level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_TRANSACTIONS"/>
     </logger>
 
-    <!-- Treasury: reserve, liquidity, reconciliation -->
-    <logger name="source.treasury"                                level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TREASURY"/>
-    </logger>
+    <!-- KFE/mining: reserve, liquidity, reconciliation -->
     <logger name="source.mining"                                  level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_TREASURY"/>
     </logger>
 
-    <!-- Audit: ledger, sovereign (quorum / raft) -->
-    <logger name="source.ledger"                                  level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_AUDIT"/>
-    </logger>
+    <!-- Audit: sovereign (quorum / raft) -->
     <logger name="source.sovereign"                               level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_AUDIT"/>
     </logger>

@@ -8,6 +8,7 @@ import source.kfe.dto.KfeColdWalletPsbtRequest;
 import source.kfe.dto.KfeColdWalletPsbtResponse;
 import source.kfe.dto.KfeReceivingCapabilitiesResponse;
 import source.kfe.dto.KfeUtxoResponse;
+import source.kfe.model.KfePsbtWorkflowEntity;
 import source.kfe.model.KfeWalletAddressEntity;
 import source.kfe.model.KfeWalletAddressStatus;
 import source.kfe.model.KfeWalletEntity;
@@ -40,6 +41,7 @@ class KfeWalletNetworkServiceTest {
     private final ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreProvider = mock(ObjectProvider.class);
     private final KfeHashService hashService = new KfeHashService();
     private final KfeAuditLogService auditLogService = mock(KfeAuditLogService.class);
+    private final KfePsbtWorkflowService psbtWorkflowService = mock(KfePsbtWorkflowService.class);
     private final KfeWalletNetworkService service = new KfeWalletNetworkService(
             userRepository,
             walletRepository,
@@ -47,7 +49,8 @@ class KfeWalletNetworkServiceTest {
             blockchainClientProvider,
             bitcoinCoreProvider,
             hashService,
-            auditLogService);
+            auditLogService,
+            psbtWorkflowService);
 
     @Test
     void returnsKfeReceivingCapabilitiesFromActiveWallets() {
@@ -119,9 +122,20 @@ class KfeWalletNetworkServiceTest {
                 eq(request.amountSats()),
                 eq(request.confirmationTarget()),
                 isNull())).thenReturn(new BitcoinCoreRpcClient.FundedPsbt("psbt-value", 250L));
+        KfePsbtWorkflowEntity workflow = new KfePsbtWorkflowEntity();
+        when(psbtWorkflowService.create(
+                eq(42L),
+                eq(wallet.getId()),
+                eq("psbt-value"),
+                eq(hashService.sha256("psbt-value")),
+                eq(250L),
+                eq(request.amountSats()),
+                eq(request.destinationAddress()),
+                eq(request.inputs()))).thenReturn(workflow);
 
         KfeColdWalletPsbtResponse response = service.createColdWalletPsbt(42L, wallet.getId(), request);
 
+        assertThat(response.workflowId()).isEqualTo(workflow.getId());
         assertThat(response.psbt()).isEqualTo("psbt-value");
         assertThat(response.psbtHash()).isEqualTo(hashService.sha256("psbt-value"));
         assertThat(response.feeSats()).isEqualTo(250L);

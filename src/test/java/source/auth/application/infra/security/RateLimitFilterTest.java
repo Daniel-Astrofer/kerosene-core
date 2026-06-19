@@ -70,11 +70,11 @@ class RateLimitFilterTest {
         FilterChain chain = mock(FilterChain.class);
 
         MockHttpServletRequest firstRequest = jsonRequest(
-                "/transactions/network/onchain/send",
+                "/kfe/transactions",
                 "{\"idempotencyKey\":\"idem-1\",\"fromWalletName\":\"main\"}");
         firstRequest.addHeader("Authorization", "Bearer stable-jwt");
         MockHttpServletRequest secondRequest = jsonRequest(
-                "/transactions/network/onchain/send",
+                "/kfe/transactions",
                 "{\"idempotencyKey\":\"idem-2\",\"fromWalletName\":\"main\"}");
         secondRequest.addHeader("Authorization", "Bearer stable-jwt");
 
@@ -135,7 +135,7 @@ class RateLimitFilterTest {
         FilterChain chain = mock(FilterChain.class);
 
         MockHttpServletRequest request = jsonRequest(
-                "/transactions/network/onchain/send",
+                "/kfe/transactions",
                 "{\"fromWalletName\":\"main\",\"idempotencyKey\":\"idem-1\"}");
         request.addHeader("Authorization", "Bearer jwt");
 

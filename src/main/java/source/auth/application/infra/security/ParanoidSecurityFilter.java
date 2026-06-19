@@ -154,7 +154,7 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
         if (!constantTimePaddingEnabled) {
             return;
         }
-        if (!(path.contains("/auth/") || path.contains("/ledger/"))) {
+        if (!(path.contains("/auth/") || path.contains("/kfe/"))) {
             return;
         }
 
@@ -171,8 +171,8 @@ public class ParanoidSecurityFilter extends OncePerRequestFilter {
     }
 
     private int maxPayloadBytesForPath(String path) {
-        if (path != null && (path.startsWith("/bitcoin/psbt/")
-                || path.contains("/cold-wallets/") && path.endsWith("/psbt"))) {
+        if (path != null && (path.startsWith("/kfe/cold-wallet/psbts/")
+                || path.contains("/cold-wallet/") && path.endsWith("/psbt"))) {
             return 64 * 1024;
         }
         return 2048;

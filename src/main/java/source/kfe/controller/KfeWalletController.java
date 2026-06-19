@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ import source.kfe.dto.KfeAddressResponse;
 import source.kfe.dto.KfeColdWalletPsbtRequest;
 import source.kfe.dto.KfeColdWalletPsbtResponse;
 import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.dto.KfeUpdateWalletRequest;
 import source.kfe.dto.KfeUtxoResponse;
 import source.kfe.dto.KfeWalletNameOption;
 import source.kfe.dto.KfeWalletResponse;
@@ -54,6 +56,25 @@ public class KfeWalletController {
         return ResponseEntity.ok(ApiResponse.success(
                 "KFE wallet names retrieved.",
                 financialApi.walletNames()));
+    }
+
+    @PatchMapping("/{walletId}")
+    public ResponseEntity<ApiResponse<KfeWalletResponse>> update(
+            @PathVariable UUID walletId,
+            @Valid @RequestBody KfeUpdateWalletRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "KFE wallet updated.",
+                financialApi.updateWallet(authenticatedUserId(authentication), walletId, request)));
+    }
+
+    @PostMapping("/{walletId}/archive")
+    public ResponseEntity<ApiResponse<KfeWalletResponse>> archive(
+            @PathVariable UUID walletId,
+            Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "KFE wallet archived.",
+                financialApi.archiveWallet(authenticatedUserId(authentication), walletId)));
     }
 
     @PostMapping("/{walletId}/addresses/rotate")

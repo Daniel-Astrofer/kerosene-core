@@ -14,9 +14,7 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.common.dto.ApiResponse;
 import source.common.observability.FinancialOperationsMetrics;
 import source.kfe.rail.KfeRailException;
-import source.ledger.exceptions.LedgerExceptions;
 import source.mining.exception.MiningExceptions;
-import source.payments.exception.PaymentException;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -165,37 +163,6 @@ public class GlobalExceptionHandler {
                 Map.of("guidance", "O cofre master não pôde ser ativado para esta conta. Tente novamente em instantes."));
     }
 
-    @ExceptionHandler(LedgerExceptions.ReceiverNotReadyException.class)
-    public ResponseEntity<ApiResponse<Object>> handleReceiverNotReady(
-            LedgerExceptions.ReceiverNotReadyException ex) {
-        return buildErrorResponse(
-                HttpStatus.CONFLICT,
-                "The destination user exists but is not yet ready to receive funds.",
-                "ERR_LEDGER_RECEIVER_NOT_READY",
-                Map.of(
-                        "reason", ex.getReason().name(),
-                        "guidance", "O destinatário ainda não concluiu a ativação da carteira."));
-    }
-
-    @ExceptionHandler(source.wallet.exceptions.WalletExceptions.WalletExceptionsCreation.class)
-    public ResponseEntity<ApiResponse<Void>> handleWalletException(source.wallet.exceptions.WalletExceptions.WalletExceptionsCreation ex) {
-        incrementFinancialMetric("validation_rejected", "rejected", "wallet_exception");
-        return buildErrorResponse(
-                HttpStatus.CONFLICT,
-                ex.getMessage(),
-                "ERR_WALLET_EXCEPTION");
-    }
-
-    @ExceptionHandler(LedgerExceptions.DuplicateTransactionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDuplicateTransaction(LedgerExceptions.DuplicateTransactionException ex) {
-        incrementFinancialMetric("idempotency_hit", "conflict", "duplicate_transaction");
-        return buildErrorResponse(
-                HttpStatus.CONFLICT,
-                ex.getMessage(),
-                "ERR_DUPLICATE_TRANSACTION",
-                Map.of("guidance", "Esta transação já foi processada recentemente. Evite duplicidade."));
-    }
-
     @ExceptionHandler(KfeRailException.ProviderUnavailable.class)
     public ResponseEntity<ApiResponse<Object>> handleKfeProviderUnavailable(KfeRailException.ProviderUnavailable ex) {
         incrementFinancialMetric("provider_unavailable", "unavailable", "kfe_rail");
@@ -204,15 +171,6 @@ public class GlobalExceptionHandler {
                 sanitizeMessage(ex.getMessage(), "KFE rail provider is unavailable."),
                 "ERR_KFE_RAIL_PROVIDER_UNAVAILABLE",
                 Map.of("guidance", "Os serviços de custódia e trilhos financeiros estão indisponíveis no momento. Tente novamente mais tarde."));
-    }
-
-    @ExceptionHandler(PaymentException.class)
-    public ResponseEntity<ApiResponse<Void>> handlePaymentException(PaymentException ex) {
-        incrementFinancialMetric("validation_rejected", "rejected", "payment_exception");
-        return buildErrorResponse(
-                ex.getStatus(),
-                sanitizeMessage(ex.getMessage(), "The payment request could not be completed."),
-                ex.getErrorCode());
     }
 
     @ExceptionHandler(KeroseneException.class)

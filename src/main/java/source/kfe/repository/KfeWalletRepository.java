@@ -7,7 +7,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import source.kfe.model.KfeWalletEntity;
+import source.kfe.model.KfeWalletKind;
+import source.kfe.model.KfeWalletStatus;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +19,11 @@ import java.util.UUID;
 public interface KfeWalletRepository extends JpaRepository<KfeWalletEntity, UUID> {
 
     List<KfeWalletEntity> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    boolean existsByUserIdAndKindAndStatusIn(
+            Long userId,
+            KfeWalletKind kind,
+            Collection<KfeWalletStatus> statuses);
 
     Optional<KfeWalletEntity> findByIdAndUserId(UUID id, Long userId);
 

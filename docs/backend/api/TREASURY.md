@@ -1,46 +1,50 @@
-# Treasury API
+# Treasury API — removida
 
-Fonte principal: controllers, DTOs e configuracao de seguranca em `backend/kerosene/src/main/java/source/**`.
+A API financeira legada de Treasury foi expurgada. O pacote `source.treasury` não existe mais e nenhuma rota `REMOVED_LEGACY_FINANCIAL_ROUTE` deve ser restaurada.
 
-`docs/backend/API_REFERENCE.md` permanece como referencia consolidada e foi usado apenas como auditoria de cobertura. A politica efetiva vem de `EndpointPolicyRegistry`, `Security` e de anotacoes `@PreAuthorize`.
+## Substituto KFE
 
+Use exclusivamente:
 
-## Escopo
+```http
+GET /api/admin/kfe/reserves/overview
+```
 
-Endpoints neste arquivo: `1`.
+Implementação ativa:
 
-Controllers cobertos:
+- Controller: `source.kfe.controller.KfeReserveAdminController`
+- Service: `source.kfe.service.KfeReserveOverviewService`
+- DTO: `source.kfe.dto.KfeReserveOverviewResponse`
 
-- `TreasuryController`
+## Contrato
 
-## Endpoints
+```json
+{
+  "success": true,
+  "message": "KFE reserve overview retrieved.",
+  "data": {
+    "totalOnchainBtc": 0.0,
+    "lightningNodeBtc": 0.0,
+    "inboundLiquidityBtc": 0.0,
+    "outboundLiquidityBtc": 0.0,
+    "reservedOnchainBtc": 0.0,
+    "reservedLightningBtc": 0.0,
+    "availableOnchainBtc": 0.0,
+    "availableLightningBtc": 0.0,
+    "lightningSendsAllowed": true,
+    "liquidityState": "HEALTHY"
+  }
+}
+```
 
-| Metodo | Path | Controller.handler | Auth | Request | Response | Fonte |
-| --- | --- | --- | --- | --- | --- | --- |
-| `GET` | `/treasury/overview` | `TreasuryController.overview` | ADMIN/METHOD_SECURITY<br>`@PreAuthorize("hasRole('ADMIN')")`<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | none | `ResponseEntity<TreasuryOverviewDTO>` | [TreasuryController.java](../../../backend/kerosene/src/main/java/source/treasury/controller/TreasuryController.java#L32) |
+## Regra arquitetural
 
-## DTOs e Payloads
+Qualquer visão administrativa de reservas, liquidez, payout ou reconciliação financeira deve nascer em `source.kfe` ou sob `/api/admin/kfe/**`.
 
-### `TreasuryOverviewDTO`
+Não reintroduzir:
 
-Fonte: [TreasuryOverviewDTO.java](../../../backend/kerosene/src/main/java/source/treasury/dto/TreasuryOverviewDTO.java)
-
-Campos observados no DTO:
-
-- `BigDecimal totalOnchainBtc`
-- `BigDecimal lightningNodeBtc`
-- `BigDecimal inboundLiquidityBtc`
-- `BigDecimal outboundLiquidityBtc`
-- `BigDecimal reservedOnchainBtc`
-- `BigDecimal reservedLightningBtc`
-- `BigDecimal availableOnchainBtc`
-- `BigDecimal availableLightningBtc`
-- `boolean lightningSendsAllowed`
-- `String liquidityState`
-
-
-## Notas de Seguranca
-
-- Rotas sem politica declarada sao negadas por `anyRequest().denyAll()` em `Security`.
-- Regras por `@PreAuthorize` prevalecem como seguranca em nivel de metodo.
-- Bodies mutantes seguem os filtros globais de content-type, tamanho de payload e `Digest` quando enviado.
+```text
+source.treasury
+/treasury/**
+TreasuryOverviewDTO
+```

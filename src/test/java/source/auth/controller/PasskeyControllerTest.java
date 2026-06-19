@@ -22,7 +22,7 @@ import source.auth.dto.passkey.PasskeyVerifyRequest;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
-import source.transactions.exception.ExternalPaymentsExceptions;
+import source.kfe.rail.KfeRailException;
 
 import java.util.Base64;
 import java.util.Optional;
@@ -293,10 +293,10 @@ class PasskeyControllerTest {
         when(passkeyService.extractOriginHostFromClientData("android-client-data"))
                 .thenReturn("android:apk-key-hash:kerosene");
         when(finalizeSignupAccount.execute("session-1"))
-                .thenThrow(new ExternalPaymentsExceptions.CustodyProviderUnavailable("custody unavailable"));
+                .thenThrow(new KfeRailException.ProviderUnavailable("custody unavailable"));
 
         assertThrows(
-                ExternalPaymentsExceptions.CustodyProviderUnavailable.class,
+                KfeRailException.ProviderUnavailable.class,
                 () -> controller.finishOnboardingRegistration(
                     "session-1",
                     registrationRequest("android-client-data")));

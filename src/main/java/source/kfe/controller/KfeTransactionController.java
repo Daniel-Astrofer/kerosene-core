@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 import source.common.dto.ApiResponse;
 import source.kfe.application.financial.FinancialApi;
 import source.kfe.dto.KfeSubmitTransactionRequest;
+import source.kfe.dto.KfeTransactionQuoteRequest;
+import source.kfe.dto.KfeTransactionQuoteResponse;
 import source.kfe.dto.KfeTransactionResponse;
 
 import java.util.UUID;
@@ -39,6 +41,14 @@ public class KfeTransactionController {
             KfeTransactionResponse response = financialApi.existingTransactionByIdempotency(userId, request.idempotencyKey(), requestHash);
             return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
         }
+    }
+
+    @PostMapping("/quote")
+    public ResponseEntity<ApiResponse<KfeTransactionQuoteResponse>> quote(
+            @Valid @RequestBody KfeTransactionQuoteRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "KFE transaction quote calculated.",
+                financialApi.quoteTransaction(request)));
     }
 
     @GetMapping("/{transactionId}")

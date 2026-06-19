@@ -8,11 +8,15 @@ import source.kfe.dto.KfeCreateWalletRequest;
 import source.kfe.dto.KfeReceivingCapabilitiesResponse;
 import source.kfe.dto.KfeSubmitTransactionRequest;
 import source.kfe.dto.KfeTransactionResponse;
+import source.kfe.dto.KfeTransactionQuoteRequest;
+import source.kfe.dto.KfeTransactionQuoteResponse;
+import source.kfe.dto.KfeUpdateWalletRequest;
 import source.kfe.dto.KfeUtxoResponse;
 import source.kfe.dto.KfeWalletNameOption;
 import source.kfe.dto.KfeWalletResponse;
 import source.kfe.repository.KfeTransactionRepository;
 import source.kfe.service.KfeResponseMapper;
+import source.kfe.service.KfePricingService;
 import source.kfe.service.KfeTransactionEngine;
 import source.kfe.service.KfeWalletNetworkService;
 import source.kfe.service.KfeWalletService;
@@ -26,6 +30,7 @@ public class FinancialApi {
     private final KfeTransactionEngine transactionEngine;
     private final KfeTransactionRepository transactionRepository;
     private final KfeResponseMapper responseMapper;
+    private final KfePricingService pricingService;
     private final KfeWalletService walletService;
     private final KfeWalletNetworkService walletNetworkService;
 
@@ -33,11 +38,13 @@ public class FinancialApi {
             KfeTransactionEngine transactionEngine,
             KfeTransactionRepository transactionRepository,
             KfeResponseMapper responseMapper,
+            KfePricingService pricingService,
             KfeWalletService walletService,
             KfeWalletNetworkService walletNetworkService) {
         this.transactionEngine = transactionEngine;
         this.transactionRepository = transactionRepository;
         this.responseMapper = responseMapper;
+        this.pricingService = pricingService;
         this.walletService = walletService;
         this.walletNetworkService = walletNetworkService;
     }
@@ -57,6 +64,22 @@ public class FinancialApi {
         return transactionEngine.requestHash(userId, request);
     }
 
+    public KfeTransactionQuoteResponse quoteTransaction(KfeTransactionQuoteRequest request) {
+        KfePricingService.Quote quote = pricingService.quote(
+                request.rail(),
+                request.direction(),
+                request.amountSats(),
+                request.networkFeeSats());
+        return new KfeTransactionQuoteResponse(
+                request.rail(),
+                request.direction(),
+                quote.grossAmountSats(),
+                quote.receiverAmountSats(),
+                quote.networkFeeSats(),
+                quote.totalDebitSats(),
+                quote.keroseneFeeSats());
+    }
+
     public KfeTransactionResponse transaction(Long userId, UUID transactionId) {
         return transactionRepository
                 .findByIdAndUserId(transactionId, userId)
@@ -70,6 +93,14 @@ public class FinancialApi {
 
     public List<KfeWalletResponse> wallets(Long userId) {
         return walletService.listWallets(userId);
+    }
+
+    public KfeWalletResponse updateWallet(Long userId, UUID walletId, KfeUpdateWalletRequest request) {
+        return walletService.updateWallet(userId, walletId, request);
+    }
+
+    public KfeWalletResponse archiveWallet(Long userId, UUID walletId) {
+        return walletService.archiveWallet(userId, walletId);
     }
 
     public List<KfeWalletNameOption> walletNames() {

@@ -1,43 +1,207 @@
 # Bitcoin Accounts API
 
-Fonte principal: controllers, DTOs e configuracao de seguranca em `backend/kerosene/src/main/java/source/**`.
+Documentação corporativa da antiga família de contas Bitcoin e dos substitutos ativos no KFE.
 
-`docs/backend/API_REFERENCE.md` permanece como referencia consolidada e foi usado apenas como auditoria de cobertura. A politica efetiva vem de `EndpointPolicyRegistry`, `Security` e de anotacoes `@PreAuthorize`.
+Fonte real inspecionada:
 
+- Lista atual de controllers em `backend/kerosene/src/main/java/**`.
+- `backend/kerosene/src/main/java/source/kfe/controller/KfeWalletController.java`.
+- `backend/kerosene/src/main/java/source/kfe/controller/KfeTransactionController.java`.
+- `backend/kerosene/src/main/java/source/common/security/EndpointPolicyRegistry.java`.
 
-## Escopo
+## Estado real do serviço
 
-Endpoints neste arquivo: `18`.
+A documentação anterior citava `BitcoinAccountsController`, mas esse controller **não existe** no código-fonte atual. Portanto, `/bitcoin/**` não deve ser documentado como API ativa.
 
-Controllers cobertos:
+O fluxo Bitcoin ativo está em KFE:
 
-- `BitcoinAccountsController`
+| Caso de uso | Endpoint ativo | Método | Documento canônico |
+| --- | --- | --- | --- |
+| Criar carteira interna/custodial/cold | `/kfe/wallets` | `POST` | `KFE.md` |
+| Listar carteiras | `/kfe/wallets` | `GET` | `KFE.md` |
+| Dashboard de saldo total e por carteira | `/kfe/dashboard` | `GET` | `KFE.md` |
+| Criar/rotacionar endereço de recebimento | `/kfe/wallets/{walletId}/addresses/rotate` | `POST` | `KFE.md` |
+| Listar UTXOs cold wallet | `/kfe/wallets/{walletId}/utxos` | `GET` | `KFE.md` |
+| Criar PSBT cold wallet | `/kfe/wallets/{walletId}/cold-wallet/psbt` | `POST` | `KFE.md` |
+| Quote de transação | `/kfe/transactions/quote` | `POST` | `KFE.md` |
+| Submeter transação | `/kfe/transactions` | `POST` | `KFE.md` |
 
-## Endpoints
+## Headers do fluxo ativo
 
-| Metodo | Path | Controller.handler | Auth | Request | Response | Fonte |
-| --- | --- | --- | --- | --- | --- | --- |
-| `GET` | `/bitcoin/accounts` | `BitcoinAccountsController.list` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | none | `ApiResponse<List<Map<String, Object>>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L51) |
-| `POST` | `/bitcoin/accounts/cold-wallet` | `BitcoinAccountsController.createColdWallet` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | body: CreateColdWalletRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L67) |
-| `POST` | `/bitcoin/accounts/internal-card` | `BitcoinAccountsController.createInternalCard` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | body: CreateInternalCardRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L58) |
-| `GET` | `/bitcoin/accounts/{accountId}/receive-requests` | `BitcoinAccountsController.listReceiveRequests` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: accountId: UUID | `ApiResponse<List<Map<String, Object>>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L99) |
-| `POST` | `/bitcoin/accounts/{accountId}/receive-requests` | `BitcoinAccountsController.createReceiveRequest` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: accountId: UUID<br>body: CreateReceiveRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L84) |
-| `GET` | `/bitcoin/cold-wallets/{coldWalletId}/psbt` | `BitcoinAccountsController.listColdWalletPsbt` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: coldWalletId: UUID | `ApiResponse<List<Map<String, Object>>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L177) |
-| `POST` | `/bitcoin/cold-wallets/{coldWalletId}/psbt` | `BitcoinAccountsController.createPsbt` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: coldWalletId: UUID<br>body: CreatePsbtRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L152) |
-| `GET` | `/bitcoin/cold-wallets/{coldWalletId}/utxos` | `BitcoinAccountsController.listColdWalletUtxos` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: coldWalletId: UUID | `ApiResponse<List<Map<String, Object>>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L168) |
-| `GET` | `/bitcoin/psbt/{workflowId}` | `BitcoinAccountsController.getPsbt` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: workflowId: UUID | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L200) |
-| `POST` | `/bitcoin/psbt/{workflowId}/signed` | `BitcoinAccountsController.submitSignedPsbt` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: workflowId: UUID<br>body: SubmitSignedPsbtRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L186) |
-| `POST` | `/bitcoin/receive-requests/{id}/expire` | `BitcoinAccountsController.expireReceiveRequest` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: id: UUID | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L133) |
-| `POST` | `/bitcoin/receive-requests/{id}/hide` | `BitcoinAccountsController.hideReceiveRequest` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: id: UUID | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L124) |
-| `GET` | `/bitcoin/receive-requests/{id}/status` | `BitcoinAccountsController.receiveStatus` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: id: UUID | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L115) |
-| `POST` | `/bitcoin/receive-requests/{id}/user-action` | `BitcoinAccountsController.receiveUserAction` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: id: UUID<br>body: UserActionRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L142) |
-| `GET` | `/bitcoin/receive/{publicCode}` | `BitcoinAccountsController.publicReceive` | PUBLIC<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: publicCode: String | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L108) |
-| `GET` | `/bitcoin/tax-events` | `BitcoinAccountsController.listTaxEvents` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | none | `ApiResponse<List<Map<String, Object>>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L209) |
-| `GET` | `/bitcoin/tax-events/export` | `BitcoinAccountsController.exportTaxEvents` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | query: format: String | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L216) |
-| `POST` | `/bitcoin/tax-events/{eventId}/classify` | `BitcoinAccountsController.classifyTaxEvent` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: eventId: UUID<br>body: ClassifyTaxEventRequest | `ApiResponse<Map<String, Object>>` | [BitcoinAccountsController.java](../../../backend/kerosene/src/main/java/source/bitcoinaccounts/controller/BitcoinAccountsController.java#L225) |
+| Nome | Tipo | Obrigatório | Descrição | Exemplo |
+| --- | --- | --- | --- | --- |
+| `Authorization` | string | Sim | JWT Bearer do usuário. | `Bearer <JWT>` |
+| `Content-Type` | string | Sim em `POST` | JSON. | `application/json` |
+| `Accept` | string | Opcional | JSON. | `application/json` |
+| `X-Correlation-Id` | string | Recomendado | Rastreabilidade. | `btc-20260619-0001` |
 
-## Notas de Seguranca
+## Endpoint ativo: Criar carteira Bitcoin via KFE
 
-- Rotas sem politica declarada sao negadas por `anyRequest().denyAll()` em `Security`.
-- Regras por `@PreAuthorize` prevalecem como seguranca em nivel de metodo.
-- Bodies mutantes seguem os filtros globais de content-type, tamanho de payload e `Digest` quando enviado.
+```http
+POST /kfe/wallets
+```
+
+### O que faz
+
+Cria uma carteira Bitcoin KFE por método de custódia: `INTERNAL`, `CUSTODIAL_ONCHAIN` ou `WATCH_ONLY`.
+
+### Regras importantes
+
+- O backend limita uma carteira ativa/em criação por usuário e por `kind`.
+- `WATCH_ONLY` deve receber material público (`xpub` ou `descriptor`) para funcionar corretamente.
+- `issueInitialAddress` só deve ser usado quando o backend consegue emitir endereço para aquele tipo.
+
+### Request body
+
+| Campo | Tipo | Obrigatório | Nullable | Default | Validações | Descrição | Exemplo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `kind` | enum | Sim | Não | nenhum | `INTERNAL`, `CUSTODIAL_ONCHAIN`, `WATCH_ONLY` | Método de custódia. | `WATCH_ONLY` |
+| `name` | enum | Não | Sim | nenhum | `INVESTMENT`, `DAILY`, `VEHICLE`, `FUTURE_EXPENSES` | Nome controlado. | `INVESTMENT` |
+| `label` | string | Não | Sim | nenhum | máximo 96 | Rótulo exibível. | `Cold Ledger` |
+| `xpub` | string | Condicional | Sim | nenhum | material público Bitcoin | XPUB para watch-only/cold. | `xpub6...` |
+| `descriptor` | string | Não | Sim | nenhum | descriptor Bitcoin | Política/script de carteira. | `wpkh([f23ab...]xpub...)` |
+| `fingerprint` | string | Não | Sim | nenhum | fingerprint de chave | Master fingerprint. | `f23ab912` |
+| `derivationPath` | string | Não | Sim | nenhum | BIP path | Caminho de derivação. | `m/84'/0'/0'` |
+| `issueInitialAddress` | boolean | Não | Não | `false` | boolean | Solicita endereço inicial. | `true` |
+
+### Exemplo curl
+
+```bash
+curl -X POST "$BASE_URL/kfe/wallets" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "WATCH_ONLY",
+    "label": "Cold wallet",
+    "xpub": "xpub6...",
+    "fingerprint": "f23ab912",
+    "derivationPath": "m/84h/0h/0h",
+    "issueInitialAddress": true
+  }'
+```
+
+### Response de sucesso
+
+Status: `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "KFE wallet created.",
+  "data": {
+    "id": "018f5d42-7b46-7d9f-9a1b-c405c8d6e020",
+    "kind": "WATCH_ONLY",
+    "name": null,
+    "label": "Cold wallet",
+    "activeAddress": "bc1q...",
+    "balanceSats": 0,
+    "availableBalanceSats": 0,
+    "status": "ACTIVE",
+    "createdAt": "2026-06-19T12:00:00",
+    "updatedAt": "2026-06-19T12:00:00"
+  },
+  "timestamp": "2026-06-19T12:00:00"
+}
+```
+
+## Endpoint ativo: Listar UTXOs de cold wallet
+
+```http
+GET /kfe/wallets/{walletId}/utxos
+```
+
+### O que faz
+
+Retorna UTXOs associados a uma carteira watch-only/cold para construção de PSBT.
+
+### Path parameters
+
+| Nome | Tipo | Obrigatório | Descrição | Exemplo |
+| --- | --- | --- | --- | --- |
+| `walletId` | UUID | Sim | Carteira cold/watch-only do usuário. | `018f5d42-7b46-7d9f-9a1b-c405c8d6e020` |
+
+### Response de sucesso
+
+```json
+{
+  "success": true,
+  "message": "KFE wallet UTXOs retrieved.",
+  "data": [
+    {
+      "txid": "5e3f...",
+      "vout": 0,
+      "valueSats": 25000,
+      "address": "bc1q...",
+      "confirmations": 6
+    }
+  ],
+  "timestamp": "2026-06-19T12:00:00"
+}
+```
+
+## Endpoint ativo: Criar PSBT de cold wallet
+
+```http
+POST /kfe/wallets/{walletId}/cold-wallet/psbt
+```
+
+### Request body
+
+| Campo | Tipo | Obrigatório | Descrição | Exemplo |
+| --- | --- | --- | --- | --- |
+| `destinationAddress` | string | Sim | Endereço Bitcoin destino. | `bc1q...` |
+| `amountSats` | long | Sim | Valor em satoshis. | `10000` |
+| `feeRateSatsPerVbyte` | long/decimal | Sim | Fee rate para montagem da PSBT. | `12` |
+| `inputs` | array | Não | UTXOs escolhidos manualmente. | `[{"txid":"...","vout":0}]` |
+
+### Response de sucesso
+
+```json
+{
+  "success": true,
+  "message": "KFE cold wallet PSBT created.",
+  "data": {
+    "psbt": "cHNidP8BA...",
+    "psbtHash": "sha256:...",
+    "feeSats": 1200,
+    "amountSats": 10000,
+    "destinationAddress": "bc1q..."
+  },
+  "timestamp": "2026-06-19T12:00:00"
+}
+```
+
+## Rotas legadas removidas
+
+As rotas `REMOVED_LEGACY_FINANCIAL_ROUTE`, `REMOVED_LEGACY_FINANCIAL_ROUTE`, `REMOVED_LEGACY_FINANCIAL_ROUTE`, `REMOVED_LEGACY_FINANCIAL_ROUTE` e `REMOVED_LEGACY_FINANCIAL_ROUTE` dependiam de `BitcoinAccountsController`, que não existe no código atual. Trate-as como `STALE`.
+
+## PSBT workflow KFE ativo
+
+A criação de PSBT de cold wallet agora é KFE-native e gera workflow persistido. Use os endpoints abaixo em vez do package legado `source.bitcoinaccounts`.
+
+| Método | Path | Auth | Para que serve |
+| --- | --- | --- | --- |
+| `GET` | `/kfe/wallets/{walletId}/utxos` | `AUTHENTICATED` | Lista UTXOs da carteira watch-only/cold wallet. |
+| `POST` | `/kfe/wallets/{walletId}/cold-wallet/psbt` | `AUTHENTICATED` | Cria PSBT e workflow KFE. |
+| `GET` | `/api/admin/kfe/reserves/psbts` | `ADMIN` | Lista workflows, com query opcional `walletId`. |
+| `GET` | `/api/admin/kfe/reserves/psbts/{workflowId}` | `ADMIN` | Consulta um workflow. |
+| `POST` | `/api/admin/kfe/reserves/psbts/{workflowId}/signed` | `ADMIN` | Anexa payload PSBT assinado. |
+| `POST` | `/api/admin/kfe/reserves/psbts/{workflowId}/broadcast` | `ADMIN` | Faz broadcast do workflow finalizado. |
+
+`KfePsbtWorkflowResponse` retorna `id`, `userId`, `walletId`, `status`, `psbt`, `psbtHash`, `signedPsbtHash`, `rawTxHash`, `broadcastTxid`, `amountSats`, `feeSats`, `destinationAddress`, `inputs`, `failureMessage`, `createdAt`, `updatedAt`, `signedAt` e `broadcastAt`.
+
+Status possíveis do workflow: `CREATED`, `SIGNED`, `FINALIZED`, `BROADCAST`, `FAILED`.
+
+## Status codes
+
+| Status | Quando ocorre | Como resolver |
+| --- | --- | --- |
+| `200 OK` | Listagens, UTXOs, rotação ou PSBT retornados. | Consumir `data`. |
+| `201 Created` | Carteira criada. | Persistir `data.id`. |
+| `400 Bad Request` | Body inválido, enum inválido, UUID inválido. | Corrigir payload/path. |
+| `401 Unauthorized` | JWT ausente/inválido. | Reautenticar. |
+| `403 Forbidden` | Carteira de outro usuário ou rota legada sem controller. | Usar token/rota ativa correta. |
+| `404 Not Found` | Carteira inexistente ou rota legada removida. | Conferir ID/path. |
+| `409 Conflict` | Já existe carteira ativa para o mesmo `kind`. | Usar carteira existente. |
+| `422 Unprocessable Entity` | Material público ausente ou regra de custódia não satisfeita. | Corrigir `xpub`/`descriptor`/kind. |
+| `500 Internal Server Error` | Falha inesperada de serviço. | Investigar logs. |

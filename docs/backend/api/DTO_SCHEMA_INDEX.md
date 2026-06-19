@@ -724,7 +724,7 @@ Fonte: [OnchainSendRequestDTO.java](../../../backend/kerosene/src/main/java/sour
 
 ## `OperationalReserveProofResponseDTO`
 
-Fonte: [OperationalReserveProofResponseDTO.java](../../../backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java)
+Fonte: [OperationalReserveProofResponseDTO.java](../../../backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java)
 
 - `Instant generatedAt`
 - `String status`
@@ -957,9 +957,9 @@ Fonte: [TreasuryAuditConfigRequestDTO.java](../../../backend/kerosene/src/main/j
 - `BigDecimal maxWithdrawLimit`
 - `String auditXpub`
 
-## `TreasuryOverviewDTO`
+## `KfeReserveOverviewResponse`
 
-Fonte: [TreasuryOverviewDTO.java](../../../backend/kerosene/src/main/java/source/treasury/dto/TreasuryOverviewDTO.java)
+Fonte: [KfeReserveOverviewResponse.java](../../../backend/kerosene/src/main/java/source/kfe/dto/KfeReserveOverviewResponse.java)
 
 - `BigDecimal totalOnchainBtc`
 - `BigDecimal lightningNodeBtc`

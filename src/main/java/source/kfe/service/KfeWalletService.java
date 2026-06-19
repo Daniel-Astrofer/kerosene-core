@@ -6,8 +6,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import source.common.service.AddressDerivationService;
+import source.auth.application.service.util.DevBalanceInjector;
 import source.kfe.dto.KfeAddressResponse;
 import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.dto.KfeUpdateWalletRequest;
 import source.kfe.dto.KfeWalletNameOption;
 import source.kfe.dto.KfeWalletResponse;
 import source.kfe.model.KfeWalletAddressEntity;
@@ -32,6 +34,11 @@ public class KfeWalletService {
     private static final Logger log = LoggerFactory.getLogger(KfeWalletService.class);
     private static final String ASSET_BTC = "BTC";
     private static final int FAILURE_REASON_MAX_LENGTH = 180;
+    private static final List<KfeWalletStatus> UNIQUE_WALLET_STATUSES = List.of(
+            KfeWalletStatus.CREATING,
+            KfeWalletStatus.ACTIVE,
+            KfeWalletStatus.FROZEN,
+            KfeWalletStatus.ROTATING_ADDRESS);
 
     private final KfeWalletRepository walletRepository;
     private final KfeWalletAddressRepository addressRepository;
@@ -44,6 +51,7 @@ public class KfeWalletService {
     private final KfeDashboardPublisher dashboardPublisher;
     private final AddressDerivationService addressDerivationService;
     private final KfeReceiveAddressIssuer receiveAddressIssuer;
+    private final DevBalanceInjector devBalanceInjector;
     private final TransactionTemplate transactionTemplate;
 
     public KfeWalletService(
@@ -58,6 +66,7 @@ public class KfeWalletService {
             KfeDashboardPublisher dashboardPublisher,
             AddressDerivationService addressDerivationService,
             KfeReceiveAddressIssuer receiveAddressIssuer,
+            DevBalanceInjector devBalanceInjector,
             TransactionTemplate transactionTemplate) {
         this.walletRepository = walletRepository;
         this.addressRepository = addressRepository;
@@ -70,6 +79,7 @@ public class KfeWalletService {
         this.dashboardPublisher = dashboardPublisher;
         this.addressDerivationService = addressDerivationService;
         this.receiveAddressIssuer = receiveAddressIssuer;
+        this.devBalanceInjector = devBalanceInjector;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -78,7 +88,7 @@ public class KfeWalletService {
 
         PendingWallet pending = Objects.requireNonNull(transactionTemplate.execute(status ->
                 createPendingWallet(userId, request)));
-        String proposalHash = walletCreateProposalHash(userId, pending);
+        String proposalHash = kfeWalletCreateProposalHash(userId, pending);
         KfeQuorumGateway.Result quorum = requireWalletCreateQuorum(userId, pending, proposalHash);
         String mpcPublicKey = provisionMpcPublicKey(userId, pending);
 
@@ -96,6 +106,7 @@ public class KfeWalletService {
     }
 
     private PendingWallet createPendingWallet(Long userId, KfeCreateWalletRequest request) {
+        requireNoExistingWalletForKind(userId, request.kind());
         KfeWalletEntity wallet = new KfeWalletEntity();
         wallet.setUserId(userId);
         wallet.setKind(request.kind());
@@ -112,6 +123,12 @@ public class KfeWalletService {
         balanceService.createEmptyBalance(wallet.getId(), wallet.getAsset());
         dashboardPublisher.publishAfterCommit(userId);
         return new PendingWallet(wallet.getId(), wallet.getKind(), wallet.getQuorumPolicyHash());
+    }
+
+    private void requireNoExistingWalletForKind(Long userId, KfeWalletKind kind) {
+        if (walletRepository.existsByUserIdAndKindAndStatusIn(userId, kind, UNIQUE_WALLET_STATUSES)) {
+            throw new IllegalArgumentException("Já existe uma carteira ativa ou em criação para este método de custódia.");
+        }
     }
 
     private KfeQuorumGateway.Result requireWalletCreateQuorum(
@@ -205,6 +222,53 @@ public class KfeWalletService {
                 .toList();
     }
 
+    @Transactional
+    public KfeWalletResponse updateWallet(Long userId, UUID walletId, KfeUpdateWalletRequest request) {
+        KfeWalletEntity wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("KFE wallet not found."));
+        if (wallet.getStatus() == KfeWalletStatus.ARCHIVED) {
+            throw new IllegalStateException("Archived wallets cannot be updated.");
+        }
+        if (request == null || !hasText(request.label())) {
+            throw new IllegalArgumentException("Wallet label is required.");
+        }
+        wallet.setLabel(request.label().trim());
+        wallet = walletRepository.save(wallet);
+        auditLogService.record(
+                "KFE_WALLET_UPDATED",
+                null,
+                wallet.getId(),
+                null,
+                null,
+                Map.of("walletId", wallet.getId().toString(), "label", wallet.getLabel()));
+        dashboardPublisher.publishAfterCommit(userId);
+        return responseMapper.toWalletResponse(wallet);
+    }
+
+    @Transactional
+    public KfeWalletResponse archiveWallet(Long userId, UUID walletId) {
+        KfeWalletEntity wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("KFE wallet not found."));
+        if (wallet.getStatus() == KfeWalletStatus.ARCHIVED) {
+            return responseMapper.toWalletResponse(wallet);
+        }
+        if (wallet.getStatus() == KfeWalletStatus.ROTATING_ADDRESS || wallet.getStatus() == KfeWalletStatus.CREATING) {
+            throw new IllegalStateException("Wallet cannot be archived while it is being created or rotated.");
+        }
+        wallet.setStatus(KfeWalletStatus.ARCHIVED);
+        wallet.setSpendable(false);
+        wallet = walletRepository.save(wallet);
+        auditLogService.record(
+                "KFE_WALLET_ARCHIVED",
+                null,
+                wallet.getId(),
+                null,
+                null,
+                Map.of("walletId", wallet.getId().toString()));
+        dashboardPublisher.publishAfterCommit(userId);
+        return responseMapper.toWalletResponse(wallet);
+    }
+
     public List<KfeWalletNameOption> availableWalletNames() {
         return List.of(KfeWalletName.values()).stream()
                 .map(name -> new KfeWalletNameOption(name, name.label()))
@@ -263,6 +327,12 @@ public class KfeWalletService {
         wallet.setStatus(KfeWalletStatus.ACTIVE);
         walletRepository.save(wallet);
 
+        DevBalanceInjector.ClaimOutcome bonusOutcome =
+                devBalanceInjector.claimTestBalance(userId, walletId);
+        if (bonusOutcome == DevBalanceInjector.ClaimOutcome.CLAIMED) {
+            log.info("[DEV] Granted 100 BTC receive bonus for wallet {}", walletId);
+        }
+
         auditLogService.record(
                 "KFE_WALLET_ADDRESS_ROTATED",
                 null,
@@ -283,11 +353,6 @@ public class KfeWalletService {
                 && !hasText(request.xpub())
                 && !hasText(request.descriptor())) {
             throw new IllegalArgumentException("WATCH_ONLY wallets require xpub or descriptor.");
-        }
-        if (request.kind() == KfeWalletKind.CUSTODIAL_ONCHAIN
-                && !hasText(request.xpub())) {
-            throw new IllegalArgumentException(
-                    "CUSTODIAL_ONCHAIN wallets require an XPUB until MPC sidecar exposes native XPUB generation.");
         }
         if (Boolean.TRUE.equals(request.issueInitialAddress())
                 && !hasText(request.initialAddress())
@@ -374,7 +439,7 @@ public class KfeWalletService {
                 + "|quorum=healthy-unanimous-min-2|pricing=onchain-0.9pct");
     }
 
-    private String walletCreateProposalHash(Long userId, PendingWallet wallet) {
+    private String kfeWalletCreateProposalHash(Long userId, PendingWallet wallet) {
         return hashService.sha256("KFE_WALLET_CREATE|" + userId + "|" + wallet.walletId()
                 + "|" + wallet.kind() + "|" + wallet.quorumPolicyHash());
     }
@@ -434,10 +499,13 @@ public class KfeWalletService {
     }
 
     private String resolveWalletLabel(KfeCreateWalletRequest request) {
+        if (hasText(request.label())) {
+            return request.label().trim();
+        }
         if (request.name() != null) {
             return request.name().label();
         }
-        return KfeWalletName.fromLabel(request.label()).label();
+        throw new IllegalArgumentException("Wallet label is required.");
     }
 
     private String blankToNull(String value) {

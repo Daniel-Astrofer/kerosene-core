@@ -45,6 +45,7 @@ public class KfeWalletNetworkService {
     private final ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClientProvider;
     private final KfeHashService hashService;
     private final KfeAuditLogService auditLogService;
+    private final KfePsbtWorkflowService psbtWorkflowService;
 
     public KfeWalletNetworkService(
             UserRepository userRepository,
@@ -53,7 +54,8 @@ public class KfeWalletNetworkService {
             ObjectProvider<BlockchainClient> blockchainClientProvider,
             ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClientProvider,
             KfeHashService hashService,
-            KfeAuditLogService auditLogService) {
+            KfeAuditLogService auditLogService,
+            KfePsbtWorkflowService psbtWorkflowService) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.addressRepository = addressRepository;
@@ -61,6 +63,7 @@ public class KfeWalletNetworkService {
         this.bitcoinCoreRpcClientProvider = bitcoinCoreRpcClientProvider;
         this.hashService = hashService;
         this.auditLogService = auditLogService;
+        this.psbtWorkflowService = psbtWorkflowService;
     }
 
     @Transactional(readOnly = true)
@@ -176,7 +179,18 @@ public class KfeWalletNetworkService {
                         "feeSats", String.valueOf(fundedPsbt.feeSats()),
                         "inputCount", String.valueOf(inputs.size())));
 
+        var workflow = psbtWorkflowService.create(
+                userId,
+                walletId,
+                fundedPsbt.psbt(),
+                psbtHash,
+                fundedPsbt.feeSats(),
+                request.amountSats(),
+                request.destinationAddress().trim(),
+                inputs);
+
         return new KfeColdWalletPsbtResponse(
+                workflow.getId(),
                 fundedPsbt.psbt(),
                 psbtHash,
                 fundedPsbt.feeSats(),

@@ -20,13 +20,13 @@ public class AccountActivationService {
 
     public AccountActivationStatusDTO getStatus(Long userId) {
         UserDataBase user = requireUser(userId);
-        return AccountActivationStatusDTO.from(new ActivationUserView(user), null);
+        return AccountActivationStatusDTO.from(new ActivationUserView(user));
     }
 
     @Transactional
     public AccountActivationStatusDTO createOrReuseLink(Long userId) {
         UserDataBase user = requireUser(userId);
-        return AccountActivationStatusDTO.from(new ActivationUserView(user), null);
+        return AccountActivationStatusDTO.from(new ActivationUserView(user));
     }
 
     @Transactional

@@ -3,7 +3,7 @@ syntax = "proto3";
 package walletrpc;
 
 option java_multiple_files = true;
-option java_package = "source.transactions.infra.lnd.proto.walletrpc";
+option java_package = "source.kfe.rail.lnd.proto.walletrpc";
 
 service WalletKit {
     rpc ListAddresses (ListAddressesRequest) returns (ListAddressesResponse);

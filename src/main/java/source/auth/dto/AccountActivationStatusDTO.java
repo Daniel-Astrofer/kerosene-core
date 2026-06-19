@@ -1,7 +1,5 @@
 package source.auth.dto;
 
-import source.transactions.dto.PaymentLinkDTO;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -19,15 +17,15 @@ public record AccountActivationStatusDTO(
     public static final String INBOUND_BLOCKED_MESSAGE =
             "Para receber fundos dentro da plataforma, deposite algum valor primeiro.";
 
-    public static AccountActivationStatusDTO from(UserDataBaseView user, PaymentLinkDTO link) {
+    public static AccountActivationStatusDTO from(UserDataBaseView user) {
         return new AccountActivationStatusDTO(
                 user.isActive(),
                 user.isActive(),
                 !user.isActive(),
                 BigDecimal.ZERO,
-                link != null ? link.getId() : null,
-                link != null ? link.getDepositAddress() : null,
-                link != null ? link.getStatus() : null,
+                null,
+                null,
+                null,
                 user.isActive()
                         ? null
                         : INBOUND_BLOCKED_MESSAGE,

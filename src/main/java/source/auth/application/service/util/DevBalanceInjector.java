@@ -12,6 +12,7 @@ import source.kfe.service.KfeBalanceService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.UUID;
 
 @Service
 public class DevBalanceInjector {
@@ -46,7 +47,7 @@ public class DevBalanceInjector {
      * Disabled by default and must be explicitly enabled via configuration.
      */
     public void injectTestBalance(UserDataBase user) {
-        claimTestBalance(user);
+        claimTestBalance(user, null);
     }
 
     public boolean isEnabled() {
@@ -54,6 +55,16 @@ public class DevBalanceInjector {
     }
 
     public ClaimOutcome claimTestBalance(UserDataBase user) {
+        return claimTestBalance(user, null);
+    }
+
+    public ClaimOutcome claimTestBalance(Long userId, UUID preferredWalletId) {
+        return userRepository.findById(userId)
+                .map(user -> claimTestBalance(user, preferredWalletId))
+                .orElse(ClaimOutcome.NO_WALLET);
+    }
+
+    public ClaimOutcome claimTestBalance(UserDataBase user, UUID preferredWalletId) {
         if (!enabled) {
             return ClaimOutcome.DISABLED;
         }
@@ -63,10 +74,12 @@ public class DevBalanceInjector {
         }
 
         try {
-            KfeWalletEntity wallet = walletRepository.findByUserIdOrderByCreatedAtDesc(user.getId())
-                    .stream()
-                    .findFirst()
-                    .orElse(null);
+            KfeWalletEntity wallet = preferredWalletId != null
+                    ? walletRepository.findByIdAndUserId(preferredWalletId, user.getId()).orElse(null)
+                    : walletRepository.findByUserIdOrderByCreatedAtDesc(user.getId())
+                            .stream()
+                            .findFirst()
+                            .orElse(null);
             if (wallet == null) {
                 log.warn("[DEV] User {} has no wallets to inject balance.", user.getUsername());
                 return ClaimOutcome.NO_WALLET;

@@ -118,12 +118,8 @@ public class RequestMdcFilter extends OncePerRequestFilter {
             return "unknown";
         if (path.startsWith("/auth"))
             return "auth";
-        if (path.startsWith("/ledger"))
-            return "ledger";
-        if (path.startsWith("/transactions"))
-            return "transactions";
-        if (path.startsWith("/wallet"))
-            return "wallet";
+        if (path.startsWith("/kfe"))
+            return "kfe";
         if (path.startsWith("/voucher"))
             return "voucher";
         if (path.startsWith("/ws"))

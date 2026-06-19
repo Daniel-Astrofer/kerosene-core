@@ -24,11 +24,12 @@ import source.kfe.service.KfeWalletService;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,7 +67,7 @@ class FinalizeSignupAccountTest {
     }
 
     @Test
-    void executeShouldCreateInactiveAccountWithoutTotpSecretsWhenTotpWasSkipped() {
+    void executeShouldActivateAccountWithoutTotpSecretsWhenTotpWasSkipped() {
         SignupState state = signupState(false);
         when(stateStore.findSignupState("session-1")).thenReturn(state);
         when(userService.findByUsername("alice")).thenReturn(null);
@@ -81,16 +82,18 @@ class FinalizeSignupAccountTest {
 
         UserDataBase created = service.execute("session-1");
 
-        assertFalse(Boolean.TRUE.equals(created.getIsActive()));
-        assertNull(created.getActivatedAt());
+        assertTrue(Boolean.TRUE.equals(created.getIsActive()));
+        assertNotNull(created.getActivatedAt());
         assertNull(created.getTOTPSecret());
         assertEquals(List.of(), created.getBackupCodes());
 
         ArgumentCaptor<UserDataBase> userCaptor = ArgumentCaptor.forClass(UserDataBase.class);
-        verify(userService).createUserInDataBase(userCaptor.capture());
-        assertEquals("alice", userCaptor.getValue().getUsername());
-        assertFalse(Boolean.TRUE.equals(userCaptor.getValue().getIsActive()));
-        assertNull(userCaptor.getValue().getActivatedAt());
+        verify(userService, times(2)).createUserInDataBase(userCaptor.capture());
+        UserDataBase persistedUser = userCaptor.getAllValues().get(0);
+        UserDataBase activatedUser = userCaptor.getAllValues().get(1);
+        assertEquals("alice", persistedUser.getUsername());
+        assertTrue(Boolean.TRUE.equals(activatedUser.getIsActive()));
+        assertNotNull(activatedUser.getActivatedAt());
 
         verify(stateStore).deleteSignupState("session-1");
         ArgumentCaptor<UserNotificationPayload> notificationCaptor =
@@ -104,10 +107,10 @@ class FinalizeSignupAccountTest {
         verify(kfeWalletService).createWallet(eq(7L), walletRequestCaptor.capture());
         KfeCreateWalletRequest walletRequest = walletRequestCaptor.getValue();
         assertEquals(KfeWalletKind.INTERNAL, walletRequest.kind());
-        assertEquals("ACCOUNT 01", walletRequest.label());
+        assertEquals("Carteira Global", walletRequest.label());
         assertNull(walletRequest.xpub());
         assertNull(walletRequest.initialAddress());
-        assertEquals(Boolean.TRUE, walletRequest.issueInitialAddress());
+        assertEquals(Boolean.FALSE, walletRequest.issueInitialAddress());
     }
 
     @Test

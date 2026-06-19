@@ -24,9 +24,9 @@ import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
 import source.kfe.dto.KfeCreateWalletRequest;
 import source.kfe.model.KfeWalletKind;
-import source.kfe.model.KfeWalletName;
 import source.kfe.service.KfeWalletService;
 
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -86,6 +86,7 @@ public class FinalizeSignupAccount {
             UserDataBase user = resolveUser(state, sessionId);
             ensurePasskeyPresent(state, user);
             ensureUserFinancialsReady(user, state);
+            user = activateFinalizedUser(user);
             schedulePostCommitCleanup(sessionId, user.getId());
             return user;
         } catch (DataIntegrityViolationException e) {
@@ -120,6 +121,15 @@ public class FinalizeSignupAccount {
             throw new IllegalStateException("User was persisted but ID is null.");
         }
         return user;
+    }
+
+    private UserDataBase activateFinalizedUser(UserDataBase user) {
+        if (Boolean.TRUE.equals(user.getIsActive())) {
+            return user;
+        }
+        user.setIsActive(true);
+        user.setActivatedAt(LocalDateTime.now());
+        return userService.createUserInDataBase(user);
     }
 
     private UserDataBase createUserFromState(SignupState state) {
@@ -187,8 +197,8 @@ public class FinalizeSignupAccount {
                 user.getId(),
                 new KfeCreateWalletRequest(
                         KfeWalletKind.INTERNAL,
-                        KfeWalletName.DAILY,
                         null,
+                        "Carteira Global",
                         null,
                         null,
                         null,
@@ -197,7 +207,7 @@ public class FinalizeSignupAccount {
                         null,
                         null,
                         initialAddress != null ? "SIGNUP_STATE_DEPOSIT_ADDRESS" : null,
-                        initialAddress == null));
+                        false));
         log.info("[Onboarding] Primary KFE wallet created for userId={}", user.getId());
     }
 

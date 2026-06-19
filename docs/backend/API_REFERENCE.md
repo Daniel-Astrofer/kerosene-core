@@ -7932,51 +7932,36 @@ Response body:
 
 Erros relevantes: `400` validacao/desserializacao, `401` token ausente/invalido quando protegido, `403` autorizacao insuficiente, `404` recurso inexistente, `409` conflito de estado, `413` payload acima do limite, `415` content-type invalido, `429` rate limit, `500` erro nao tratado. Consulte o controller e `GlobalExceptionHandler` para codigos de dominio especificos.
 
-## Treasury
+## KFE Reserve Overview
 
-### GET /treasury/overview
+### GET /api/admin/kfe/reserves/overview
 
-- Controller: `TreasuryController.overview` (`backend/kerosene/src/main/java/source/treasury/controller/TreasuryController.java: 29`).
+- Controller: `KfeReserveAdminController.overview`.
 - Autenticacao: `JWT com ROLE_ADMIN`.
-- Response Java: `ResponseEntity<TreasuryOverviewDTO>`.
-
-Headers:
-
-| Header | Obrigatorio | Valor/observacao |
-| --- | --- | --- |
-| `Accept` | no | `application/json` |
-| `Authorization` | yes | `Bearer <jwt com ROLE_ADMIN>` |
-
-Path params:
-
-Nenhum.
-
-Query params:
-
-Nenhum.
-
-Request body:
-
-Nenhum.
+- Response Java: `ApiResponse<KfeReserveOverviewResponse>`.
+- Status: ativo. Substitui semanticamente o antigo `REMOVED_LEGACY_FINANCIAL_ROUTE` sem restaurar `source.treasury`.
 
 Response body:
 
 ```json
 {
-  "totalOnchainBtc": "0.00010000",
-  "lightningNodeBtc": "0.00010000",
-  "inboundLiquidityBtc": "0.00010000",
-  "outboundLiquidityBtc": "0.00010000",
-  "reservedOnchainBtc": "0.00010000",
-  "reservedLightningBtc": "0.00010000",
-  "availableOnchainBtc": "0.00010000",
-  "availableLightningBtc": "0.00010000",
-  "lightningSendsAllowed": true,
-  "liquidityState": "string"
+  "success": true,
+  "message": "KFE reserve overview retrieved.",
+  "data": {
+    "totalOnchainBtc": 0.0,
+    "lightningNodeBtc": 0.0,
+    "inboundLiquidityBtc": 0.0,
+    "outboundLiquidityBtc": 0.0,
+    "reservedOnchainBtc": 0.0,
+    "reservedLightningBtc": 0.0,
+    "availableOnchainBtc": 0.0,
+    "availableLightningBtc": 0.0,
+    "lightningSendsAllowed": true,
+    "liquidityState": "HEALTHY"
+  }
 }
 ```
 
-Erros relevantes: `400` validacao/desserializacao, `401` token ausente/invalido quando protegido, `403` autorizacao insuficiente, `404` recurso inexistente, `409` conflito de estado, `413` payload acima do limite, `415` content-type invalido, `429` rate limit, `500` erro nao tratado. Consulte o controller e `GlobalExceptionHandler` para codigos de dominio especificos.
 
 ## Payments
 
@@ -8911,7 +8896,7 @@ Source: `backend/kerosene/src/main/java/source/auth/dto/AppPinStatusDTO.java`
 
 ### Assets
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -8952,7 +8937,7 @@ Source: `backend/kerosene/src/main/java/source/transactions/dto/CancelPaymentLin
 
 ### ChainState
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -9270,7 +9255,7 @@ Source: `backend/kerosene/src/main/java/source/ledger/controller/LedgerControlle
 
 ### Liabilities
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -9337,7 +9322,7 @@ Source: `backend/kerosene/src/main/java/source/payments/dto/ReceivingCapabilitie
 
 ### MerkleProof
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -9470,7 +9455,7 @@ Source: `backend/kerosene/src/main/java/source/transactions/dto/OnchainSendReque
 
 ### OperationalReserveProofResponseDTO
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -9698,7 +9683,7 @@ Source: `backend/kerosene/src/main/java/source/payments/dto/PaymentStatusRespons
 
 ### ProviderHealth
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/OperationalReserveProofResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/OperationalReserveProofResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -9853,9 +9838,9 @@ Source: `backend/kerosene/src/main/java/source/ledger/dto/TreasuryAuditConfigRes
 | `auditXpubPreview` | `String` | `-` |
 | `updatedAt` | `LocalDateTime` | `-` |
 
-### TreasuryOverviewDTO
+### KfeReserveOverviewResponse
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/TreasuryOverviewDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/KfeReserveOverviewResponse.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |
@@ -9872,7 +9857,7 @@ Source: `backend/kerosene/src/main/java/source/treasury/dto/TreasuryOverviewDTO.
 
 ### TreasuryPayoutResponseDTO
 
-Source: `backend/kerosene/src/main/java/source/treasury/dto/TreasuryPayoutResponseDTO.java`
+Source: `backend/kerosene/src/main/java/source/kfe/dto/TreasuryPayoutResponseDTO.java`
 
 | Campo | Tipo | Validacao observada |
 | --- | --- | --- |

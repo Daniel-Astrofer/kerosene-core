@@ -3,7 +3,7 @@ syntax = "proto3";
 package lnrpc;
 
 option java_multiple_files = true;
-option java_package = "source.transactions.infra.lnd.proto.lnrpc";
+option java_package = "source.kfe.rail.lnd.proto.lnrpc";
 
 service Lightning {
     rpc WalletBalance (WalletBalanceRequest) returns (WalletBalanceResponse);

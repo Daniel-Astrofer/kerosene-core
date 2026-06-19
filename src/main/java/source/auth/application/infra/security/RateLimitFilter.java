@@ -35,7 +35,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "idempotencyKey",
             "fromWalletName",
             "payerWalletName",
-            "paymentIntentId",
             "txid");
     private static final List<String> QUERY_BUCKET_FIELDS = List.of(
             "username",
@@ -65,14 +64,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new RouteLimit("/auth/login", "auth-login", 10),
             new RouteLimit("/auth/signup", "auth-signup", 8),
             new RouteLimit("/auth/pow/challenge", "auth-pow-challenge", 30),
-            new RouteLimit("/ledger/payment-request", "funds-payment-request", 6),
-            new RouteLimit("/ledger/transaction", "funds-ledger-transaction", 6),
-            new RouteLimit("/transactions/network/onchain/send", "funds-onchain-send", 4),
-            new RouteLimit("/transactions/network/lightning/pay", "funds-lightning-pay", 6),
-            new RouteLimit("/transactions/withdraw", "funds-withdraw", 4),
-            new RouteLimit("/payments/", "funds-payments", 10),
-            new RouteLimit("/transactions/network/onchain/address", "funds-onchain-address", 20),
-            new RouteLimit("/transactions/network/lightning/invoice", "funds-lightning-invoice", 20));
+            new RouteLimit("/kfe/transactions/quote", "kfe-transaction-quote", 20),
+            new RouteLimit("/kfe/transactions", "kfe-transaction-submit", 6),
+            new RouteLimit("/kfe/wallets", "kfe-wallets", 20),
+            new RouteLimit("/kfe/users/", "kfe-receiving-capabilities", 20));
 
     private final RedisServicer redisService;
     private final ObjectMapper objectMapper;
@@ -217,8 +212,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (uri.startsWith("/voucher/")) {
             return "voucher";
         }
-        if (uri.startsWith("/ledger/")) {
-            return "ledger";
+        if (uri.startsWith("/kfe/")) {
+            return "kfe";
         }
         return "general";
     }

@@ -30,12 +30,12 @@ public class AccountActivationController {
         return ResponseEntity.ok(ApiResponse.success("Activation status retrieved successfully.", status));
     }
 
-    @PostMapping("/deposit-link")
-    public ResponseEntity<ApiResponse<AccountActivationStatusDTO>> createDepositLink(Authentication authentication) {
+    @PostMapping("/funding-link")
+    public ResponseEntity<ApiResponse<AccountActivationStatusDTO>> createFundingLink(Authentication authentication) {
         AccountActivationStatusDTO status =
                 accountActivationService.createOrReuseLink(authenticatedUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(
-                "Initial deposits are prepared inside the platform deposit flow.",
+                "Initial funding is prepared inside the KFE flow.",
                 status));
     }
 

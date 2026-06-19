@@ -29,7 +29,7 @@ import source.auth.model.entity.DeviceKeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
-import source.transactions.exception.ExternalPaymentsExceptions;
+import source.kfe.rail.KfeRailException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -126,7 +126,7 @@ public class DeviceKeyController {
         } catch (DeviceKeyProtocolException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
-        } catch (ExternalPaymentsExceptions.CustodyProviderUnavailable
+        } catch (KfeRailException.ProviderUnavailable
                  | FinalizeSignupAccount.VaultNotReadyException exception) {
             throw exception;
         } catch (RuntimeException exception) {

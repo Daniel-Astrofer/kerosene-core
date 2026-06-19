@@ -24,4 +24,6 @@ public interface KfeTransactionRepository extends JpaRepository<KfeTransactionEn
     Optional<KfeTransactionEntity> findByIdForUpdate(@Param("id") UUID id);
 
     List<KfeTransactionEntity> findTop25ByUserIdOrderByCreatedAtDesc(Long userId);
+
+    List<KfeTransactionEntity> findTop200ByUserIdOrderByCreatedAtDesc(Long userId);
 }

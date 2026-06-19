@@ -1,36 +1,42 @@
 # Lógica de Negócios do Kerosene
 
-## Visão Geral
+## Visão geral
 
-O backend do Kerosene implementa uma arquitetura sofisticada para gerenciamento de operações financeiras. A lógica central está distribuída em quatro módulos principais: `source.kfe`, `source.treasury`, `source.ledger` e `source.payments`. Cada módulo opera dentro de limites rigorosos para garantir que o sistema permaneça robusto, consistente e logicamente sólido ("cordial").
+O backend do Kerosene opera em modo **KFE-only** para domínio financeiro. A lógica central de dinheiro, saldo, carteira, transação, recebimento, PSBT, eventos fiscais, reservas e reconciliação pertence ao `source.kfe`.
 
-## Módulos Principais
+O backend amplo não deve possuir módulos financeiros paralelos. Qualquer comportamento financeiro novo deve nascer no KFE ou sob rotas administrativas KFE, como `/api/admin/kfe/**`.
 
-### 1. KFE (Kerosene Financial Engine)
-- **Função:** Gerencia o processamento transacional central, a rede e a execução de transações em diversos trilhos (Lightning, On-chain, Interno).
-- **Lógica de Negócios:**
-  - Gerencia transferências internas que exigem estritamente autorização transacional via MFA/chave de acesso.
-  - Controla o processamento de Quorum por meio de transportes Multi-TLS Tor.
-  - Garante validação robusta de rede antes de emitir endereços de recebimento.
+## Motor financeiro oficial
 
-### 2. Treasury
-- **Função:** Orquestra as reservas de saldo do sistema, retenção de receita e auditoria em larga escala.
-- **Lógica de Negócios:**
-  - Segrega a carteira operacional do sistema dos fundos dos usuários.
-  - Reconcilia a saúde geral da rede, correspondendo os totais internos do razão contra a prova de reservas on-chain.
+### KFE — Kerosene Financial Engine
 
-### 3. Ledger
-- **Função:** Sistema de registro oficial para todos os saldos de usuários e entradas transacionais idempotentes.
-- **Lógica de Negócios:**
-  - Utiliza contabilidade de partidas dobradas para rastrear todos os movimentos de valor.
-  - Serviços de auditoria de saldo sombra garantem que os saldos em tempo real correspondam aos extratos históricos e HMACs criptográficos.
+**Função:** gerenciar o processamento transacional central, execução por trilhos e estado financeiro auditável.
 
-### 4. Payments
-- **Função:** Gerencia interações externas, gateways fiduciários e links de pagamento.
-- **Lógica de Negócios:**
-  - Encapsula a execução para lidar com lógica complexa para fornecedores externos.
-  - Valida endpoints e impõe limites de taxa rigorosos.
+Responsabilidades:
 
-## Verificação
+- carteiras e ciclo de vida de carteira;
+- saldos disponíveis, bloqueados e observados;
+- transferências internas;
+- saques on-chain;
+- saques Lightning;
+- quote/fee de transação;
+- payment requests e receive requests;
+- PSBT workflow de cold/watch-only wallet;
+- eventos fiscais derivados de transações KFE;
+- visão administrativa de reservas;
+- auditoria, statement e reconciliação;
+- outbox de execução financeira.
 
-A lógica do sistema foi verificada durante a missão noturna. Pequenos defeitos de sintaxe em testes provenientes de scripts de migração automatizados foram corrigidos, e lacunas de autorização originalmente sinalizadas foram either corrigidas ou formalmente documentadas para revisão futura da arquitetura.
+## Regras arquiteturais
+
+1. Nenhum pacote fora de `source.kfe` pode implementar domínio financeiro próprio.
+2. Rotas financeiras públicas devem usar `/kfe/**`.
+3. Rotas financeiras administrativas devem usar `/api/admin/kfe/**`.
+4. O retorno de módulos financeiros removidos é bloqueado por `scripts/verify-kfe-only.sh`.
+5. Não existe feature flag para voltar ao backend financeiro antigo.
+
+## Módulos removidos
+
+Os antigos domínios financeiros foram expurgados. Eles não são fonte de verdade, não devem ser restaurados e não devem aparecer em código executável.
+
+Use o documento `docs/backend/KFE_ONLY_FINANCIAL_ARCHITECTURE.md` para a política completa de prevenção de regressão.

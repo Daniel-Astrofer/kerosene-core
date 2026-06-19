@@ -7,8 +7,7 @@ import org.springframework.http.ResponseEntity;
 import source.auth.AuthExceptions;
 import source.common.dto.ApiResponse;
 import source.common.observability.FinancialOperationsMetrics;
-import source.ledger.exceptions.LedgerExceptions;
-import source.payments.exception.PaymentException;
+import source.kfe.rail.KfeRailException;
 
 import java.util.Map;
 
@@ -70,43 +69,47 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void shouldReturnConflictWhenReceiverIsNotReady() {
-        LedgerExceptions.ReceiverNotReadyException ex = LedgerExceptions.ReceiverNotReadyException.inboundBlocked();
+    void shouldReturnPaymentRequiredWhenInboundReceivingIsBlocked() {
+        AuthExceptions.InboundReceivingBlockedException ex =
+                new AuthExceptions.InboundReceivingBlockedException("Account cannot receive funds yet.");
 
-        ResponseEntity<ApiResponse<Object>> response = handler.handleReceiverNotReady(ex);
+        ResponseEntity<ApiResponse<Object>> response = handler.handleInboundReceivingBlocked(ex);
 
-        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-        assertEquals("ERR_LEDGER_RECEIVER_NOT_READY", response.getBody().getErrorCode());
-        assertEquals("The destination user exists but is not yet ready to receive funds.",
-                response.getBody().getMessage());
-        assertEquals("INBOUND_BLOCKED", ((Map<?, ?>) response.getBody().getData()).get("reason"));
+        assertEquals(HttpStatus.PAYMENT_REQUIRED, response.getStatusCode());
+        assertEquals("ERR_ACCOUNT_DEPOSIT_REQUIRED", response.getBody().getErrorCode());
+        assertEquals("Account cannot receive funds yet.", response.getBody().getMessage());
+        assertEquals(
+                "Ative uma carteira ou adicione saldo para receber pela plataforma.",
+                ((Map<?, ?>) response.getBody().getData()).get("guidance"));
     }
 
     @Test
-    void shouldPreservePaymentExceptionStatusAndCode() {
-        PaymentException ex = PaymentException.conflict(
-                "QUOTE_EXPIRED",
-                "A cotação expirou. Gere uma nova antes de confirmar.");
+    void shouldReturnUnavailableWhenKfeProviderIsUnavailable() {
+        KfeRailException.ProviderUnavailable ex =
+                new KfeRailException.ProviderUnavailable("KFE rail provider is offline.");
 
-        ResponseEntity<ApiResponse<Void>> response = handler.handlePaymentException(ex);
+        ResponseEntity<ApiResponse<Object>> response = handler.handleKfeProviderUnavailable(ex);
 
-        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-        assertEquals("QUOTE_EXPIRED", response.getBody().getErrorCode());
-        assertEquals("A cotação expirou. Gere uma nova antes de confirmar.", response.getBody().getMessage());
-        verify(financialMetrics).increment("validation_rejected", "rejected", "payment_exception");
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertEquals("ERR_KFE_RAIL_PROVIDER_UNAVAILABLE", response.getBody().getErrorCode());
+        assertEquals("KFE rail provider is offline.", response.getBody().getMessage());
+        assertEquals(
+                "Os serviços de custódia e trilhos financeiros estão indisponíveis no momento. Tente novamente mais tarde.",
+                ((Map<?, ?>) response.getBody().getData()).get("guidance"));
+        verify(financialMetrics).increment("provider_unavailable", "unavailable", "kfe_rail");
     }
 
     @Test
-    void shouldSanitizeTechnicalPaymentExceptionMessage() {
-        PaymentException ex = PaymentException.badRequest(
-                "PAYMENT_INVALID",
-                "SQLException: select * from payment_intents");
+    void shouldSanitizeTechnicalKeroseneExceptionMessage() {
+        VaultException ex = new VaultException(
+                "SQLException: select * from vault_keys",
+                ErrorCodes.VAULT_STORAGE_ERROR);
 
-        ResponseEntity<ApiResponse<Void>> response = handler.handlePaymentException(ex);
+        ResponseEntity<ApiResponse<Void>> response = handler.handleKeroseneException(ex);
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("PAYMENT_INVALID", response.getBody().getErrorCode());
-        assertEquals("The payment request could not be completed.", response.getBody().getMessage());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        assertEquals(ErrorCodes.VAULT_STORAGE_ERROR, response.getBody().getErrorCode());
+        assertEquals("The requested platform service is temporarily unavailable.", response.getBody().getMessage());
     }
 
     @Test

@@ -1,110 +1,131 @@
 # Ledger API
 
-Fonte principal: controllers, DTOs e configuracao de seguranca em `backend/kerosene/src/main/java/source/**`.
+Documentação corporativa da antiga família Ledger e de seus substitutos ativos.
 
-`docs/backend/API_REFERENCE.md` permanece como referencia consolidada e foi usado apenas como auditoria de cobertura. A politica efetiva vem de `EndpointPolicyRegistry`, `Security` e de anotacoes `@PreAuthorize`.
+Fonte real inspecionada:
 
+- Lista atual de controllers em `backend/kerosene/src/main/java/**`.
+- `backend/kerosene/src/main/java/source/kfe/controller/KfeDashboardController.java`.
+- `backend/kerosene/src/main/java/source/kfe/controller/KfeTransactionController.java`.
+- `backend/kerosene/src/main/java/source/common/security/EndpointPolicyRegistry.java`.
 
-## Escopo
+## Estado real do serviço
 
-Endpoints neste arquivo: `8`.
+A documentação anterior citava `LedgerController`, mas esse controller não existe no código-fonte atual. Portanto, `REMOVED_LEGACY_FINANCIAL_ROUTE` não é API ativa neste build.
 
-Controllers cobertos:
+O comportamento de ledger/saldos atualmente exposto para clientes passa por KFE:
 
-- `LedgerController`
+| Necessidade | Endpoint ativo | Método | Documento |
+| --- | --- | --- | --- |
+| Saldo total e por carteira | `/kfe/dashboard` | `GET` | `KFE.md` |
+| Carteiras e balances | `/kfe/wallets` | `GET` | `KFE.md` |
+| Criar transação/lançamento financeiro | `/kfe/transactions` | `POST` | `KFE.md` |
+| Consultar transação | `/kfe/transactions/{transactionId}` | `GET` | `KFE.md` |
+| Auditoria de eventos financeiros | `/api/admin/kfe/audit/events` | `GET` | `AUDIT.md` / `KFE.md` |
 
-## Endpoints
+## Headers para o fluxo ativo KFE
 
-| Metodo | Path | Controller.handler | Auth | Request | Response | Fonte |
-| --- | --- | --- | --- | --- | --- | --- |
-| `GET` | `/ledger/all` | `LedgerController.getAllLedgers` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | none | `ApiResponse<List<LedgerDTO>>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L119) |
-| `GET` | `/ledger/balance` | `LedgerController.getBalance` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | query: walletName: String | `ApiResponse<BigDecimal>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L143) |
-| `GET` | `/ledger/find` | `LedgerController.getLedgerByWalletName` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | query: walletName: String | `ApiResponse<LedgerDTO>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L128) |
-| `GET` | `/ledger/history` | `LedgerController.getHistory` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | query: page: int, size: int | `ApiResponse<List<LedgerSyncEventDTO>>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L103) |
-| `POST` | `/ledger/payment-request` | `LedgerController.createPaymentRequest` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | body: CreatePaymentRequestReq | `ApiResponse<InternalPaymentRequestDTO>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L253) |
-| `GET` | `/ledger/payment-request/{linkId}` | `LedgerController.getPaymentRequest` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: linkId: String | `ApiResponse<PaymentRequestPublicDTO>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L262) |
-| `POST` | `/ledger/payment-request/{linkId}/pay` | `LedgerController.payPaymentRequest` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | path: linkId: String<br>body: PayPaymentRequestReq | `ApiResponse<InternalPaymentRequestDTO>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L273) |
-| `POST` | `/ledger/transaction` | `LedgerController.transaction` | AUTHENTICATED<br>cond: `@ConditionalOnProperty(name = "kfe.legacy-financial.enabled", havingValue = "true")` | body: TransactionDTO | `ApiResponse<InternalTransactionResponseDTO>` | [LedgerController.java](../../../backend/kerosene/src/main/java/source/ledger/controller/LedgerController.java#L75) |
+| Nome | Tipo | Obrigatório | Descrição | Exemplo |
+| --- | --- | --- | --- | --- |
+| `Authorization` | string | Sim | JWT Bearer. | `Bearer <JWT>` |
+| `Content-Type` | string | Sim em transações | JSON. | `application/json` |
+| `Accept` | string | Opcional | JSON. | `application/json` |
+| `X-Correlation-Id` | string | Recomendado | Rastreabilidade contábil. | `ledger-20260619-0001` |
+| `X-Idempotency-Key` | string | Recomendado quando o endpoint aceitar | Evita duplicidade de mutações financeiras. | `txn-01J...` |
 
-## DTOs e Payloads
+## Endpoint ativo: Dashboard de saldos
 
-### `InternalPaymentRequestDTO`
+```http
+GET /kfe/dashboard
+```
 
-Fonte: [InternalPaymentRequestDTO.java](../../../backend/kerosene/src/main/java/source/ledger/dto/InternalPaymentRequestDTO.java)
+### O que faz
 
-Campos observados no DTO:
+Retorna visão agregada de saldo total e saldos por carteira. É o substituto externo do antigo ledger read model.
 
-- `id: String`
-- `requesterUserId: Long`
-- `receiverWalletId: Long`
-- `receiverWalletName: String`
-- `destinationHash: String`
-- `amount: BigDecimal`
-- `status: String`
-- `expiresAt: LocalDateTime`
-- `createdAt: LocalDateTime`
-- `paidAt: LocalDateTime`
+### Quando usar
 
-### `InternalTransactionResponseDTO`
+- Home do app.
+- Tela de carteira.
+- Reconciliação visual de saldo total e saldos por método de custódia.
 
-Fonte: [InternalTransactionResponseDTO.java](../../../backend/kerosene/src/main/java/source/ledger/dto/InternalTransactionResponseDTO.java)
+### Response de sucesso
 
-Campos observados no DTO:
+Status: `200 OK`
 
-- `String txid`
-- `String status`
-- `BigDecimal amount`
-- `String sender`
-- `String receiver`
-- `String context`
+```json
+{
+  "success": true,
+  "message": "KFE dashboard retrieved.",
+  "data": {
+    "totalBalanceSats": 150000,
+    "availableBalanceSats": 149000,
+    "pendingBalanceSats": 1000,
+    "wallets": [
+      {
+        "walletId": "018f5d42-7b46-7d9f-9a1b-c405c8d6e020",
+        "kind": "INTERNAL",
+        "label": "Carteira global",
+        "balanceSats": 100000,
+        "availableBalanceSats": 100000,
+        "activeAddress": null,
+        "status": "ACTIVE"
+      }
+    ],
+    "statement": []
+  },
+  "timestamp": "2026-06-19T12:00:00"
+}
+```
 
-### `LedgerDTO`
+## Endpoint ativo: Submeter transação KFE
 
-Fonte: [LedgerDTO.java](../../../backend/kerosene/src/main/java/source/ledger/dto/LedgerDTO.java)
+```http
+POST /kfe/transactions
+```
 
-Campos observados no DTO:
+### O que faz
 
-- `id: Integer`
-- `walletId: Long`
-- `walletName: String`
-- `balance: BigDecimal`
-- `nonce: Integer`
-- `lastHash: String`
-- `context: String`
-- `amount: BigDecimal`
+Cria uma transação financeira KFE e produz eventos auditáveis.
 
-### `PaymentRequestPublicDTO`
+### Uso correto
 
-Fonte: [PaymentRequestPublicDTO.java](../../../backend/kerosene/src/main/java/source/ledger/dto/PaymentRequestPublicDTO.java)
+1. Consultar `/kfe/users/{receiverIdentifier}/receiving-capabilities` se houver recebedor externo/interno.
+2. Consultar `/kfe/transactions/quote` para obter valores finais.
+3. Submeter `/kfe/transactions` com chave de idempotência.
+4. Consultar `/kfe/transactions/{transactionId}`.
 
-Campos observados no DTO:
+### Observação
 
-- `id: String`
-- `amount: BigDecimal`
-- `status: String`
-- `expiresAt: LocalDateTime`
-- `destinationHash: String`
-- `locked: boolean`
+O schema completo está em `KFE.md`, que é a documentação canônica de transações ativas.
 
-### `TransactionDTO`
+## Rotas legadas removidas
 
-Fonte: [TransactionDTO.java](../../../backend/kerosene/src/main/java/source/ledger/dto/TransactionDTO.java)
+As rotas antigas abaixo dependiam de `LedgerController`, ausente no código atual:
 
-Campos observados no DTO:
+| Rota antiga | Estado | Substituto |
+| --- | --- | --- |
+| `REMOVED_LEGACY_FINANCIAL_ROUTE` | `STALE` | `GET /kfe/wallets` ou `GET /kfe/dashboard` |
+| `REMOVED_LEGACY_FINANCIAL_ROUTE` | `STALE` | `GET /kfe/dashboard` |
+| `REMOVED_LEGACY_FINANCIAL_ROUTE` | `STALE` | Filtrar `GET /kfe/wallets` |
+| `REMOVED_LEGACY_FINANCIAL_ROUTE` | `STALE` | `GET /kfe/dashboard` statement ou auditoria KFE |
+| `REMOVED_LEGACY_FINANCIAL_ROUTE` | `STALE` | `POST /kfe/transactions` |
+| `REMOVED_LEGACY_FINANCIAL_ROUTE` | `STALE` | Fluxos KFE atuais/futuros |
 
-- `sender: String`
-- `receiver: String`
-- `amount: BigDecimal`
-- `context: String`
-- `idempotencyKey: String`
-- `requestTimestamp: Long`
-- `passkeyAssertionJson: String`
-- `confirmationPassphrase: String`
-- `totpCode: String`
+## Status codes
 
+| Status | Quando ocorre | Como resolver |
+| --- | --- | --- |
+| `200 OK` | Dashboard/listagens/consulta retornados. | Consumir `data`. |
+| `201 Created` | Recurso criado em endpoint ativo que crie entidade. | Persistir ID. |
+| `400 Bad Request` | Payload inválido. | Corrigir body. |
+| `401 Unauthorized` | JWT ausente/inválido. | Reautenticar. |
+| `403 Forbidden` | Rota legada sem controller/policy ou token insuficiente. | Usar KFE ativo. |
+| `404 Not Found` | Controller legado ausente ou recurso não encontrado. | Conferir path/ID. |
+| `409 Conflict` | Idempotência ou conflito de estado financeiro. | Consultar transação existente. |
+| `422 Unprocessable Entity` | Regra contábil/financeira não satisfeita. | Ajustar saldo/estado. |
+| `500 Internal Server Error` | Falha inesperada. | Investigar logs. |
 
-## Notas de Seguranca
+## Nota de manutenção
 
-- Rotas sem politica declarada sao negadas por `anyRequest().denyAll()` em `Security`.
-- Regras por `@PreAuthorize` prevalecem como seguranca em nivel de metodo.
-- Bodies mutantes seguem os filtros globais de content-type, tamanho de payload e `Digest` quando enviado.
+Se uma API Ledger separada voltar a existir, será necessário restaurar controller, declarar policy em `EndpointPolicyRegistry`, documentar DTOs reais e explicitar se ela é pública, autenticada ou apenas administrativa.
