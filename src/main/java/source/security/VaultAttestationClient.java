@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 import com.fasterxml.jackson.databind.JsonNode;
 
 /**
@@ -59,7 +58,7 @@ public class VaultAttestationClient {
             requireTorTransport();
             challenge = fetchAttestationChallengeViaUds(resolvedVaultUrl, nodeId);
         } else {
-            challenge = generateSelfChallenge();
+            challenge = fetchAttestationChallengeDirect(resolvedVaultUrl, nodeId);
         }
 
         String attestationSignature = signAttestationChallenge(nodeId, publicKeyBase64, challenge);
@@ -185,13 +184,6 @@ public class VaultAttestationClient {
 
         logger.info("[VaultAttestationClient] Hardware attested via UDS. Session token received.");
         return result.bodyAsString();
-    }
-
-    private AttestationChallenge generateSelfChallenge() {
-        String challengeId = UUID.randomUUID().toString();
-        String challengeNonce = UUID.randomUUID().toString();
-        logger.info("[VaultAttestationClient] Generated self-challenge for direct attestation: {}", challengeId);
-        return new AttestationChallenge(challengeId, challengeNonce);
     }
 
     private void requireTorTransport() {
