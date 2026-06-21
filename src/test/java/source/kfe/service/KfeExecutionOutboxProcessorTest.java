@@ -71,4 +71,31 @@ class KfeExecutionOutboxProcessorTest {
                 eq("{}")
         );
     }
+
+    @Test
+    void processDoesNotCallProviderWhenPreparationDoesNotProceed() {
+        UUID outboxId = UUID.randomUUID();
+        KfeExecutionTransactionHelper.PreparationResult terminal = new KfeExecutionTransactionHelper.PreparationResult(
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0L,
+                0L,
+                null,
+                null,
+                null
+        );
+        when(transactionHelper.prepare(outboxId)).thenReturn(terminal);
+
+        processor.process(outboxId);
+
+        verify(transactionHelper).prepare(outboxId);
+        verifyNoInteractions(onchainCustodyPort, lightningPaymentGateway);
+        verify(transactionHelper, never()).markFinalFailure(any(), any(), any(), any());
+        verify(transactionHelper, never()).markRetryableFailure(any(), any(), any(), any());
+    }
 }

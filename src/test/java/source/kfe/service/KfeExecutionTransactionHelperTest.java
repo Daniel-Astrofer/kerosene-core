@@ -98,6 +98,29 @@ class KfeExecutionTransactionHelperTest {
         verify(outboxRepository).save(outbox);
     }
 
+    @Test
+    void duplicateFinalFailureDoesNotReleaseReserveAgain() {
+        UUID outboxId = UUID.randomUUID();
+        UUID transactionId = UUID.randomUUID();
+        KfeExecutionOutboxEntity outbox = claimedOutbox(transactionId);
+        KfeTransactionEntity tx = mock(KfeTransactionEntity.class);
+        when(tx.getStatus()).thenReturn(KfeTransactionStatus.FAILED);
+        when(tx.getFailureCode()).thenReturn("PROVIDER_FINAL_FAILURE");
+        when(tx.getFailureMessage()).thenReturn("provider rejected payment");
+
+        when(outboxRepository.findByIdForUpdate(outboxId)).thenReturn(Optional.of(outbox));
+        when(transactionRepository.findByIdForUpdate(transactionId)).thenReturn(Optional.of(tx));
+
+        helper.markFinalFailure(outboxId, transactionId, "PROVIDER_FINAL_FAILURE", "provider rejected payment");
+
+        assertThat(outbox.getStatus()).isEqualTo("FAILED_FINAL");
+        assertThat(outbox.getLastError()).isEqualTo("PROVIDER_FINAL_FAILURE: provider rejected payment");
+        verify(balanceService, never()).releaseReserved(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+        verify(movementRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(transactionRepository, never()).save(tx);
+        verify(outboxRepository).save(outbox);
+    }
+
     private KfeExecutionOutboxEntity claimedOutbox(UUID transactionId) {
         KfeExecutionOutboxEntity outbox = new KfeExecutionOutboxEntity();
         outbox.setTransactionId(transactionId);

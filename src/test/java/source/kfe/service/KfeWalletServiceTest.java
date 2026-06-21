@@ -10,6 +10,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.common.service.AddressDerivationService;
 import source.kfe.dto.KfeCreateWalletRequest;
+import source.kfe.dto.KfeUpdateWalletRequest;
 import source.kfe.dto.KfeWalletResponse;
 import source.kfe.model.KfeWalletEntity;
 import source.kfe.model.KfeWalletKind;
@@ -206,6 +207,28 @@ class KfeWalletServiceTest {
         assertEquals("Já existe uma carteira ativa ou em criação para este método de custódia.", exception.getMessage());
         verify(walletRepository, never()).save(any(KfeWalletEntity.class));
         verifyNoInteractions(quorumGateway, mpcKeyService);
+    }
+
+    @Test
+    void archivedWalletRejectsUpdateWithoutPersistingSensitiveChange() {
+        UUID walletId = UUID.randomUUID();
+        KfeWalletEntity wallet = new KfeWalletEntity();
+        wallet.setId(walletId);
+        wallet.setUserId(1L);
+        wallet.setKind(KfeWalletKind.CUSTODIAL_ONCHAIN);
+        wallet.setStatus(KfeWalletStatus.ARCHIVED);
+        wallet.setLabel("Archived");
+
+        when(walletRepository.findByIdAndUserIdForUpdate(walletId, 1L)).thenReturn(Optional.of(wallet));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.updateWallet(1L, walletId, new KfeUpdateWalletRequest("Sensitive rename")));
+
+        assertEquals("Archived wallets cannot be updated.", exception.getMessage());
+        assertEquals("Archived", wallet.getLabel());
+        verify(walletRepository, never()).save(any(KfeWalletEntity.class));
+        verifyNoInteractions(auditLogService, dashboardPublisher, responseMapper);
     }
 
 }
