@@ -27,6 +27,7 @@ public class EndpointPolicyRegistry {
             "/auth/backup-codes",
             "/auth/backup-codes/**",
             "/auth/device-key/**",
+            "/auth/logout",
             "/auth/me",
             "/auth/passkey/**",
             "/auth/security-status",
@@ -44,7 +45,8 @@ public class EndpointPolicyRegistry {
             "/sovereignty/reattest",
             "/sovereignty/telemetry",
             "/users/*/receiving-capabilities",
-            "/v1/audit/stats"
+            "/v1/audit/stats",
+            "/wallet/create"
     };
 
     private static final String[] ADMIN = {
