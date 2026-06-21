@@ -1,0 +1,89 @@
+package source.common.infra.diagnostics;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
+
+class StartupDiagnosticsServiceTest {
+
+    @Test
+    void reportsOkForCompleteNonProductionConfiguration() {
+        StartupDiagnosticReport report = new StartupDiagnosticsService(baseEnvironment()).diagnose();
+
+        assertThat(report.status()).isEqualTo(StartupDiagnosticStatus.OK);
+        assertThat(report.failCount()).isZero();
+    }
+
+    @Test
+    void reportsProductionSafetyFailuresWithoutSecretValues() {
+        MockEnvironment environment = baseEnvironment()
+                .withProperty("spring.flyway.baseline-on-migrate", "true")
+                .withProperty("app.cors.allowed-origins", "http://localhost:3000")
+                .withProperty("vault.enabled", "false")
+                .withProperty("spring.datasource.password", "super-secret-password");
+        environment.setActiveProfiles("prod");
+
+        StartupDiagnosticReport report = new StartupDiagnosticsService(environment).diagnose();
+
+        assertThat(report.status()).isEqualTo(StartupDiagnosticStatus.FAIL);
+        assertThat(report.toLogSummary())
+                .contains("flyway:FAIL")
+                .contains("prod-safety:FAIL")
+                .contains("spring.datasource.password=<redacted>")
+                .doesNotContain("super-secret-password");
+    }
+
+    @Test
+    void reportsKfeOnlyViolations() {
+        MockEnvironment environment = baseEnvironment()
+                .withProperty("kfe.legacy-financial.enabled", "true")
+                .withProperty("transactions.local-derived-address-fallback-enabled", "true");
+
+        StartupDiagnosticReport report = new StartupDiagnosticsService(environment).diagnose();
+
+        assertThat(report.status()).isEqualTo(StartupDiagnosticStatus.FAIL);
+        assertThat(report.toLogSummary())
+                .contains("kfe-only:FAIL")
+                .contains("kfe.legacy-financial.enabled must not be true")
+                .contains("transactions.local-derived-address-fallback-enabled must be false");
+    }
+
+    @Test
+    void warnsWhenFlywayIsDisabled() {
+        MockEnvironment environment = baseEnvironment().withProperty("spring.flyway.enabled", "false");
+
+        StartupDiagnosticReport report = new StartupDiagnosticsService(environment).diagnose();
+
+        assertThat(report.status()).isEqualTo(StartupDiagnosticStatus.WARN);
+        assertThat(report.toLogSummary()).contains("flyway:WARN");
+    }
+
+    private MockEnvironment baseEnvironment() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("spring.datasource.url", "jdbc:postgresql://db:5432/kerosene")
+                .withProperty("spring.datasource.username", "api_system")
+                .withProperty("spring.datasource.password", "change-me")
+                .withProperty("spring.data.redis.host", "redis")
+                .withProperty("spring.data.redis.port", "6379")
+                .withProperty("vault.enabled", "true")
+                .withProperty("vault.raft.enabled", "true")
+                .withProperty("vault.raft.required", "true")
+                .withProperty("vault.raft.url", "https://vault-raft-1:8200")
+                .withProperty("mpc.sidecar.host", "mpc-sidecar")
+                .withProperty("mpc.sidecar.port", "50051")
+                .withProperty("mpc.sidecar.tls.enabled", "true")
+                .withProperty("lightning.lnd.enabled", "true")
+                .withProperty("lightning.lnd.host", "lnd-bitcoind")
+                .withProperty("lightning.lnd.port", "10009")
+                .withProperty("lightning.lnd.tls.enabled", "true")
+                .withProperty("kfe.receive.bitcoin-core-wallet-address-enabled", "true")
+                .withProperty("kfe.network-monitor.enabled", "true")
+                .withProperty("transactions.local-derived-address-fallback-enabled", "false")
+                .withProperty("transactions.bitcoin-core-wallet-address-enabled", "true")
+                .withProperty("spring.flyway.enabled", "true")
+                .withProperty("spring.flyway.baseline-on-migrate", "false");
+        environment.setActiveProfiles("docker");
+        return environment;
+    }
+}

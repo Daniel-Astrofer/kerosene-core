@@ -8,14 +8,23 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+/**
+ * Emits sanitized startup diagnostics for successful and failed Spring boot lifecycles.
+ */
 @Component
 public class StartupDiagnosticsListener {
 
     private static final Logger log = LoggerFactory.getLogger(StartupDiagnosticsListener.class);
+    private final StartupDiagnosticsService startupDiagnosticsService;
+
+    public StartupDiagnosticsListener(StartupDiagnosticsService startupDiagnosticsService) {
+        this.startupDiagnosticsService = startupDiagnosticsService;
+    }
 
     @EventListener
     public void onReady(ApplicationReadyEvent event) {
-        log.info("Application startup completed and HTTP readiness probes are available");
+        StartupDiagnosticReport report = startupDiagnosticsService.diagnose();
+        log.info("STARTUP_DIAGNOSTICS event=STARTUP_READY {}", report.toLogSummary());
     }
 
     @EventListener
@@ -26,9 +35,18 @@ public class StartupDiagnosticsListener {
     @EventListener
     public void onFailed(ApplicationFailedEvent event) {
         Throwable failure = event.getException();
-        log.error("Application startup failed: type={} message={}",
+        StartupDiagnosticReport report = startupDiagnosticsService.diagnose();
+        log.error("STARTUP_DIAGNOSTICS event=STARTUP_FAILED failureType={} failureMessage={} {}",
                 failure.getClass().getSimpleName(),
-                failure.getMessage(),
+                sanitizeFailureMessage(failure.getMessage()),
+                report.toLogSummary(),
                 failure);
+    }
+
+    private String sanitizeFailureMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "";
+        }
+        return message.replaceAll("(?i)(password|secret|token|macaroon|private-key|api-key)=\\S+", "$1=<redacted>");
     }
 }
