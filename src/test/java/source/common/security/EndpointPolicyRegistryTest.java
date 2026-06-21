@@ -47,10 +47,32 @@ class EndpointPolicyRegistryTest {
     }
 
     @Test
-    void walletEndpointsRequireAuthentication() {
+    void kfeWalletEndpointsRequireAuthentication() {
         assertEquals(
                 EndpointPolicyRegistry.Policy.AUTHENTICATED,
-                registry.policyFor("/wallet/create").orElseThrow());
+                registry.policyFor("/kfe/wallets").orElseThrow());
+        assertEquals(
+                EndpointPolicyRegistry.Policy.AUTHENTICATED,
+                registry.policyFor("/kfe/users/alice/receiving-capabilities").orElseThrow());
+    }
+
+    @Test
+    void kfeAdminEndpointsRequireAdminPolicy() {
+        assertEquals(
+                EndpointPolicyRegistry.Policy.ADMIN,
+                registry.policyFor("/api/admin/kfe/audit/latest").orElseThrow());
+        assertEquals(
+                EndpointPolicyRegistry.Policy.ADMIN,
+                registry.policyFor("/api/admin/kfe/reserves/overview").orElseThrow());
+    }
+
+    @Test
+    void legacyFinancialEndpointsAreNotDeclared() {
+        assertTrue(registry.policyFor("/wallet/create").isEmpty());
+        assertTrue(registry.policyFor("/v1/audit/config").isEmpty());
+        assertTrue(registry.policyFor("/v1/audit/reserves/current").isEmpty());
+        assertTrue(registry.policyFor("/v1/audit/siphon").isEmpty());
+        assertTrue(registry.policyFor("/v1/audit/stats").isEmpty());
     }
 
     @Test

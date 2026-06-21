@@ -49,6 +49,22 @@ class ReleaseAttestationFilterTest {
         assertEquals("{\"success\":false,\"error\":\"REMOTE_RELEASE_DIGEST_MISMATCH\"}", response.getContentAsString());
     }
 
+    @Test
+    void defaultCriticalPrefixesProtectKfeAdminRoutesNotLegacyAuditSiphon() throws Exception {
+        ReleaseAttestationFilter filter = filterWithDefaultPrefixes(releaseManifestService(true, DIGEST));
+
+        MockHttpServletResponse kfeAdminResponse = new MockHttpServletResponse();
+        filter.doFilter(new MockHttpServletRequest("POST", "/api/admin/kfe/audit/root"),
+                kfeAdminResponse, new MockFilterChain());
+
+        MockHttpServletResponse legacyAuditResponse = new MockHttpServletResponse();
+        filter.doFilter(new MockHttpServletRequest("POST", "/v1/audit/siphon"),
+                legacyAuditResponse, new MockFilterChain());
+
+        assertEquals(403, kfeAdminResponse.getStatus());
+        assertEquals(200, legacyAuditResponse.getStatus());
+    }
+
     private ReleaseAttestationFilter filter(ReleaseManifestService releaseManifestService) {
         return new ReleaseAttestationFilter(
                 provider(releaseManifestService),
@@ -58,6 +74,17 @@ class ReleaseAttestationFilterTest {
                 SECRET,
                 "",
                 "/internal");
+    }
+
+    private ReleaseAttestationFilter filterWithDefaultPrefixes(ReleaseManifestService releaseManifestService) {
+        return new ReleaseAttestationFilter(
+                provider(releaseManifestService),
+                true,
+                false,
+                300,
+                SECRET,
+                "",
+                ReleaseAttestationFilter.DEFAULT_CRITICAL_PATH_PREFIXES);
     }
 
     private ReleaseManifestService releaseManifestService(boolean authorized, String manifestDigest) {

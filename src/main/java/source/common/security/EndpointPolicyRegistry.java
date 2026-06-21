@@ -44,9 +44,7 @@ public class EndpointPolicyRegistry {
             "/quorum/**",
             "/sovereignty/reattest",
             "/sovereignty/telemetry",
-            "/users/*/receiving-capabilities",
-            "/v1/audit/stats",
-            "/wallet/create"
+            "/users/*/receiving-capabilities"
     };
 
     private static final String[] ADMIN = {
@@ -55,10 +53,6 @@ public class EndpointPolicyRegistry {
             "/auth/admin/devices",
             "/auth/admin/devices/**",
             "/auth/admin/key",
-            "/v1/audit/config",
-            "/v1/audit/reserves/**",
-            "/v1/audit/siphon",
-            "/v1/audit/siphon/**",
             "/v3/api-docs",
             "/v3/api-docs/**",
             "/configuration/security",

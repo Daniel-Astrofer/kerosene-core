@@ -26,6 +26,9 @@ import java.util.List;
 @Component
 public class ReleaseAttestationFilter extends OncePerRequestFilter {
 
+    public static final String DEFAULT_CRITICAL_PATH_PREFIXES =
+            "/internal,/sovereignty/heartbeat,/api/admin/kfe,/kfe/wallets";
+
     public static final String RELEASE_DIGEST_HEADER = "X-Kerosene-Release-Digest";
     public static final String RELEASE_TIMESTAMP_HEADER = "X-Kerosene-Release-Timestamp";
     public static final String RELEASE_PROOF_HEADER = "X-Kerosene-Release-Proof";
@@ -46,7 +49,7 @@ public class ReleaseAttestationFilter extends OncePerRequestFilter {
             @Value("${release.attestation.max-clock-skew-seconds:300}") long maxClockSkewSeconds,
             @Value("${release.attestation.shared-secret:}") String sharedSecret,
             @Value("${release.attestation.client-certificate-subject:}") String requiredCertificateSubject,
-            @Value("${release.attestation.critical-path-prefixes:/internal,/sovereignty/heartbeat,/v1/audit/siphon}") String criticalPathPrefixes) {
+            @Value("${release.attestation.critical-path-prefixes:" + DEFAULT_CRITICAL_PATH_PREFIXES + "}") String criticalPathPrefixes) {
         this.releaseManifestService = releaseManifestService.getIfAvailable();
         this.enabled = enabled;
         this.requireClientCertificate = requireClientCertificate;
