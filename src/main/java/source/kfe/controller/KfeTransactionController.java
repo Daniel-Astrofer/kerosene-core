@@ -33,14 +33,8 @@ public class KfeTransactionController {
             @Valid @RequestBody KfeSubmitTransactionRequest request,
             Authentication authentication) {
         Long userId = authenticatedUserId(authentication);
-        try {
-            KfeTransactionResponse response = financialApi.submitTransaction(userId, request);
-            return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
-        } catch (org.springframework.dao.DataIntegrityViolationException | org.hibernate.exception.ConstraintViolationException ex) {
-            String requestHash = financialApi.transactionRequestHash(userId, request);
-            KfeTransactionResponse response = financialApi.existingTransactionByIdempotency(userId, request.idempotencyKey(), requestHash);
-            return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
-        }
+        KfeTransactionResponse response = financialApi.submitTransaction(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("KFE transaction accepted.", response));
     }
 
     @PostMapping("/quote")

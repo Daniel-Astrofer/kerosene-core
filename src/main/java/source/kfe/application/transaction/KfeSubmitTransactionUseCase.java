@@ -1,5 +1,7 @@
 package source.kfe.application.transaction;
 
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.kfe.dto.KfeSubmitTransactionRequest;
@@ -108,7 +110,13 @@ public class KfeSubmitTransactionUseCase {
             return SubmissionAttempt.existing(requestHash, idempotencyUseCase.existingResponse(existingIdempotency, requestHash));
         }
 
-        KfeIdempotencyEntity idempotency = idempotencyUseCase.reserve(userId, request, requestHash);
+        KfeIdempotencyEntity idempotency;
+        try {
+            idempotency = idempotencyUseCase.reserve(userId, request, requestHash);
+        } catch (DataIntegrityViolationException | ConstraintViolationException ex) {
+            return SubmissionAttempt.existing(requestHash,
+                    idempotencyUseCase.getExistingByIdempotency(userId, request.idempotencyKey(), requestHash));
+        }
         return SubmissionAttempt.reserved(requestHash, idempotency);
     }
 

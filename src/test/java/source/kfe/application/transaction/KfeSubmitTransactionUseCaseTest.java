@@ -1,9 +1,12 @@
 package source.kfe.application.transaction;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import source.kfe.dto.KfeSubmitTransactionRequest;
+import source.kfe.dto.KfeTransactionResponse;
 import source.kfe.model.KfeDirection;
 import source.kfe.model.KfeRail;
+import source.kfe.model.KfeTransactionStatus;
 import source.kfe.repository.KfeTransactionRepository;
 import source.kfe.service.KfeBalanceService;
 import source.kfe.service.KfeDashboardPublisher;
@@ -15,6 +18,7 @@ import source.kfe.service.KfeResponseMapper;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,9 +61,45 @@ class KfeSubmitTransactionUseCaseTest {
     );
 
     @Test
+    void duplicateIdempotencyReservationReturnsExistingTransactionResponse() {
+        Long userId = 123L;
+        KfeSubmitTransactionRequest request = outboundRequest();
+        String requestHash = "request-hash";
+        KfeTransactionResponse existingResponse = transactionResponse();
+
+        when(idempotencyUseCase.requestHash(userId, request)).thenReturn(requestHash);
+        when(idempotencyUseCase.find(userId, request.idempotencyKey())).thenReturn(null);
+        when(idempotencyUseCase.reserve(userId, request, requestHash))
+                .thenThrow(new DataIntegrityViolationException("duplicate idempotency reservation"));
+        when(idempotencyUseCase.getExistingByIdempotency(userId, request.idempotencyKey(), requestHash))
+                .thenReturn(existingResponse);
+
+        KfeTransactionResponse response = useCase.submit(userId, request);
+
+        assertSame(existingResponse, response);
+        verify(idempotencyUseCase).getExistingByIdempotency(userId, request.idempotencyKey(), requestHash);
+        verify(transactionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void failedIdempotencyReservationDoesNotCreateTransactionIntent() {
         Long userId = 123L;
-        KfeSubmitTransactionRequest request = new KfeSubmitTransactionRequest(
+        KfeSubmitTransactionRequest request = outboundRequest();
+        String requestHash = "request-hash";
+
+        when(idempotencyUseCase.requestHash(userId, request)).thenReturn(requestHash);
+        when(idempotencyUseCase.find(userId, request.idempotencyKey())).thenReturn(null);
+        when(idempotencyUseCase.reserve(userId, request, requestHash))
+                .thenThrow(new IllegalStateException("duplicate idempotency reservation"));
+
+        assertThrows(IllegalStateException.class, () -> useCase.submit(userId, request));
+
+        verify(idempotencyUseCase).reserve(userId, request, requestHash);
+        verify(transactionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    private KfeSubmitTransactionRequest outboundRequest() {
+        return new KfeSubmitTransactionRequest(
                 "idemp-key",
                 KfeRail.ONCHAIN,
                 KfeDirection.OUTBOUND,
@@ -73,16 +113,28 @@ class KfeSubmitTransactionUseCaseTest {
                 "passkey-json",
                 "passphrase"
         );
-        String requestHash = "request-hash";
+    }
 
-        when(idempotencyUseCase.requestHash(userId, request)).thenReturn(requestHash);
-        when(idempotencyUseCase.find(userId, request.idempotencyKey())).thenReturn(null);
-        when(idempotencyUseCase.reserve(userId, request, requestHash))
-                .thenThrow(new IllegalStateException("duplicate idempotency reservation"));
-
-        assertThrows(IllegalStateException.class, () -> useCase.submit(userId, request));
-
-        verify(idempotencyUseCase).reserve(userId, request, requestHash);
-        verify(transactionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    private KfeTransactionResponse transactionResponse() {
+        return new KfeTransactionResponse(
+                UUID.randomUUID(),
+                KfeTransactionStatus.SETTLED,
+                KfeRail.ONCHAIN,
+                KfeDirection.OUTBOUND,
+                UUID.randomUUID(),
+                null,
+                100_000L,
+                99_000L,
+                1000L,
+                0L,
+                101_000L,
+                "proposal-hash",
+                3,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }
