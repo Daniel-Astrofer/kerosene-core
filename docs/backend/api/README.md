@@ -1,10 +1,23 @@
 # Backend API Documentation
 
-Documentação de API por serviço do backend Kerosene.
+Esta pasta contém a **documentação operacional canônica por domínio** da API do backend Kerosene.
 
-Fonte principal: controllers, DTOs e configuração de segurança em `backend/kerosene/src/main/java/source/**`.
+Use estes arquivos para integração de frontend, mobile, QA, automação, suporte e revisão de produto. Cada documento separa a API por serviço e deve responder: para que serve, como autenticar, quais headers enviar, qual body usar, quais responses esperar e quais rotas foram removidas ou substituídas.
 
-`docs/backend/API_REFERENCE.md` permanece como referência consolidada, mas os arquivos desta pasta são a documentação operacional por serviço. A política efetiva vem de `EndpointPolicyRegistry`, `Security` e de anotações `@PreAuthorize`.
+`docs/backend/API_REFERENCE.md` existe como referência consolidada e inventário full-text. Ele não substitui estes documentos por domínio.
+
+Fonte principal: controllers, DTOs, `EndpointPolicyRegistry`, configuração de segurança e anotações de autorização em `backend/kerosene/src/main/java/source/**`.
+
+## Regra KFE-only
+
+A documentação financeira ativa deve apontar para KFE. Para novos fluxos, use:
+
+```text
+/kfe/**
+/api/admin/kfe/**
+```
+
+Rotas financeiras antigas só podem aparecer como `STALE`, `CONTROLLER_ABSENT`, `REMOVED` ou orientação de migração. Elas não devem ser apresentadas como contrato ativo para clientes externos.
 
 ## Status da revisão corporativa
 
