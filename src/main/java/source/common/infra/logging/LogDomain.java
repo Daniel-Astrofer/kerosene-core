@@ -21,36 +21,56 @@ import org.slf4j.MarkerFactory;
  * log.warn(LogDomain.AUDIT, "reconciliation.mismatch ledgerBalance={} nodeBalance={}", l, n);
  * }</pre>
  *
- * <p><b>Domain definitions:</b>
- * <ul>
- *   <li>{@link #SECURITY} — auth, passkeys, honeypot, token issuance, MFA</li>
- *   <li>{@link #TRANSACTIONS} — payments, Lightning, on-chain, wallet operations</li>
- *   <li>{@link #TREASURY} — reserve, liquidity, rebalancing, cold wallet</li>
- *   <li>{@link #AUDIT} — ledger integrity, reconciliation, quorum/raft events</li>
- *   <li>{@link #ACCESS} — HTTP access log (method, path, status, duration)</li>
- * </ul>
+ * <p><b>Domain definitions:</b> runtime, startup, security, auth, kfe, audit,
+ * integration, vault, mpc, frontend-api and access.
  *
  * Events without a marker route to the general {@code APPLICATION} appender.
  */
 public final class LogDomain {
 
-    /** Auth flows, JWT issuance, passkeys, honeypot triggers, MFA enforcement. */
-    public static final Marker SECURITY     = MarkerFactory.getMarker("SECURITY");
+    /** General application runtime diagnostics. */
+    public static final Marker RUNTIME = MarkerFactory.getMarker("RUNTIME");
 
-    /** Payments, Lightning invoices, on-chain sends/receives, wallet balance changes. */
-    public static final Marker TRANSACTIONS = MarkerFactory.getMarker("TRANSACTIONS");
+    /** Startup, readiness, profile and configuration diagnostics. */
+    public static final Marker STARTUP = MarkerFactory.getMarker("STARTUP");
 
-    /** Reserve snapshots, liquidity rebalancing, cold-wallet sweeps, treasury overview. */
-    public static final Marker TREASURY     = MarkerFactory.getMarker("TREASURY");
+    /** Security controls, fail-closed decisions, policy denials and suspicious activity. */
+    public static final Marker SECURITY = MarkerFactory.getMarker("SECURITY");
+
+    /** Auth flows, JWT/session issuance, passkeys, device keys and MFA enforcement. */
+    public static final Marker AUTH = MarkerFactory.getMarker("AUTH");
+
+    /** KFE financial engine events: wallets, ledger, transactions, outbox and settlement. */
+    public static final Marker KFE = MarkerFactory.getMarker("KFE");
+
+    /** External integration calls that are not Vault/MPC-specific. */
+    public static final Marker INTEGRATION = MarkerFactory.getMarker("INTEGRATION");
+
+    /** Vault calls, readiness, attestation and key-management diagnostics. */
+    public static final Marker VAULT = MarkerFactory.getMarker("VAULT");
+
+    /** MPC calls, signer diagnostics and threshold-policy decisions. */
+    public static final Marker MPC = MarkerFactory.getMarker("MPC");
+
+    /** Frontend/backend API communication diagnostics excluding raw bodies. */
+    public static final Marker FRONTEND_API = MarkerFactory.getMarker("FRONTEND_API");
 
     /**
      * Immutable business events: ledger mutations, reconciliation results,
      * quorum decisions, shard operations. These logs should never be dropped.
      */
-    public static final Marker AUDIT        = MarkerFactory.getMarker("AUDIT");
+    public static final Marker AUDIT = MarkerFactory.getMarker("AUDIT");
 
     /** HTTP request/response access log (no body, no PII, only metadata). */
-    public static final Marker ACCESS       = MarkerFactory.getMarker("ACCESS");
+    public static final Marker ACCESS = MarkerFactory.getMarker("ACCESS");
+
+    /** @deprecated Use {@link #KFE}. */
+    @Deprecated(forRemoval = false)
+    public static final Marker TRANSACTIONS = KFE;
+
+    /** @deprecated Use {@link #KFE} or {@link #AUDIT}, depending on event semantics. */
+    @Deprecated(forRemoval = false)
+    public static final Marker TREASURY = KFE;
 
     private LogDomain() {
     }

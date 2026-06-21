@@ -66,13 +66,16 @@ public class LoggingFilter extends OncePerRequestFilter {
             return;
         }
 
-        log.info(LogDomain.ACCESS, "http_access {} {} {} {} {} {} {}",
-                kv("http.method",           req.getMethod()),
-                kv("url.path",              uri),
-                kv("http.status_code",      res.getStatus()),
-                kv("duration_ms",           durationMs),
-                kv("client.ip",             LogSanitizer.maskedIp(req.getRemoteAddr())),
-                kv("req.bytes",             req.getContentAsByteArray().length),
-                kv("res.bytes",             res.getContentAsByteArray().length));
+        log.info(LogDomain.ACCESS, "http_access {} {} {} {} {} {} {} {} {} {}",
+                kv(StructuredLogField.EVENT, "http.access"),
+                kv(StructuredLogField.DOMAIN, "access"),
+                kv(StructuredLogField.OPERATION, "http.request"),
+                kv(StructuredLogField.HTTP_METHOD, req.getMethod()),
+                kv(StructuredLogField.URL_PATH, uri),
+                kv(StructuredLogField.HTTP_STATUS_CODE, res.getStatus()),
+                kv(StructuredLogField.DURATION_MS, durationMs),
+                kv(StructuredLogField.CLIENT_IP, LogSanitizer.maskedIp(req.getRemoteAddr())),
+                kv(StructuredLogField.REQUEST_BYTES, req.getContentAsByteArray().length),
+                kv(StructuredLogField.RESPONSE_BYTES, res.getContentAsByteArray().length));
     }
 }

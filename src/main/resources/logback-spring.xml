@@ -3,7 +3,7 @@
 
     <!-- ══════════════════════════════════════════════════════════════════
          KEROSENE — Structured Log Configuration (Financial Platform)
-         Domains: security | transactions | treasury | audit | access | app
+         Domains: runtime | startup | security | auth | kfe | audit | integration | vault | mpc | frontend-api | access
          All logs emit JSON. Routing is driven by the MDC field "logDomain".
          ══════════════════════════════════════════════════════════════════ -->
 
@@ -45,11 +45,11 @@
         </encoder>
     </appender>
 
-    <!-- ─── TRANSACTIONS DOMAIN ──────────────────────────────────────── -->
-    <appender name="TRANSACTIONS" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- ─── KFE DOMAIN ───────────────────────────────────────────────── -->
+    <appender name="KFE" class="ch.qos.logback.core.ConsoleAppender">
         <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
             <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
-                <marker>TRANSACTIONS</marker>
+                <marker>KFE</marker>
             </evaluator>
             <onMatch>ACCEPT</onMatch>
             <onMismatch>DENY</onMismatch>
@@ -70,11 +70,11 @@
         </encoder>
     </appender>
 
-    <!-- ─── TREASURY DOMAIN ──────────────────────────────────────────── -->
-    <appender name="TREASURY" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- ─── RUNTIME DOMAIN ────────────────────────────────────────────── -->
+    <appender name="RUNTIME" class="ch.qos.logback.core.ConsoleAppender">
         <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
             <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
-                <marker>TREASURY</marker>
+                <marker>RUNTIME</marker>
             </evaluator>
             <onMatch>ACCEPT</onMatch>
             <onMismatch>DENY</onMismatch>
@@ -92,6 +92,79 @@
                 <maxLength>2048</maxLength>
                 <shortenedClassNameLength>40</shortenedClassNameLength>
             </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- Startup/security/auth/integration-specific markers share the runtime encoder. -->
+    <appender name="STARTUP" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator"><marker>STARTUP</marker></evaluator>
+            <onMatch>ACCEPT</onMatch><onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="AUTH" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator"><marker>AUTH</marker></evaluator>
+            <onMatch>ACCEPT</onMatch><onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="INTEGRATION" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator"><marker>INTEGRATION</marker></evaluator>
+            <onMatch>ACCEPT</onMatch><onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="VAULT" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator"><marker>VAULT</marker></evaluator>
+            <onMatch>ACCEPT</onMatch><onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="MPC" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator"><marker>MPC</marker></evaluator>
+            <onMatch>ACCEPT</onMatch><onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <appender name="FRONTEND_API" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator"><marker>FRONTEND_API</marker></evaluator>
+            <onMatch>ACCEPT</onMatch><onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
+            <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -168,18 +241,60 @@
         <appender-ref ref="SECURITY"/>
     </appender>
 
-    <appender name="ASYNC_TRANSACTIONS" class="ch.qos.logback.classic.AsyncAppender">
+    <appender name="ASYNC_AUTH" class="ch.qos.logback.classic.AsyncAppender">
         <queueSize>512</queueSize>
         <discardingThreshold>0</discardingThreshold>
         <includeCallerData>false</includeCallerData>
-        <appender-ref ref="TRANSACTIONS"/>
+        <appender-ref ref="AUTH"/>
     </appender>
 
-    <appender name="ASYNC_TREASURY" class="ch.qos.logback.classic.AsyncAppender">
+    <appender name="ASYNC_KFE" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="KFE"/>
+    </appender>
+
+    <appender name="ASYNC_RUNTIME" class="ch.qos.logback.classic.AsyncAppender">
         <queueSize>256</queueSize>
         <discardingThreshold>0</discardingThreshold>
         <includeCallerData>false</includeCallerData>
-        <appender-ref ref="TREASURY"/>
+        <appender-ref ref="RUNTIME"/>
+    </appender>
+
+    <appender name="ASYNC_STARTUP" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="STARTUP"/>
+    </appender>
+
+    <appender name="ASYNC_INTEGRATION" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="INTEGRATION"/>
+    </appender>
+
+    <appender name="ASYNC_VAULT" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="VAULT"/>
+    </appender>
+
+    <appender name="ASYNC_MPC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="MPC"/>
+    </appender>
+
+    <appender name="ASYNC_FRONTEND_API" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="FRONTEND_API"/>
     </appender>
 
     <appender name="ASYNC_AUDIT" class="ch.qos.logback.classic.AsyncAppender">
@@ -202,7 +317,7 @@
 
     <!-- Security: auth, passkeys, honeypot, JWT -->
     <logger name="source.auth"                                    level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_SECURITY"/>
+        <appender-ref ref="ASYNC_AUTH"/>
     </logger>
     <logger name="source.security"                                level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_SECURITY"/>
@@ -213,12 +328,28 @@
 
     <!-- KFE: financial engine, lightning, on-chain -->
     <logger name="source.kfe"                                     level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TRANSACTIONS"/>
+        <appender-ref ref="ASYNC_KFE"/>
     </logger>
 
     <!-- KFE/mining: reserve, liquidity, reconciliation -->
     <logger name="source.mining"                                  level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_TREASURY"/>
+        <appender-ref ref="ASYNC_KFE"/>
+    </logger>
+
+    <logger name="source.vault"                                   level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_VAULT"/>
+    </logger>
+    <logger name="source.mpc"                                     level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_MPC"/>
+    </logger>
+    <logger name="source.common.integration"                      level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_INTEGRATION"/>
+    </logger>
+    <logger name="source.common.startup"                          level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_STARTUP"/>
+    </logger>
+    <logger name="source.common.frontend"                         level="INFO"  additivity="false">
+        <appender-ref ref="ASYNC_FRONTEND_API"/>
     </logger>
 
     <!-- Audit: sovereign (quorum / raft) -->
