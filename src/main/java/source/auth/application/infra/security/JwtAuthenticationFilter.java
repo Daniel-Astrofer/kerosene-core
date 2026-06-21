@@ -61,6 +61,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null) {
             UsernamePasswordAuthenticationToken auth = null;
             try {
+                if (jwtService.isSessionRevoked(token)) {
+                    throw new AuthExceptions.InvalidCredentials("invalid session");
+                }
                 Long userId = jwtService.extractId(token);
 
                 List<SimpleGrantedAuthority> authorities = jwtService.extractRoles(token).stream()
@@ -71,12 +74,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 // Check if the token needs renewal
                 if (jwtServiceImpl.shouldRenewToken(token)) {
-                    String newToken = jwtService.generateToken(userId);
+                    String newToken = jwtService.generateToken(
+                            userId,
+                            jwtService.extractRoles(token),
+                            jwtService.extractSessionId(token));
                     response.setHeader("X-New-Token", newToken);
                 }
 
             } catch (Exception e) {
-                log.warn("JWT Authentication Error for path {}: {}", request.getServletPath(), e.getMessage());
+                log.warn("JWT Authentication Error for path {}", request.getServletPath());
                 // For WebSocket upgrade paths (/ws/**), do NOT abort the request.
                 // The STOMP-level interceptor in WebSocketConfig handles authentication
                 // AFTER the HTTP upgrade. Returning 401 here prevents the upgrade entirely.
@@ -84,7 +90,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.debug("Skipping JWT block for WS path: {}", request.getServletPath());
                 } else {
                     resolver.resolveException(request, response, null,
-                            new AuthExceptions.InvalidCredentials("invalid session: " + e.getMessage()));
+                            new AuthExceptions.InvalidCredentials("invalid session"));
                     return;
                 }
             }

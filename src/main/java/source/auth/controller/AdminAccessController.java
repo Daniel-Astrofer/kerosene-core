@@ -55,9 +55,14 @@ public class AdminAccessController {
     }
 
     @GetMapping("/login/{attemptId}")
-    public ResponseEntity<ApiResponse<AdminLoginResponseDTO>> pollLogin(@PathVariable UUID attemptId) {
+    public ResponseEntity<ApiResponse<AdminLoginResponseDTO>> pollLogin(
+            @PathVariable UUID attemptId,
+            HttpServletRequest httpRequest) {
         try {
-            AdminLoginResponseDTO response = adminAccessService.pollLogin(attemptId);
+            AdminLoginResponseDTO response = adminAccessService.pollLogin(
+                    attemptId,
+                    clientAddress(httpRequest),
+                    httpRequest.getHeader("User-Agent"));
             HttpStatus status = response.requiresMobileApproval() ? HttpStatus.ACCEPTED : HttpStatus.OK;
             return ResponseEntity.status(status).body(ApiResponse.success(response.message(), response));
         } catch (AuthExceptions.StructuredAuthException exception) {

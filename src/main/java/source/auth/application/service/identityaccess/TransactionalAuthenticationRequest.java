@@ -51,4 +51,20 @@ public record TransactionalAuthenticationRequest(
                 confirmationPassphrase,
                 TransactionalAuthenticationScope.WALLET_OUTBOUND);
     }
+
+    public static TransactionalAuthenticationRequest accountSecurityChange(
+            Long authenticatedUserId,
+            String totpCode,
+            String passkeyAssertionJson,
+            String confirmationPassphrase) {
+        return new TransactionalAuthenticationRequest(
+                null,
+                authenticatedUserId,
+                authenticatedUserId,
+                null,
+                totpCode,
+                passkeyAssertionJson,
+                confirmationPassphrase,
+                TransactionalAuthenticationScope.ACCOUNT_SECURITY_CHANGE);
+    }
 }

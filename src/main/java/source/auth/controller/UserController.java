@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
+import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
 import source.auth.dto.UserDTO;
@@ -11,6 +12,7 @@ import source.auth.dto.SignupResponseDTO;
 import source.auth.dto.SignupTotpVerifyRequestDTO;
 import source.auth.application.service.pow.PowService;
 import source.common.dto.ApiResponse;
+import source.common.exception.ErrorCodes;
 
 import java.util.Map;
 
@@ -24,13 +26,16 @@ public class UserController {
     private final Login login;
     private final Signup signup;
     private final PowService powService;
+    private final JwtServicer jwtService;
 
     public UserController(Login login,
             Signup signup,
-            PowService powService) {
+            PowService powService,
+            JwtServicer jwtService) {
         this.login = login;
         this.signup = signup;
         this.powService = powService;
+        this.jwtService = jwtService;
     }
 
     @GetMapping("/pow/challenge")
@@ -71,6 +76,31 @@ public class UserController {
         String token = login.loginTotpVerify(userDTO);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.success("TOTP verification successful. You have logged in.", token));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestHeader(value = "Authorization", required = false) String authorization) {
+        String token = extractBearerToken(authorization);
+        if (token == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Authentication is required to logout.", ErrorCodes.AUTH_SESSION_EXPIRED));
+        }
+
+        try {
+            jwtService.revokeSession(token);
+            return ResponseEntity.ok(ApiResponse.success("Session revoked."));
+        } catch (RuntimeException exception) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Unable to revoke the current session.", ErrorCodes.AUTH_SESSION_EXPIRED));
+        }
+    }
+
+    private String extractBearerToken(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return null;
+        }
+        String token = authorization.substring("Bearer ".length()).trim();
+        return token.isBlank() ? null : token;
     }
 
 }

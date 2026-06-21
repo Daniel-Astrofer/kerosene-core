@@ -22,4 +22,16 @@ public interface RedisServicer {
     void setValue(String key, String value, long timeoutSeconds);
 
     void deleteValue(String key);
+
+    default void revokeJwtSession(String sessionId, long timeoutSeconds) {
+        setValue(jwtRevokedSessionKey(sessionId), "1", timeoutSeconds);
+    }
+
+    default boolean isJwtSessionRevoked(String sessionId) {
+        return getValue(jwtRevokedSessionKey(sessionId)) != null;
+    }
+
+    static String jwtRevokedSessionKey(String sessionId) {
+        return "auth:jwt:revoked-session:" + sessionId;
+    }
 }

@@ -157,13 +157,15 @@ public class AdminAccessService {
     }
 
     @Transactional
-    public AdminLoginResponseDTO pollLogin(UUID attemptId) {
-        AdminAccessAttemptEntity attempt = attemptRepository.findById(attemptId)
+    public AdminLoginResponseDTO pollLogin(UUID attemptId, String remoteAddress, String userAgentHeader) {
+        AdminAccessAttemptEntity attempt = attemptRepository.findForPollingById(attemptId)
                 .orElseThrow(() -> new AuthExceptions.StructuredAuthException(
                         "Tentativa administrativa nao encontrada.",
                         HttpStatus.NOT_FOUND,
                         "ADMIN_ATTEMPT_NOT_FOUND",
                         null));
+
+        validatePollingContext(attempt, remoteAddress, userAgentHeader);
 
         if (attempt.getStatus() == AdminAccessAttemptStatus.PENDING
                 && attempt.getExpiresAt().isBefore(LocalDateTime.now())) {
@@ -175,6 +177,8 @@ public class AdminAccessService {
         if (attempt.getStatus() == AdminAccessAttemptStatus.APPROVED) {
             attempt.getDevice().setStatus(AdminAccessDeviceStatus.ACTIVE);
             attempt.getDevice().setLastAccessAt(LocalDateTime.now());
+            attempt.setStatus(AdminAccessAttemptStatus.REDEEMED);
+            attemptRepository.save(attempt);
             deviceRepository.save(attempt.getDevice());
             String token = attempt.getUser().getId() + " "
                     + jwtServicer.generateToken(attempt.getUser().getId(), List.of(UserRole.ADMIN.name()));
@@ -194,6 +198,25 @@ public class AdminAccessService {
                 attempt.getExpiresAt(),
                 null,
                 statusMessage(attempt.getStatus()));
+    }
+
+    private void validatePollingContext(
+            AdminAccessAttemptEntity attempt,
+            String remoteAddress,
+            String userAgentHeader) {
+        String expectedIpFingerprint = safeId(attempt.getIpFingerprint());
+        String requestIpFingerprint = LogSanitizer.fingerprint(remoteAddress);
+        String expectedUserAgent = safe(attempt.getUserAgent());
+        String requestUserAgent = safe(userAgentHeader);
+
+        if (!constantTimeEquals(expectedIpFingerprint, requestIpFingerprint)
+                || !constantTimeEquals(expectedUserAgent, requestUserAgent)) {
+            throw new AuthExceptions.StructuredAuthException(
+                    "Contexto da tentativa administrativa nao confere.",
+                    HttpStatus.FORBIDDEN,
+                    "ADMIN_ATTEMPT_CONTEXT_MISMATCH",
+                    null);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -462,6 +485,7 @@ public class AdminAccessService {
             case PENDING -> "Aguardando autorizacao no app mobile.";
             case DENIED, BLOCKED -> "Acesso administrativo bloqueado no app mobile.";
             case EXPIRED -> "A tentativa de acesso expirou.";
+            case REDEEMED -> "A tentativa de acesso administrativo ja foi utilizada.";
             case APPROVED -> "Acesso administrativo registrado.";
         };
     }

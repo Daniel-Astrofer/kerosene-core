@@ -8,7 +8,22 @@ public interface JwtServicer {
 
     String generateToken(long id, Collection<String> roles);
 
+    default String generateToken(long id, Collection<String> roles, String sessionId) {
+        return generateToken(id, roles);
+    }
+
     Long extractId(String token);
+
+    default String extractSessionId(String token) {
+        return null;
+    }
+
+    default boolean isSessionRevoked(String token) {
+        return false;
+    }
+
+    default void revokeSession(String token) {
+    }
 
     default List<String> extractRoles(String token) {
         return List.of("USER");

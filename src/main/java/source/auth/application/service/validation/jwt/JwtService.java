@@ -1,8 +1,10 @@
 package source.auth.application.service.validation.jwt;
 
 import source.auth.AuthConstants;
+import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import io.jsonwebtoken.Jwts;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -11,12 +13,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 @Service("JwtService")
 public class JwtService implements JwtServicer {
 
     @Value("${api.secret.token.secret}")
     private String secretKey;
+
+    @Autowired(required = false)
+    private RedisServicer redisService;
 
     public SecretKey getSecretKey() {
         byte[] keyBytes = secretKey.trim().getBytes(StandardCharsets.UTF_8);
@@ -30,9 +36,15 @@ public class JwtService implements JwtServicer {
 
     @Override
     public String generateToken(long id, Collection<String> roles) {
+        return generateToken(id, roles, UUID.randomUUID().toString());
+    }
+
+    @Override
+    public String generateToken(long id, Collection<String> roles, String sessionId) {
         return Jwts.builder()
                 .subject(String.valueOf(id))
                 .id(String.valueOf(id))
+                .claim("sessionId", normalizeSessionId(sessionId))
                 .claim("roles", normalizeRoles(roles))
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + AuthConstants.JWT_EXPIRATION_TIME))
@@ -49,6 +61,36 @@ public class JwtService implements JwtServicer {
                 .getPayload()
                 .getId();
         return Long.parseLong(idString);
+    }
+
+    @Override
+    public String extractSessionId(String token) {
+        Object sessionId = Jwts.parser()
+                .verifyWith(getSecretKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("sessionId");
+        return sessionId == null ? null : String.valueOf(sessionId);
+    }
+
+    @Override
+    public boolean isSessionRevoked(String token) {
+        String sessionId = extractSessionId(token);
+        if (sessionId == null || sessionId.isBlank() || redisService == null) {
+            return false;
+        }
+        return redisService.isJwtSessionRevoked(sessionId);
+    }
+
+    @Override
+    public void revokeSession(String token) {
+        String sessionId = extractSessionId(token);
+        if (sessionId == null || sessionId.isBlank() || redisService == null) {
+            return;
+        }
+        long timeoutSeconds = Math.max(1L, (extractExpiration(token).getTime() - System.currentTimeMillis()) / 1000L);
+        redisService.revokeJwtSession(sessionId, timeoutSeconds);
     }
 
     @Override
@@ -113,6 +155,13 @@ public class JwtService implements JwtServicer {
             return normalized.substring("ROLE_".length());
         }
         return normalized;
+    }
+
+    private String normalizeSessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return UUID.randomUUID().toString();
+        }
+        return sessionId;
     }
 
 }

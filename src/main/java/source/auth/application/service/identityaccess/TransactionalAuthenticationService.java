@@ -148,16 +148,17 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         if (!presented) {
             throw missingTotpException(request.scope(), accountSecurity);
         }
-        if (!hasText(request.totpSecret())) {
+        String totpSecret = hasText(request.totpSecret()) ? request.totpSecret() : user.getTOTPSecret();
+        if (!hasText(totpSecret)) {
             throw new AuthExceptions.IncorrectTotpException("TOTP not configured for this operation.");
         }
 
         if (request.scope() == TransactionalAuthenticationScope.WALLET_OUTBOUND) {
-            if (!totpVerifier.totpMatcher(request.totpSecret(), request.totpCode())) {
+            if (!totpVerifier.totpMatcher(totpSecret, request.totpCode())) {
                 throw new AuthExceptions.IncorrectTotpException("Invalid wallet TOTP code.");
             }
         } else {
-            totpVerifier.totpVerify(request.totpSecret(), request.totpCode());
+            totpVerifier.totpVerify(totpSecret, request.totpCode());
         }
         log.info("Transaction TOTP factor verified for userId={}", user.getId());
         return true;

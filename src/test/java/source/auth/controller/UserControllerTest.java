@@ -8,12 +8,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
 import source.auth.application.service.pow.PowService;
+import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.UserDTO;
 import source.common.exception.GlobalExceptionHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,8 +28,9 @@ class UserControllerTest {
     private final Login login = mock(Login.class);
     private final Signup signup = mock(Signup.class);
     private final PowService powService = mock(PowService.class);
+    private final JwtServicer jwtService = mock(JwtServicer.class);
     private final MockMvc mockMvc = MockMvcBuilders
-            .standaloneSetup(new UserController(login, signup, powService))
+            .standaloneSetup(new UserController(login, signup, powService, jwtService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 
@@ -69,5 +72,38 @@ class UserControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"totpCode\":\"123456\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void logoutRevokesCurrentBearerToken() throws Exception {
+        mockMvc.perform(post("/auth/logout")
+                .header("Authorization", "Bearer token-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Session revoked."));
+
+        verify(jwtService).revokeSession("token-1");
+    }
+
+    @Test
+    void logoutRejectsMissingBearerToken() throws Exception {
+        mockMvc.perform(post("/auth/logout"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Authentication is required to logout."))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_013"));
+    }
+
+    @Test
+    void logoutDoesNotExposeRawRevocationErrors() throws Exception {
+        doThrow(new IllegalArgumentException("raw jwt parse failure"))
+                .when(jwtService).revokeSession("bad-token");
+
+        mockMvc.perform(post("/auth/logout")
+                .header("Authorization", "Bearer bad-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Unable to revoke the current session."))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_013"));
     }
 }
