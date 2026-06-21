@@ -85,8 +85,8 @@ public class KfeSubmitTransactionUseCase {
             return idempotencyUseCase.existingResponse(existingIdempotency, requestHash);
         }
 
+        KfeIdempotencyEntity idempotency = idempotencyUseCase.reserve(userId, request, requestHash);
         KfeTransactionEntity tx = createIntent(userId, request);
-        KfeIdempotencyEntity idempotency = idempotencyUseCase.reserve(request, requestHash, tx);
         stateMachine.audit(tx, "KFE_TRANSACTION_INTENT", null, tx.getStatus(), null);
 
         stateMachine.transition(tx, KfeTransactionStatus.VALIDATING, "KFE_TRANSACTION_VALIDATING",

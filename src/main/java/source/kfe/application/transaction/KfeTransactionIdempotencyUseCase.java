@@ -60,12 +60,11 @@ public class KfeTransactionIdempotencyUseCase {
                 .orElseThrow(() -> new IllegalStateException("Idempotent transaction record is missing."));
     }
 
-    public KfeIdempotencyEntity reserve(KfeSubmitTransactionRequest request, String requestHash, KfeTransactionEntity tx) {
+    public KfeIdempotencyEntity reserve(Long userId, KfeSubmitTransactionRequest request, String requestHash) {
         KfeIdempotencyEntity idempotency = new KfeIdempotencyEntity();
-        idempotency.setId(new KfeIdempotencyId(tx.getUserId(), request.idempotencyKey()));
-        idempotency.setTransactionId(tx.getId());
+        idempotency.setId(new KfeIdempotencyId(userId, request.idempotencyKey()));
         idempotency.setRequestHash(requestHash);
-        idempotency.setStatus(tx.getStatus().name());
+        idempotency.setStatus("PENDING");
         return idempotencyRepository.save(idempotency);
     }
 
