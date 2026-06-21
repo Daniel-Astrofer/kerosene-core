@@ -7,12 +7,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import source.auth.application.usecase.passkey.GetPasskeyInventoryUseCase;
 import source.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
-import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
-import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
@@ -21,7 +20,6 @@ import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.dto.SignupState;
 import source.auth.dto.passkey.PasskeyRegistrationRequest;
 import source.auth.dto.passkey.PasskeyVerifyRequest;
-import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 
@@ -31,35 +29,32 @@ public class PasskeyController {
 
     private static final Logger log = LoggerFactory.getLogger(PasskeyController.class);
     private final PasskeyService passkeyService;
-    private final UserRepository userRepository;
     private final JwtServicer jwtServicer;
     private final SignupStateStore signupStateStore;
-    private final PasskeyInventoryService passkeyInventoryService;
     private final DevBalanceInjector balanceInjector;
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final RedisServicer redisService;
     private final PasskeyOrchestrator passkeyOrchestrator;
+    private final GetPasskeyInventoryUseCase getPasskeyInventoryUseCase;
     private final UpdatePasskeyDeviceStatusUseCase updatePasskeyDeviceStatusUseCase;
 
     public PasskeyController(PasskeyService passkeyService,
-                                  UserRepository userRepository,
                                   JwtServicer jwtServicer,
                                   SignupStateStore signupStateStore,
-                                  PasskeyInventoryService passkeyInventoryService,
                                   DevBalanceInjector balanceInjector,
                                   FinalizeSignupAccount finalizeSignupAccount,
                                   RedisServicer redisService,
                                   PasskeyOrchestrator passkeyOrchestrator,
+                                  GetPasskeyInventoryUseCase getPasskeyInventoryUseCase,
                                   UpdatePasskeyDeviceStatusUseCase updatePasskeyDeviceStatusUseCase) {
         this.passkeyService = passkeyService;
-        this.userRepository = userRepository;
         this.jwtServicer = jwtServicer;
         this.signupStateStore = signupStateStore;
-        this.passkeyInventoryService = passkeyInventoryService;
         this.balanceInjector = balanceInjector;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.redisService = redisService;
         this.passkeyOrchestrator = passkeyOrchestrator;
+        this.getPasskeyInventoryUseCase = getPasskeyInventoryUseCase;
         this.updatePasskeyDeviceStatusUseCase = updatePasskeyDeviceStatusUseCase;
     }
 
@@ -77,15 +72,15 @@ public class PasskeyController {
                     .body(ApiResponse.error("Must be logged in to inspect passkeys", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
 
-        UserDataBase user = userRepository.findById(Long.parseLong(auth.getName())).orElse(null);
-        if (user == null) {
+        GetPasskeyInventoryUseCase.Result result = getPasskeyInventoryUseCase.execute(Long.parseLong(auth.getName()));
+        if (result.status() == GetPasskeyInventoryUseCase.Status.USER_NOT_FOUND) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
+                    .body(ApiResponse.error(result.message(), ErrorCodes.AUTH_USER_NOT_FOUND));
         }
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Registered passkeys retrieved successfully.",
-                passkeyInventoryService.inventoryFor(user)));
+                result.inventory()));
     }
 
     @PostMapping("/register")

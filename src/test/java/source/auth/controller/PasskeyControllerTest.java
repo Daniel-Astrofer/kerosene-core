@@ -18,6 +18,7 @@ import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
+import source.auth.application.usecase.passkey.GetPasskeyInventoryUseCase;
 import source.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
 import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.dto.SignupState;
@@ -54,6 +55,7 @@ class PasskeyControllerTest {
     private FinalizeSignupAccount finalizeSignupAccount;
     private JwtServicer jwtServicer;
     private RedisServicer redisService;
+    private GetPasskeyInventoryUseCase getPasskeyInventoryUseCase;
     private UpdatePasskeyDeviceStatusUseCase updatePasskeyDeviceStatusUseCase;
     private PasskeyController controller;
 
@@ -69,6 +71,7 @@ class PasskeyControllerTest {
         finalizeSignupAccount = mock(FinalizeSignupAccount.class);
         jwtServicer = mock(JwtServicer.class);
         redisService = mock(RedisServicer.class);
+        getPasskeyInventoryUseCase = mock(GetPasskeyInventoryUseCase.class);
         updatePasskeyDeviceStatusUseCase = mock(UpdatePasskeyDeviceStatusUseCase.class);
 
         PasskeyOrchestrator passkeyOrchestrator = new PasskeyOrchestrator(
@@ -83,14 +86,13 @@ class PasskeyControllerTest {
                 redisService);
         controller = new PasskeyController(
                 passkeyService,
-                userRepository,
                 jwtServicer,
                 signupStateStore,
-                passkeyInventoryService,
                 balanceInjector,
                 finalizeSignupAccount,
                 redisService,
                 passkeyOrchestrator,
+                getPasskeyInventoryUseCase,
                 updatePasskeyDeviceStatusUseCase);
     }
 
@@ -311,6 +313,54 @@ class PasskeyControllerTest {
 
         verify(passkeyService).consumeChallengeFromRedis("alice");
         verify(passkeyService, never()).deleteChallengeFromRedis("alice");
+    }
+
+    @Test
+    void getRegisteredDevicesRequiresAuthenticatedUser() {
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.getRegisteredDevices();
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Must be logged in to inspect passkeys", response.getBody().getMessage());
+        assertEquals(ErrorCodes.AUTH_SESSION_EXPIRED, response.getBody().getErrorCode());
+        verify(getPasskeyInventoryUseCase, never()).execute(anyLong());
+    }
+
+    @Test
+    void getRegisteredDevicesMapsUserMissingFromUseCase() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(getPasskeyInventoryUseCase.execute(42L))
+                .thenReturn(new GetPasskeyInventoryUseCase.Result(
+                        GetPasskeyInventoryUseCase.Status.USER_NOT_FOUND,
+                        "User not found",
+                        null));
+
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.getRegisteredDevices();
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("User not found", response.getBody().getMessage());
+        assertEquals(ErrorCodes.AUTH_USER_NOT_FOUND, response.getBody().getErrorCode());
+    }
+
+    @Test
+    void getRegisteredDevicesMapsSuccessInventory() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        PasskeyInventoryDTO inventory = new PasskeyInventoryDTO(true, true, false, "localhost", "localhost", List.of());
+        when(getPasskeyInventoryUseCase.execute(42L))
+                .thenReturn(new GetPasskeyInventoryUseCase.Result(
+                        GetPasskeyInventoryUseCase.Status.FOUND,
+                        null,
+                        inventory));
+
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.getRegisteredDevices();
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Registered passkeys retrieved successfully.", response.getBody().getMessage());
+        assertEquals(inventory, response.getBody().getData());
     }
 
     @Test
