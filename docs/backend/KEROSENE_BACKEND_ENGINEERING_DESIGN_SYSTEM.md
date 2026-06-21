@@ -855,7 +855,147 @@ Exigir testes de:
 
 ---
 
-## 15. Checklist de refatoração
+## 15. Documentação de código backend
+
+Documentação de código deve explicar intenção, invariantes, riscos e decisões operacionais que não são óbvias pela assinatura.
+
+Documentar sempre:
+
+- controllers públicos;
+- use cases públicos;
+- ports públicos;
+- application services e domain services;
+- métodos com regra de negócio;
+- métodos com side effect;
+- métodos com regra de segurança;
+- métodos que emitem auditoria;
+- métodos idempotentes;
+- decisões fail-closed;
+- chamadas para provider externo;
+- métodos privados não óbvios.
+
+Evitar:
+
+- comentário que apenas repete o nome do método;
+- Javadoc em getter, setter, mapper trivial ou DTO simples;
+- documentação genérica sem regra concreta;
+- comentários desatualizados para justificar código confuso.
+
+### 15.1 Controllers
+
+Controller público deve documentar o contrato de borda quando o endpoint representa fluxo sensível.
+
+Exemplo:
+
+```java
+/**
+ * Creates a KFE withdrawal request for the authenticated account.
+ *
+ * Business rules live in CreateKfeWithdrawalUseCase; this controller only
+ * authenticates context, validates request shape and maps the use-case output.
+ *
+ * Security: requires an authenticated user and step-up already validated by
+ * the authorization layer for sensitive KFE operations.
+ */
+```
+
+### 15.2 Use cases e services
+
+Use case ou service deve documentar regra de negócio, side effects, idempotência e eventos relevantes.
+
+Exemplo KFE:
+
+```java
+/**
+ * Reserves funds and schedules an outbound KFE transfer.
+ *
+ * Business rules:
+ * - the wallet must be active and owned by the requester;
+ * - available balance must cover amount plus fee;
+ * - terminal transactions are never reopened.
+ *
+ * Side effects: persists ledger reservation and creates an outbox event.
+ * External calls: none in the database transaction; providers are called by outbox workers.
+ */
+```
+
+### 15.3 Ports
+
+Port público deve documentar contrato, idempotência esperada, erro interno e restrições de provider.
+
+Exemplo:
+
+```java
+/**
+ * Submits a signed KFE transaction to the external provider.
+ *
+ * Implementations must use the provider idempotency token supplied by the
+ * caller and translate provider failures to ExternalProviderException without
+ * leaking raw provider payloads.
+ */
+```
+
+### 15.4 Segurança
+
+Documentar a decisão de segurança no ponto em que ela é aplicada ou exigida.
+
+Exemplo:
+
+```java
+/**
+ * Rejects PSBT signing unless the current session has a valid step-up grant.
+ *
+ * Security: failure must be deny-by-default; missing, expired or ambiguous
+ * step-up state is treated as unauthorized.
+ */
+```
+
+### 15.5 Idempotência
+
+Documentar reserva, conflito e resultado repetido quando a operação tem efeito financeiro ou provider externo.
+
+Exemplo:
+
+```java
+/**
+ * Reserves the idempotency key before any provider-visible effect.
+ *
+ * Replays with the same request hash return the stored result. Replays with a
+ * different hash raise IdempotencyConflictException and must not call providers.
+ */
+```
+
+### 15.6 Auditoria
+
+Documentar eventos auditáveis e payload permitido quando o método emite auditoria.
+
+Exemplo:
+
+```java
+/**
+ * Emits KFE_TRANSACTION_SUBMITTED after the internal reservation is committed.
+ *
+ * Audit payload may include traceId, userId, walletId, transactionId and status.
+ * It must not include provider secrets, JWTs, raw signatures or private keys.
+ */
+```
+
+### 15.7 Fail-closed
+
+Documentar explicitamente quando ausência de configuração, autorização, provider ou estado confiável deve negar a operação.
+
+Exemplo:
+
+```java
+/**
+ * Resolves the production signer adapter.
+ *
+ * Fail-closed: production must reject startup when Vault or MPC configuration is
+ * missing. It must never downgrade silently to a local development signer.
+ */
+```
+
+## 16. Checklist de refatoração
 
 Antes de alterar código:
 
@@ -884,7 +1024,7 @@ Depois de alterar código:
 
 ---
 
-## 16. Contrato para agentes de código
+## 17. Contrato para agentes de código
 
 Agentes só devem alterar código quando receberem arquivos exatos.
 
@@ -929,7 +1069,7 @@ Retorno esperado:
 
 ---
 
-## 17. Regras de merge
+## 18. Regras de merge
 
 Uma alteração não deve ser considerada pronta se:
 
@@ -946,7 +1086,7 @@ Uma alteração não deve ser considerada pronta se:
 
 ---
 
-## 18. Ordem recomendada de adoção
+## 19. Ordem recomendada de adoção
 
 1. Padronizar erro público e exception mapping.
 2. Padronizar logs estruturados e traceId.
@@ -961,7 +1101,7 @@ Uma alteração não deve ser considerada pronta se:
 
 ---
 
-## 19. Glossário oficial
+## 20. Glossário oficial
 
 ```text
 UseCase
@@ -991,7 +1131,7 @@ Fail-closed
 
 ---
 
-## 20. Frase de decisão
+## 21. Frase de decisão
 
 Quando houver dúvida, usar esta regra:
 
