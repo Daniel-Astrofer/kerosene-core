@@ -36,7 +36,7 @@ class FailClosedFilterTest {
 
     @Test
     void paranoidFilter_ShouldTriggerSuicide_WhenDigestIsWrong() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/ledger/tx");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/kfe/transactions");
         request.addHeader("Digest", "SHA-256=wronghash");
         request.setContent("{\"amount\":100}".getBytes());
         request.setContentType("application/json");
@@ -53,7 +53,7 @@ class FailClosedFilterTest {
     @Test
     void paranoidFilter_ShouldForward_WhenDigestIsValidAndPreserveBody() throws Exception {
         byte[] body = "{\"amount\":100}".getBytes(StandardCharsets.UTF_8);
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/ledger/tx");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/kfe/transactions");
         request.addHeader("Digest", "SHA-256=" + sha256(body));
         request.setContent(body);
         request.setContentType("application/json");
@@ -75,7 +75,7 @@ class FailClosedFilterTest {
 
     @Test
     void paranoidFilter_ShouldForward_WhenDigestIsAbsent() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/ledger/tx");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/kfe/transactions");
         request.setContent("{\"amount\":100}".getBytes(StandardCharsets.UTF_8));
         request.setContentType("application/json");
 
@@ -133,7 +133,7 @@ class FailClosedFilterTest {
 
     @Test
     void honeypotFilter_ShouldSkipInspection_WhenRouteIsOutsideAuthFlow() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/ledger/tx");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/kfe/transactions");
         request.setContent("{\"__hp\":\"triggered\"}".getBytes());
         request.setContentType("application/json");
 

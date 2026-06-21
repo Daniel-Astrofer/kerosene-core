@@ -18,7 +18,7 @@ public record TransactionalAuthenticationRequest(
         }
     }
 
-    public static TransactionalAuthenticationRequest ledgerTransfer(
+    public static TransactionalAuthenticationRequest kfeTransaction(
             UserDataBase sender,
             String totpCode,
             String passkeyAssertionJson,

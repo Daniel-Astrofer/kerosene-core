@@ -39,13 +39,13 @@ import static org.mockito.Mockito.when;
 class TransactionalPasskeyIntegrationTest {
 
     @Test
-    void ledgerTransferAcceptsRealEd25519PasskeyAssertionAndAdvancesCounter() throws Exception {
+    void kfeTransactionAcceptsRealEd25519PasskeyAssertionAndAdvancesCounter() throws Exception {
         Fixture fixture = fixture(2L);
         Services services = services(fixture, 0L);
         when(services.repository.advanceSignatureCount(eq(fixture.credentialId()), eq(1L), eq(2L)))
                 .thenReturn(1);
 
-        assertDoesNotThrow(() -> services.service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
+        assertDoesNotThrow(() -> services.service.authorize(TransactionalAuthenticationRequest.kfeTransaction(
                 services.user,
                 null,
                 fixture.assertionJson(),
@@ -55,13 +55,13 @@ class TransactionalPasskeyIntegrationTest {
     }
 
     @Test
-    void ledgerTransferRejectsReplayWhenSignatureCounterDoesNotIncrease() throws Exception {
+    void kfeTransactionRejectsReplayWhenSignatureCounterDoesNotIncrease() throws Exception {
         Fixture fixture = fixture(7L);
         Services services = services(fixture, 7L);
 
         AuthExceptions.StructuredAuthException exception = assertThrows(
                 AuthExceptions.StructuredAuthException.class,
-                () -> services.service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
+                () -> services.service.authorize(TransactionalAuthenticationRequest.kfeTransaction(
                         services.user,
                         null,
                         fixture.assertionJson(),

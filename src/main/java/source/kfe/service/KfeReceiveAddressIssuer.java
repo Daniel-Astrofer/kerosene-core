@@ -21,7 +21,7 @@ public class KfeReceiveAddressIssuer {
             KfeDerivationCursorService cursorService,
             ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClient,
             @Value("${bitcoin.platform.master-xpub:${bitcoin.hot-wallet.xpub:}}") String platformMasterXpub,
-            @Value("${kfe.receive.bitcoin-core-wallet-address-enabled:${transactions.bitcoin-core-wallet-address-enabled:false}}")
+            @Value("${kfe.receive.bitcoin-core-wallet-address-enabled:false}")
             boolean bitcoinCoreWalletAddressEnabled) {
         this.addressDerivationService = addressDerivationService;
         this.cursorService = cursorService;

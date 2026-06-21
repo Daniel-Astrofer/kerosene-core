@@ -51,7 +51,7 @@ class TransactionalAuthenticationPasskeyIntegrationTest {
     void authorizesTransactionWithRealEd25519AssertionAndAdvancesCounterAtomically() throws Exception {
         Fixture fixture = buildServiceFixture(1);
 
-        assertDoesNotThrow(() -> fixture.service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
+        assertDoesNotThrow(() -> fixture.service.authorize(TransactionalAuthenticationRequest.kfeTransaction(
                 fixture.user,
                 null,
                 fixture.assertionJson,
@@ -66,7 +66,7 @@ class TransactionalAuthenticationPasskeyIntegrationTest {
 
         AuthExceptions.StructuredAuthException exception = assertThrows(
                 AuthExceptions.StructuredAuthException.class,
-                () -> fixture.service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
+                () -> fixture.service.authorize(TransactionalAuthenticationRequest.kfeTransaction(
                         fixture.user,
                         null,
                         fixture.assertionJson,

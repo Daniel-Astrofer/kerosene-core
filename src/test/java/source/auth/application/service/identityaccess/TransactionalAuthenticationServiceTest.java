@@ -145,7 +145,7 @@ class TransactionalAuthenticationServiceTest {
         when(passkeyCredentialRepository.advanceSignatureCount(eq(credentialIdBytes), eq(1L), eq(1L)))
                 .thenReturn(1);
 
-        assertDoesNotThrow(() -> service.authorize(TransactionalAuthenticationRequest.ledgerTransfer(
+        assertDoesNotThrow(() -> service.authorize(TransactionalAuthenticationRequest.kfeTransaction(
                 user,
                 null,
                 assertionJson,
