@@ -16,6 +16,7 @@ public class ApiResponse<T> {
     private String message;
     private T data;
     private String errorCode;
+    private String traceId;
     private LocalDateTime timestamp;
 
     public ApiResponse() {
@@ -44,6 +45,12 @@ public class ApiResponse<T> {
 
     public static <T> ApiResponse<T> error(String message, String errorCode, T data) {
         return new ApiResponse<>(false, message, data, errorCode);
+    }
+
+    public static <T> ApiResponse<T> error(String message, String errorCode, T data, String traceId) {
+        ApiResponse<T> response = new ApiResponse<>(false, message, data, errorCode);
+        response.setTraceId(traceId);
+        return response;
     }
 
     // Getters and Setters
@@ -78,6 +85,14 @@ public class ApiResponse<T> {
 
     public void setErrorCode(String errorCode) {
         this.errorCode = errorCode;
+    }
+
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
     }
 
     public LocalDateTime getTimestamp() {

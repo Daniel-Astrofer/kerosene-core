@@ -3,6 +3,7 @@ package source.common.exception;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import source.auth.AuthExceptions;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.common.dto.ApiResponse;
+import source.common.infra.logging.StructuredLogField;
 import source.common.observability.FinancialOperationsMetrics;
 import source.kfe.rail.KfeRailException;
 import source.mining.exception.MiningExceptions;
@@ -260,7 +262,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiResponse<Void>> buildErrorResponse(HttpStatus status, String message, String errorCode) {
-        return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode));
+        return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, null, currentTraceId()));
     }
 
     private <T> ResponseEntity<ApiResponse<T>> buildErrorResponse(
@@ -268,7 +270,23 @@ public class GlobalExceptionHandler {
             String message,
             String errorCode,
             T data) {
-        return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
+        return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data, currentTraceId()));
+    }
+
+    private String currentTraceId() {
+        String traceId = safeMdcValue(MDC.get(StructuredLogField.TRACE_ID));
+        if (traceId != null) {
+            return traceId;
+        }
+        return safeMdcValue(MDC.get(StructuredLogField.CORRELATION_ID));
+    }
+
+    private String safeMdcValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void incrementFinancialMetric(String name, String outcome, String type) {

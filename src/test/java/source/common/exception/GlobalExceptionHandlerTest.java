@@ -2,10 +2,12 @@ package source.common.exception;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import source.auth.AuthExceptions;
 import source.common.dto.ApiResponse;
+import source.common.infra.logging.StructuredLogField;
 import source.common.observability.FinancialOperationsMetrics;
 import source.kfe.rail.KfeRailException;
 
@@ -22,6 +24,7 @@ class GlobalExceptionHandlerTest {
 
     @BeforeEach
     void setUp() {
+        MDC.clear();
         financialMetrics = mock(FinancialOperationsMetrics.class);
         handler = new GlobalExceptionHandler(financialMetrics);
     }
@@ -121,6 +124,27 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         assertEquals(ErrorCodes.VAULT_STORAGE_ERROR, response.getBody().getErrorCode());
         assertEquals("Vault storage is temporarily unavailable.", response.getBody().getMessage());
+    }
+
+    @Test
+    void shouldIncludeTraceIdFromMdcInErrorBody() {
+        MDC.put(StructuredLogField.TRACE_ID, "trace-backend-123");
+        MDC.put(StructuredLogField.CORRELATION_ID, "corr-backend-456");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgument(new IllegalArgumentException("bad input"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("trace-backend-123", response.getBody().getTraceId());
+    }
+
+    @Test
+    void shouldFallbackToCorrelationIdWhenTraceIdIsMissing() {
+        MDC.put(StructuredLogField.CORRELATION_ID, "corr-backend-456");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgument(new IllegalArgumentException("bad input"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("corr-backend-456", response.getBody().getTraceId());
     }
 
     private String invokeSanitize(String raw, String fallback) {
