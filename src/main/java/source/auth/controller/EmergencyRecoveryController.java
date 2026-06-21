@@ -34,18 +34,24 @@ public class EmergencyRecoveryController {
             EmergencyRecoveryStartResponse response = emergencyRecoveryUseCase.start(request, clientFingerprint);
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(ApiResponse.success("Emergency recovery session created.", response));
-        } catch (AuthExceptions.RecoveryRateLimitedException e) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(false, e.getMessage(), null, "RECOVERY_RATE_LIMITED"));
-        } catch (AuthExceptions.RecoveryRejectedException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(false, e.getMessage(), null, "RECOVERY_REJECTED"));
+        } catch (AuthExceptions.RecoveryRateLimitedException exception) {
+            return recoveryError(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "Emergency recovery is temporarily rate limited.",
+                    "RECOVERY_RATE_LIMITED");
+        } catch (AuthExceptions.RecoveryRejectedException exception) {
+            return recoveryError(
+                    HttpStatus.UNAUTHORIZED,
+                    "Emergency recovery request was rejected.",
+                    "RECOVERY_REJECTED");
         } catch (AuthExceptions.InvalidCredentials | AuthExceptions.InvalidPassphrase
                 | AuthExceptions.UsernameCantBeNull | AuthExceptions.InvalidCharacterUsername
                 | AuthExceptions.CharacterLimitException | AuthExceptions.PassphraseCantBeNull
-                | IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(new ApiResponse<>(false, e.getMessage(), null, "RECOVERY_BAD_REQUEST"));
+                | IllegalArgumentException exception) {
+            return recoveryError(
+                    HttpStatus.BAD_REQUEST,
+                    "Emergency recovery request is invalid.",
+                    "RECOVERY_BAD_REQUEST");
         }
     }
 
@@ -56,15 +62,26 @@ public class EmergencyRecoveryController {
             EmergencyRecoveryFinishResponse response = emergencyRecoveryUseCase.finish(request);
             return ResponseEntity.ok(ApiResponse.success(
                     "Emergency recovery completed. Login again with the new credentials.", response));
-        } catch (AuthExceptions.RecoverySessionExpiredException e) {
-            return ResponseEntity.status(HttpStatus.GONE)
-                    .body(new ApiResponse<>(false, e.getMessage(), null, "RECOVERY_SESSION_EXPIRED"));
-        } catch (AuthExceptions.RecoveryRejectedException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(false, e.getMessage(), null, "RECOVERY_REJECTED"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(new ApiResponse<>(false, e.getMessage(), null, "RECOVERY_BAD_REQUEST"));
+        } catch (AuthExceptions.RecoverySessionExpiredException exception) {
+            return recoveryError(
+                    HttpStatus.GONE,
+                    "Emergency recovery session is expired or already consumed.",
+                    "RECOVERY_SESSION_EXPIRED");
+        } catch (AuthExceptions.RecoveryRejectedException exception) {
+            return recoveryError(
+                    HttpStatus.UNAUTHORIZED,
+                    "Emergency recovery request was rejected.",
+                    "RECOVERY_REJECTED");
+        } catch (IllegalArgumentException exception) {
+            return recoveryError(
+                    HttpStatus.BAD_REQUEST,
+                    "Emergency recovery request is invalid.",
+                    "RECOVERY_BAD_REQUEST");
         }
+    }
+
+    private <T> ResponseEntity<ApiResponse<T>> recoveryError(HttpStatus status, String message, String errorCode) {
+        return ResponseEntity.status(status)
+                .body(new ApiResponse<>(false, message, null, errorCode));
     }
 }

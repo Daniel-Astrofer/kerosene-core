@@ -43,6 +43,10 @@ import java.util.UUID;
 public class DeviceKeyController {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceKeyController.class);
+    private static final String DEVICE_KEY_GENERIC_ERROR = "Device key request failed.";
+    private static final String DEVICE_KEY_CHALLENGE_ERROR = "Device key challenge is required or expired.";
+    private static final String DEVICE_KEY_ASSERTION_ERROR = "Device key assertion could not be verified.";
+    private static final String DEVICE_KEY_REPLAY_ERROR = "Device key request was rejected by replay protection.";
 
     private final DeviceKeyService deviceKeyService;
     private final DeviceKeyCredentialRepository deviceKeyRepository;
@@ -122,17 +126,17 @@ public class DeviceKeyController {
                     token));
         } catch (DeviceKeyChallengeException exception) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_CHALLENGE));
+                    .body(ApiResponse.error(DEVICE_KEY_CHALLENGE_ERROR, ErrorCodes.AUTH_PASSKEY_CHALLENGE));
         } catch (DeviceKeyProtocolException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
+                    .body(ApiResponse.error(DEVICE_KEY_ASSERTION_ERROR, ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
         } catch (KfeRailException.ProviderUnavailable
                  | FinalizeSignupAccount.VaultNotReadyException exception) {
             throw exception;
         } catch (RuntimeException exception) {
             log.error("Device key onboarding failed", exception);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_GENERIC));
+                    .body(ApiResponse.error(DEVICE_KEY_GENERIC_ERROR, ErrorCodes.AUTH_GENERIC));
         }
     }
 
@@ -176,10 +180,10 @@ public class DeviceKeyController {
             return ResponseEntity.ok(ApiResponse.success("Device key registered successfully", "OK"));
         } catch (DeviceKeyChallengeException exception) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_CHALLENGE));
+                    .body(ApiResponse.error(DEVICE_KEY_CHALLENGE_ERROR, ErrorCodes.AUTH_PASSKEY_CHALLENGE));
         } catch (DeviceKeyProtocolException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
+                    .body(ApiResponse.error(DEVICE_KEY_ASSERTION_ERROR, ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
         }
     }
 
@@ -231,7 +235,7 @@ public class DeviceKeyController {
             }
 
             finalizeSignupAccount.ensureUserFinancialsReady(user, null);
-            
+
             if (!Boolean.TRUE.equals(user.getIsActive())) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Account is inactive", ErrorCodes.AUTH_INVALID_CREDENTIALS));
@@ -250,17 +254,17 @@ public class DeviceKeyController {
             return ResponseEntity.ok(ApiResponse.success("Device key authentication successful", token));
         } catch (DeviceKeyReplayException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_REPLAY));
+                    .body(ApiResponse.error(DEVICE_KEY_REPLAY_ERROR, ErrorCodes.AUTH_PASSKEY_REPLAY));
         } catch (DeviceKeyChallengeException exception) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_CHALLENGE));
+                    .body(ApiResponse.error(DEVICE_KEY_CHALLENGE_ERROR, ErrorCodes.AUTH_PASSKEY_CHALLENGE));
         } catch (DeviceKeyProtocolException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
+                    .body(ApiResponse.error(DEVICE_KEY_ASSERTION_ERROR, ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
         } catch (RuntimeException exception) {
             log.error("Device key verification failed", exception);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error(exception.getMessage(), ErrorCodes.AUTH_GENERIC));
+                    .body(ApiResponse.error(DEVICE_KEY_GENERIC_ERROR, ErrorCodes.AUTH_GENERIC));
         }
     }
 

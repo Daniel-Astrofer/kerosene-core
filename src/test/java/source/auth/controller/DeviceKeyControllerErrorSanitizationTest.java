@@ -1,0 +1,134 @@
+package source.auth.controller;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
+import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
+import source.auth.application.orchestrator.signup.port.SignupStateStore;
+import source.auth.application.service.cache.contracts.RedisServicer;
+import source.auth.application.service.devicekey.DeviceKeyChallengeException;
+import source.auth.application.service.devicekey.DeviceKeyProtocolException;
+import source.auth.application.service.devicekey.DeviceKeyReplayException;
+import source.auth.application.service.devicekey.DeviceKeyService;
+import source.auth.application.service.util.DevBalanceInjector;
+import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.dto.SignupState;
+import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
+import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
+import source.common.dto.ApiResponse;
+import source.common.exception.ErrorCodes;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class DeviceKeyControllerErrorSanitizationTest {
+
+    private static final String SECRET_RUNTIME_MESSAGE = "sql detail: private-device-key-token";
+
+    private final DeviceKeyService deviceKeyService = mock(DeviceKeyService.class);
+    private final DeviceKeyCredentialRepository deviceKeyRepository = mock(DeviceKeyCredentialRepository.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
+    private final SignupStateStore signupStateStore = mock(SignupStateStore.class);
+    private final FinalizeSignupAccount finalizeSignupAccount = mock(FinalizeSignupAccount.class);
+    private final JwtServicer jwtServicer = mock(JwtServicer.class);
+    private final DevBalanceInjector balanceInjector = mock(DevBalanceInjector.class);
+    private final RedisServicer redisService = mock(RedisServicer.class);
+
+    private final DeviceKeyController controller = new DeviceKeyController(
+            deviceKeyService,
+            deviceKeyRepository,
+            userRepository,
+            signupStateStore,
+            finalizeSignupAccount,
+            jwtServicer,
+            balanceInjector,
+            redisService);
+
+    @Test
+    void finishOnboardingRegistrationDoesNotExposeGenericRuntimeMessage() {
+        SignupState state = new SignupState();
+        state.setUsername("alice");
+        when(signupStateStore.findSignupState("session-1")).thenReturn(state);
+        when(deviceKeyService.verifyRegistration(any(DeviceKeyRegistrationRequest.class), eq("session-1"), eq("alice")))
+                .thenThrow(new RuntimeException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+                "session-1",
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_GENERIC);
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key request failed.");
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void verifyAndLoginDoesNotExposeGenericRuntimeMessage() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        request.setCredentialId("credential-1");
+        when(deviceKeyRepository.findByCredentialId("credential-1"))
+                .thenThrow(new RuntimeException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_GENERIC);
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key request failed.");
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+    @Test
+    void finishOnboardingRegistrationDoesNotExposeChallengeReason() {
+        SignupState state = new SignupState();
+        state.setUsername("alice");
+        when(signupStateStore.findSignupState("session-1")).thenReturn(state);
+        when(deviceKeyService.verifyRegistration(any(DeviceKeyRegistrationRequest.class), eq("session-1"), eq("alice")))
+                .thenThrow(new DeviceKeyChallengeException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+                "session-1",
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_CHALLENGE);
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key challenge is required or expired.");
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void finishOnboardingRegistrationDoesNotExposeProtocolReason() {
+        SignupState state = new SignupState();
+        state.setUsername("alice");
+        when(signupStateStore.findSignupState("session-1")).thenReturn(state);
+        when(deviceKeyService.verifyRegistration(any(DeviceKeyRegistrationRequest.class), eq("session-1"), eq("alice")))
+                .thenThrow(new DeviceKeyProtocolException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+                "session-1",
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED);
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key assertion could not be verified.");
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void verifyAndLoginDoesNotExposeReplayReason() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        request.setCredentialId("credential-1");
+        when(deviceKeyRepository.findByCredentialId("credential-1"))
+                .thenThrow(new DeviceKeyReplayException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_REPLAY);
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key request was rejected by replay protection.");
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+}
