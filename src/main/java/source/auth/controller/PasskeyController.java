@@ -7,7 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
@@ -21,12 +21,9 @@ import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.dto.SignupState;
 import source.auth.dto.passkey.PasskeyRegistrationRequest;
 import source.auth.dto.passkey.PasskeyVerifyRequest;
-import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
-
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/auth/passkey")
@@ -34,7 +31,6 @@ public class PasskeyController {
 
     private static final Logger log = LoggerFactory.getLogger(PasskeyController.class);
     private final PasskeyService passkeyService;
-    private final PasskeyCredentialRepository passkeyCredentialRepository;
     private final UserRepository userRepository;
     private final JwtServicer jwtServicer;
     private final SignupStateStore signupStateStore;
@@ -43,9 +39,9 @@ public class PasskeyController {
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final RedisServicer redisService;
     private final PasskeyOrchestrator passkeyOrchestrator;
+    private final UpdatePasskeyDeviceStatusUseCase updatePasskeyDeviceStatusUseCase;
 
     public PasskeyController(PasskeyService passkeyService,
-                                  PasskeyCredentialRepository passkeyCredentialRepository,
                                   UserRepository userRepository,
                                   JwtServicer jwtServicer,
                                   SignupStateStore signupStateStore,
@@ -53,9 +49,9 @@ public class PasskeyController {
                                   DevBalanceInjector balanceInjector,
                                   FinalizeSignupAccount finalizeSignupAccount,
                                   RedisServicer redisService,
-                                  PasskeyOrchestrator passkeyOrchestrator) {
+                                  PasskeyOrchestrator passkeyOrchestrator,
+                                  UpdatePasskeyDeviceStatusUseCase updatePasskeyDeviceStatusUseCase) {
         this.passkeyService = passkeyService;
-        this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.userRepository = userRepository;
         this.jwtServicer = jwtServicer;
         this.signupStateStore = signupStateStore;
@@ -64,6 +60,7 @@ public class PasskeyController {
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.redisService = redisService;
         this.passkeyOrchestrator = passkeyOrchestrator;
+        this.updatePasskeyDeviceStatusUseCase = updatePasskeyDeviceStatusUseCase;
     }
 
     @GetMapping("/challenge")
@@ -144,23 +141,20 @@ public class PasskeyController {
                     .body(ApiResponse.error("Must be logged in to update devices", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
 
-        UserDataBase user = userRepository.findById(Long.parseLong(auth.getName())).orElse(null);
-        if (user == null) {
+        UpdatePasskeyDeviceStatusUseCase.Result result = updatePasskeyDeviceStatusUseCase.execute(
+                Long.parseLong(auth.getName()),
+                deviceInstallId,
+                status);
+        if (result.status() == UpdatePasskeyDeviceStatusUseCase.Status.USER_NOT_FOUND) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
+                    .body(ApiResponse.error(result.message(), ErrorCodes.AUTH_USER_NOT_FOUND));
+        }
+        if (result.status() == UpdatePasskeyDeviceStatusUseCase.Status.DEVICE_NOT_FOUND) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(result.message(), ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
         }
 
-        Optional<PasskeyCredential> credential = passkeyCredentialRepository
-                .findFirstByUserIdAndDeviceInstallId(user.getId(), deviceInstallId);
-        if (credential.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("Device not found", ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
-        }
-
-        PasskeyCredential device = credential.get();
-        device.setStatus(status);
-        passkeyCredentialRepository.save(device);
-        return ResponseEntity.ok(ApiResponse.success(message, passkeyInventoryService.inventoryFor(user)));
+        return ResponseEntity.ok(ApiResponse.success(message, result.inventory()));
     }
 
     private String normalizeUsername(String username) {

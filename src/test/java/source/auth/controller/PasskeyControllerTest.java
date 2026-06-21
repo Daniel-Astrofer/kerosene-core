@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import source.auth.application.infra.persistence.jpa.UserRepository;
@@ -16,6 +18,8 @@ import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
+import source.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
+import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.dto.SignupState;
 import source.auth.dto.passkey.PasskeyRegistrationRequest;
 import source.auth.dto.passkey.PasskeyVerifyRequest;
@@ -25,6 +29,7 @@ import source.common.exception.ErrorCodes;
 import source.kfe.rail.KfeRailException;
 
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,10 +54,12 @@ class PasskeyControllerTest {
     private FinalizeSignupAccount finalizeSignupAccount;
     private JwtServicer jwtServicer;
     private RedisServicer redisService;
+    private UpdatePasskeyDeviceStatusUseCase updatePasskeyDeviceStatusUseCase;
     private PasskeyController controller;
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
         passkeyService = mock(PasskeyService.class);
         passkeyCredentialRepository = mock(PasskeyCredentialRepository.class);
         userRepository = mock(UserRepository.class);
@@ -62,6 +69,7 @@ class PasskeyControllerTest {
         finalizeSignupAccount = mock(FinalizeSignupAccount.class);
         jwtServicer = mock(JwtServicer.class);
         redisService = mock(RedisServicer.class);
+        updatePasskeyDeviceStatusUseCase = mock(UpdatePasskeyDeviceStatusUseCase.class);
 
         PasskeyOrchestrator passkeyOrchestrator = new PasskeyOrchestrator(
                 passkeyService,
@@ -75,7 +83,6 @@ class PasskeyControllerTest {
                 redisService);
         controller = new PasskeyController(
                 passkeyService,
-                passkeyCredentialRepository,
                 userRepository,
                 jwtServicer,
                 signupStateStore,
@@ -83,7 +90,8 @@ class PasskeyControllerTest {
                 balanceInjector,
                 finalizeSignupAccount,
                 redisService,
-                passkeyOrchestrator);
+                passkeyOrchestrator,
+                updatePasskeyDeviceStatusUseCase);
     }
 
     @Test
@@ -303,6 +311,72 @@ class PasskeyControllerTest {
 
         verify(passkeyService).consumeChallengeFromRedis("alice");
         verify(passkeyService, never()).deleteChallengeFromRedis("alice");
+    }
+
+    @Test
+    void blockDeviceRequiresAuthenticatedUser() {
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.blockDevice("device-1");
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Must be logged in to update devices", response.getBody().getMessage());
+        assertEquals(ErrorCodes.AUTH_SESSION_EXPIRED, response.getBody().getErrorCode());
+        verify(updatePasskeyDeviceStatusUseCase, never()).execute(anyLong(), any(), any());
+    }
+
+    @Test
+    void blockDeviceMapsUserMissingFromUseCase() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(updatePasskeyDeviceStatusUseCase.execute(42L, "device-1", "BLOCKED"))
+                .thenReturn(new UpdatePasskeyDeviceStatusUseCase.Result(
+                        UpdatePasskeyDeviceStatusUseCase.Status.USER_NOT_FOUND,
+                        "User not found",
+                        null));
+
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.blockDevice("device-1");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("User not found", response.getBody().getMessage());
+        assertEquals(ErrorCodes.AUTH_USER_NOT_FOUND, response.getBody().getErrorCode());
+    }
+
+    @Test
+    void revokeDeviceMapsDeviceMissingFromUseCase() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(updatePasskeyDeviceStatusUseCase.execute(42L, "device-1", "REVOKED"))
+                .thenReturn(new UpdatePasskeyDeviceStatusUseCase.Result(
+                        UpdatePasskeyDeviceStatusUseCase.Status.DEVICE_NOT_FOUND,
+                        "Device not found",
+                        null));
+
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.revokeDevice("device-1");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Device not found", response.getBody().getMessage());
+        assertEquals(ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND, response.getBody().getErrorCode());
+    }
+
+    @Test
+    void revokeDeviceMapsSuccessMessageAndInventory() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        PasskeyInventoryDTO inventory = new PasskeyInventoryDTO(true, true, false, "localhost", "localhost", List.of());
+        when(updatePasskeyDeviceStatusUseCase.execute(42L, "device-1", "REVOKED"))
+                .thenReturn(new UpdatePasskeyDeviceStatusUseCase.Result(
+                        UpdatePasskeyDeviceStatusUseCase.Status.UPDATED,
+                        null,
+                        inventory));
+
+        ResponseEntity<ApiResponse<PasskeyInventoryDTO>> response = controller.revokeDevice("device-1");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Authenticated device revoked.", response.getBody().getMessage());
+        assertEquals(inventory, response.getBody().getData());
     }
 
     private SignupState signupState(String username) {
