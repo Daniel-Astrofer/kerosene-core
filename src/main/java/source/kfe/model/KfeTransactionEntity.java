@@ -16,7 +16,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "transactions_master", schema = "financial", indexes = {
         @Index(name = "idx_transactions_master_user_created", columnList = "user_id, created_at"),
-        @Index(name = "idx_transactions_master_status", columnList = "status")
+        @Index(name = "idx_transactions_master_status", columnList = "status"),
+        @Index(name = "idx_transactions_master_provider_reference", columnList = "provider_reference, status")
 })
 public class KfeTransactionEntity {
 

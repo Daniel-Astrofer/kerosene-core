@@ -70,6 +70,10 @@ public class KfeInboundSettlementService {
             markOutboxDispatched(outbox, proof.providerReference());
             return true;
         }
+        if (hasSettledProviderReference(tx, proof)) {
+            markOutboxDispatched(outbox, proof.providerReference());
+            return true;
+        }
         if (tx.getStatus() != KfeTransactionStatus.REQUIRES_RECONCILIATION
                 && tx.getStatus() != KfeTransactionStatus.EXECUTING) {
             return false;
@@ -124,6 +128,18 @@ public class KfeInboundSettlementService {
         markOutboxDispatched(outbox, proof.providerReference());
         dashboardPublisher.publishAfterCommit(tx.getUserId());
         return true;
+    }
+
+    private boolean hasSettledProviderReference(KfeTransactionEntity tx, InboundSettlementProof proof) {
+        String providerReference = trim(proof.providerReference(), 255);
+        if (providerReference == null || providerReference.isBlank()) {
+            return false;
+        }
+        return transactionRepository.findByProviderReferenceAndStatusForUpdate(
+                        providerReference,
+                        KfeTransactionStatus.SETTLED)
+                .stream()
+                .anyMatch(existing -> !existing.getId().equals(tx.getId()));
     }
 
     private void markStillReconciling(

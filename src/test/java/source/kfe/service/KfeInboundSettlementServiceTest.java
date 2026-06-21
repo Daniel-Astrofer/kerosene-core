@@ -191,4 +191,43 @@ class KfeInboundSettlementServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals("netRef", tx.getBlockchainTxid());
     }
 
+    @Test
+    void settleDoesNotCreditAgainWhenProviderReferenceAlreadySettled() {
+        KfeExecutionOutboxEntity outbox = new KfeExecutionOutboxEntity();
+        UUID outboxId = outbox.getId();
+
+        KfeTransactionEntity tx = new KfeTransactionEntity();
+        UUID txId = tx.getId();
+        tx.setStatus(KfeTransactionStatus.REQUIRES_RECONCILIATION);
+        tx.setDestinationWalletId(UUID.randomUUID());
+        tx.setGrossAmountSats(1000L);
+        tx.setReceiverAmountSats(1000L);
+
+        KfeTransactionEntity settled = new KfeTransactionEntity();
+        settled.setStatus(KfeTransactionStatus.SETTLED);
+        settled.setProvider("provider");
+        settled.setProviderReference("ref");
+
+        when(outboxRepository.findByIdForUpdate(outboxId)).thenReturn(Optional.of(outbox));
+        when(transactionRepository.findByIdForUpdate(txId)).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByProviderReferenceAndStatusForUpdate(
+                "ref",
+                KfeTransactionStatus.SETTLED)).thenReturn(java.util.List.of(settled));
+
+        boolean result = service.settle(new KfeInboundSettlementService.InboundSettlementProof(
+                txId, outboxId, "provider", "ref", "netRef", 1000L, 3, "raw"
+        ));
+
+        assertTrue(result);
+        assertTrue(outbox.getStatus().equals("DISPATCHED"));
+        verify(outboxRepository).save(outbox);
+        verify(balanceService, never()).creditAvailable(any(), anyString(), anyLong());
+        verify(movementRepository, never()).save(any());
+        verify(transactionRepository, never()).save(tx);
+        verify(auditLogService, never()).record(anyString(), any(), any(), any(), any(), anyMap());
+        verify(statementService, never()).recordUserStatement(anyLong(), any(), any(), anyMap());
+        verify(idempotencyRepository, never()).findById(any());
+        verify(dashboardPublisher, never()).publishAfterCommit(anyLong());
+    }
+
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import source.kfe.model.KfeTransactionStatus;
 import source.kfe.model.KfeTransactionEntity;
 
 import java.util.List;
@@ -22,6 +23,16 @@ public interface KfeTransactionRepository extends JpaRepository<KfeTransactionEn
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from KfeTransactionEntity t where t.id = :id")
     Optional<KfeTransactionEntity> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select t from KfeTransactionEntity t
+            where t.providerReference = :providerReference
+              and t.status = :status
+            """)
+    List<KfeTransactionEntity> findByProviderReferenceAndStatusForUpdate(
+            @Param("providerReference") String providerReference,
+            @Param("status") KfeTransactionStatus status);
 
     List<KfeTransactionEntity> findTop25ByUserIdOrderByCreatedAtDesc(Long userId);
 
