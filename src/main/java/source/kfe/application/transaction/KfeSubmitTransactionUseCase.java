@@ -19,6 +19,7 @@ import source.kfe.service.KfeQuorumGateway;
 import source.kfe.service.KfeResponseMapper;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class KfeSubmitTransactionUseCase {
@@ -74,21 +75,48 @@ public class KfeSubmitTransactionUseCase {
         this.statementRecorder = statementRecorder;
     }
 
+    /**
+     * Submits a KFE-only transaction inside one database transaction.
+     *
+     * The idempotency reservation must happen before the transaction intent is created: if reservation fails,
+     * no transaction row, balance movement, outbox item, statement, or dashboard side effect should be emitted.
+     */
     @Transactional
     public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request) {
+        SubmissionAttempt attempt = validateAndReserve(userId, request);
+        if (attempt.existingResponse() != null) {
+            return attempt.existingResponse();
+        }
+
+        KfeTransactionEntity tx = createIntent(userId, request);
+        stateMachine.audit(tx, "KFE_TRANSACTION_INTENT", null, tx.getStatus(), null);
+
+        PreparedTransaction prepared = validateQuoteAndQuorum(userId, tx, request, attempt.requestHash());
+        WalletLock lock = reserveAndLock(request, prepared);
+        routeLockedTransaction(userId, request, prepared, lock);
+
+        return completePublishAndRespond(userId, attempt.idempotency(), prepared.tx(), lock.destinationWallet());
+    }
+
+    private SubmissionAttempt validateAndReserve(Long userId, KfeSubmitTransactionRequest request) {
         validator.validate(request);
         authorizationUseCase.authorize(userId, request);
 
         String requestHash = idempotencyUseCase.requestHash(userId, request);
         KfeIdempotencyEntity existingIdempotency = idempotencyUseCase.find(userId, request.idempotencyKey());
         if (existingIdempotency != null) {
-            return idempotencyUseCase.existingResponse(existingIdempotency, requestHash);
+            return SubmissionAttempt.existing(requestHash, idempotencyUseCase.existingResponse(existingIdempotency, requestHash));
         }
 
         KfeIdempotencyEntity idempotency = idempotencyUseCase.reserve(userId, request, requestHash);
-        KfeTransactionEntity tx = createIntent(userId, request);
-        stateMachine.audit(tx, "KFE_TRANSACTION_INTENT", null, tx.getStatus(), null);
+        return SubmissionAttempt.reserved(requestHash, idempotency);
+    }
 
+    private PreparedTransaction validateQuoteAndQuorum(
+            Long userId,
+            KfeTransactionEntity tx,
+            KfeSubmitTransactionRequest request,
+            String requestHash) {
         stateMachine.transition(tx, KfeTransactionStatus.VALIDATING, "KFE_TRANSACTION_VALIDATING",
                 Map.of("requestHash", requestHash));
         KfeWalletEntity sourceWallet = walletResolver.resolveSourceWallet(userId, request);
@@ -101,23 +129,42 @@ public class KfeSubmitTransactionUseCase {
                 Map.of("proposalHash", proposalHash));
         KfeQuorumGateway.Result quorum = quorumGateway.requireHealthyUnanimousConsensus(proposalHash);
         tx.setQuorumAckCount(quorum.acceptedNodes());
+        return new PreparedTransaction(tx, sourceWallet, destinationWallet, proposalHash, quorum.acceptedNodes());
+    }
 
+    private WalletLock reserveAndLock(KfeSubmitTransactionRequest request, PreparedTransaction prepared) {
+        KfeTransactionEntity tx = prepared.tx();
+        KfeWalletEntity sourceWallet = prepared.sourceWallet();
         if (walletResolver.requiresSourceReserve(request)) {
             balanceService.reserve(sourceWallet.getId(), ASSET_BTC, tx.getTotalDebitSats());
             movementRecorder.record(tx.getId(), sourceWallet.getId(), "RESERVE", tx.getTotalDebitSats(), "AVAILABLE", "LOCKED");
         }
         stateMachine.transition(tx, KfeTransactionStatus.LOCKED, "KFE_TRANSACTION_LOCKED",
-                Map.of("proposalHash", proposalHash, "quorumAckCount", quorum.acceptedNodes()));
+                Map.of("proposalHash", prepared.proposalHash(), "quorumAckCount", prepared.quorumAckCount()));
+        return new WalletLock(sourceWallet, prepared.destinationWallet());
+    }
 
+    private void routeLockedTransaction(
+            Long userId,
+            KfeSubmitTransactionRequest request,
+            PreparedTransaction prepared,
+            WalletLock lock) {
+        KfeTransactionEntity tx = prepared.tx();
         if (request.rail() == KfeRail.INTERNAL || request.direction() == KfeDirection.INTERNAL) {
-            settleInternal(userId, tx, sourceWallet, destinationWallet);
+            settleInternal(userId, tx, lock.sourceWallet(), lock.destinationWallet());
         } else {
             outboxUseCase.enqueueExternal(tx, request);
             stateMachine.transition(tx, KfeTransactionStatus.EXECUTING, "KFE_TRANSACTION_EXECUTING",
-                    Map.of("proposalHash", proposalHash, "rail", tx.getRail().name()));
-            statementRecorder.record(userId, tx, sourceWallet != null ? sourceWallet.getId() : tx.getDestinationWalletId(), request);
+                    Map.of("proposalHash", prepared.proposalHash(), "rail", tx.getRail().name()));
+            statementRecorder.record(userId, tx, lock.statementWalletId(tx), request);
         }
+    }
 
+    private KfeTransactionResponse completePublishAndRespond(
+            Long userId,
+            KfeIdempotencyEntity idempotency,
+            KfeTransactionEntity tx,
+            KfeWalletEntity destinationWallet) {
         idempotencyUseCase.complete(idempotency, tx);
         publishDashboards(userId, destinationWallet);
         return responseMapper.toTransactionResponse(transactionRepository.save(tx));
@@ -140,6 +187,7 @@ public class KfeSubmitTransactionUseCase {
             KfeTransactionEntity tx,
             KfeWalletEntity sourceWallet,
             KfeWalletEntity destinationWallet) {
+        // Internal settlement is the only submit path that moves both sides immediately.
         balanceService.settleReservedDebit(sourceWallet.getId(), ASSET_BTC, tx.getTotalDebitSats());
         movementRecorder.record(tx.getId(), sourceWallet.getId(), "SETTLE_DEBIT", tx.getTotalDebitSats(), "LOCKED", null);
         balanceService.creditAvailable(destinationWallet.getId(), ASSET_BTC, tx.getReceiverAmountSats());
@@ -188,5 +236,34 @@ public class KfeSubmitTransactionUseCase {
 
     private String safe(String value) {
         return value != null ? value : "";
+    }
+
+    private record SubmissionAttempt(
+            String requestHash,
+            KfeIdempotencyEntity idempotency,
+            KfeTransactionResponse existingResponse) {
+
+        private static SubmissionAttempt reserved(String requestHash, KfeIdempotencyEntity idempotency) {
+            return new SubmissionAttempt(requestHash, idempotency, null);
+        }
+
+        private static SubmissionAttempt existing(String requestHash, KfeTransactionResponse existingResponse) {
+            return new SubmissionAttempt(requestHash, null, existingResponse);
+        }
+    }
+
+    private record PreparedTransaction(
+            KfeTransactionEntity tx,
+            KfeWalletEntity sourceWallet,
+            KfeWalletEntity destinationWallet,
+            String proposalHash,
+            int quorumAckCount) {
+    }
+
+    private record WalletLock(KfeWalletEntity sourceWallet, KfeWalletEntity destinationWallet) {
+
+        private UUID statementWalletId(KfeTransactionEntity tx) {
+            return sourceWallet != null ? sourceWallet.getId() : tx.getDestinationWalletId();
+        }
     }
 }
