@@ -20,6 +20,7 @@ import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
+import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.dto.SignupState;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
@@ -57,6 +58,7 @@ public class DeviceKeyController {
     private final JwtServicer jwtServicer;
     private final DevBalanceInjector balanceInjector;
     private final RedisServicer redisService;
+    private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase;
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
 
     public DeviceKeyController(
@@ -68,6 +70,7 @@ public class DeviceKeyController {
             JwtServicer jwtServicer,
             DevBalanceInjector balanceInjector,
             RedisServicer redisService,
+            GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
             ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
@@ -77,6 +80,7 @@ public class DeviceKeyController {
         this.jwtServicer = jwtServicer;
         this.balanceInjector = balanceInjector;
         this.redisService = redisService;
+        this.getDeviceKeyAuthenticationChallengeUseCase = getDeviceKeyAuthenticationChallengeUseCase;
         this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
     }
 
@@ -146,14 +150,15 @@ public class DeviceKeyController {
 
     @GetMapping("/challenge")
     public ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> getChallenge(@RequestParam String username) {
-        UserDataBase user = userRepository.findByUsername(normalizeUsername(username));
-        if (user == null) {
+        GetDeviceKeyAuthenticationChallengeUseCase.Result result =
+                getDeviceKeyAuthenticationChallengeUseCase.execute(username);
+        if (result.status() == GetDeviceKeyAuthenticationChallengeUseCase.Status.USER_NOT_FOUND) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
+                    .body(ApiResponse.error(result.message(), ErrorCodes.AUTH_USER_NOT_FOUND));
         }
         return ResponseEntity.ok(ApiResponse.success(
                 "Device key challenge generated",
-                deviceKeyService.startAuthenticationChallenge(user)));
+                result.challenge()));
     }
 
     @PostMapping("/register/start")

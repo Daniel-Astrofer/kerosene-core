@@ -17,8 +17,10 @@ import source.auth.application.service.devicekey.DeviceKeyReplayException;
 import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.dto.SignupState;
+import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
@@ -48,6 +50,8 @@ class DeviceKeyControllerErrorSanitizationTest {
     private final JwtServicer jwtServicer = mock(JwtServicer.class);
     private final DevBalanceInjector balanceInjector = mock(DevBalanceInjector.class);
     private final RedisServicer redisService = mock(RedisServicer.class);
+    private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase =
+            mock(GetDeviceKeyAuthenticationChallengeUseCase.class);
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase =
             mock(ManageDeviceKeyDevicesUseCase.class);
 
@@ -60,6 +64,7 @@ class DeviceKeyControllerErrorSanitizationTest {
             jwtServicer,
             balanceInjector,
             redisService,
+            getDeviceKeyAuthenticationChallengeUseCase,
             manageDeviceKeyDevicesUseCase);
 
     @AfterEach
@@ -149,6 +154,45 @@ class DeviceKeyControllerErrorSanitizationTest {
         assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_REPLAY);
         assertThat(response.getBody().getMessage()).isEqualTo("Device key request was rejected by replay protection.");
         assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void getChallengeMapsUserNotFound() {
+        when(getDeviceKeyAuthenticationChallengeUseCase.execute("alice"))
+                .thenReturn(new GetDeviceKeyAuthenticationChallengeUseCase.Result(
+                        GetDeviceKeyAuthenticationChallengeUseCase.Status.USER_NOT_FOUND,
+                        "User not found",
+                        null));
+
+        ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> response = controller.getChallenge("alice");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("User not found");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_USER_NOT_FOUND);
+    }
+
+    @Test
+    void getChallengeMapsSuccess() {
+        DeviceKeyChallengeResponse challenge = new DeviceKeyChallengeResponse(
+                "challenge-id",
+                "challenge",
+                120L,
+                "onion",
+                "Ed25519",
+                "v1");
+        when(getDeviceKeyAuthenticationChallengeUseCase.execute("  Alice  "))
+                .thenReturn(new GetDeviceKeyAuthenticationChallengeUseCase.Result(
+                        GetDeviceKeyAuthenticationChallengeUseCase.Status.GENERATED,
+                        null,
+                        challenge));
+
+        ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> response = controller.getChallenge("  Alice  ");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key challenge generated");
+        assertThat(response.getBody().getData()).isEqualTo(challenge);
     }
 
     @Test
