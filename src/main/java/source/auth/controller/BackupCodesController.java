@@ -7,10 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.AuthExceptions;
-import source.auth.application.service.account.BackupCodeService;
-import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
-import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
+import source.auth.application.usecase.backupcodes.BackupCodesOperationsUseCase;
 import source.auth.dto.BackupCodesStatusDTO;
 import source.common.dto.ApiResponse;
 
@@ -18,19 +15,15 @@ import source.common.dto.ApiResponse;
 @RequestMapping("/auth/backup-codes")
 public class BackupCodesController {
 
-    private final BackupCodeService backupCodeService;
-    private final TransactionalAuthenticationPort transactionalAuthenticationPort;
+    private final BackupCodesOperationsUseCase backupCodesOperationsUseCase;
 
-    public BackupCodesController(
-            BackupCodeService backupCodeService,
-            TransactionalAuthenticationPort transactionalAuthenticationPort) {
-        this.backupCodeService = backupCodeService;
-        this.transactionalAuthenticationPort = transactionalAuthenticationPort;
+    public BackupCodesController(BackupCodesOperationsUseCase backupCodesOperationsUseCase) {
+        this.backupCodesOperationsUseCase = backupCodesOperationsUseCase;
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse<BackupCodesStatusDTO>> getStatus(Authentication authentication) {
-        BackupCodesStatusDTO response = backupCodeService.getStatus(Long.parseLong(authentication.getName()));
+        BackupCodesStatusDTO response = backupCodesOperationsUseCase.getStatus(Long.parseLong(authentication.getName()));
         return ResponseEntity.ok(ApiResponse.success("Backup code status retrieved successfully.", response));
     }
 
@@ -40,17 +33,11 @@ public class BackupCodesController {
             @RequestBody(required = false) RegenerateBackupCodesRequest request) {
         Long userId = Long.parseLong(authentication.getName());
         RegenerateBackupCodesRequest stepUpRequest = request != null ? request : RegenerateBackupCodesRequest.empty();
-        try {
-            transactionalAuthenticationPort.authorize(TransactionalAuthenticationRequest.accountSecurityChange(
-                    userId,
-                    stepUpRequest.totpCode(),
-                    stepUpRequest.passkeyAssertionJson(),
-                    stepUpRequest.confirmationPassphrase()));
-        } catch (AuthExceptions.AuthValidationException exception) {
-            throw new AuthExceptions.InvalidCredentials("Unable to authorize backup code regeneration.");
-        }
-
-        BackupCodesStatusDTO response = backupCodeService.regenerate(userId);
+        BackupCodesStatusDTO response = backupCodesOperationsUseCase.regenerate(
+                userId,
+                stepUpRequest.totpCode(),
+                stepUpRequest.passkeyAssertionJson(),
+                stepUpRequest.confirmationPassphrase());
         return ResponseEntity.ok(ApiResponse.success("Backup codes regenerated successfully.", response));
     }
 
