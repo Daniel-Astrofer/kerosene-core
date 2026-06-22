@@ -18,10 +18,10 @@ import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
+import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
-import source.auth.dto.SignupState;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
@@ -60,6 +60,8 @@ class DeviceKeyControllerErrorSanitizationTest {
             mock(StartAuthenticatedDeviceKeyRegistrationUseCase.class);
     private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase =
             mock(FinishAuthenticatedDeviceKeyRegistrationUseCase.class);
+    private final FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase =
+            mock(FinishOnboardingDeviceKeyRegistrationUseCase.class);
 
     private final DeviceKeyController controller = new DeviceKeyController(
             deviceKeyService,
@@ -73,7 +75,8 @@ class DeviceKeyControllerErrorSanitizationTest {
             getDeviceKeyAuthenticationChallengeUseCase,
             manageDeviceKeyDevicesUseCase,
             startAuthenticatedDeviceKeyRegistrationUseCase,
-            finishAuthenticatedDeviceKeyRegistrationUseCase);
+            finishAuthenticatedDeviceKeyRegistrationUseCase,
+            finishOnboardingDeviceKeyRegistrationUseCase);
 
     @AfterEach
     void clearSecurityContext() {
@@ -81,11 +84,38 @@ class DeviceKeyControllerErrorSanitizationTest {
     }
 
     @Test
+    void finishOnboardingRegistrationMapsSessionExpired() {
+        when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
+                .thenReturn(FinishOnboardingDeviceKeyRegistrationUseCase.Result.sessionExpired());
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+                "session-1",
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Session expired");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+    }
+
+    @Test
+    void finishOnboardingRegistrationMapsSuccess() {
+        when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
+                .thenReturn(FinishOnboardingDeviceKeyRegistrationUseCase.Result.created("42 jwt-token"));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+                "session-1",
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key linked and account created.");
+        assertThat(response.getBody().getData()).isEqualTo("42 jwt-token");
+    }
+
+    @Test
     void finishOnboardingRegistrationDoesNotExposeGenericRuntimeMessage() {
-        SignupState state = new SignupState();
-        state.setUsername("alice");
-        when(signupStateStore.findSignupState("session-1")).thenReturn(state);
-        when(deviceKeyService.verifyRegistration(any(DeviceKeyRegistrationRequest.class), eq("session-1"), eq("alice")))
+        when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new RuntimeException(SECRET_RUNTIME_MESSAGE));
 
         ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
@@ -115,10 +145,7 @@ class DeviceKeyControllerErrorSanitizationTest {
 
     @Test
     void finishOnboardingRegistrationDoesNotExposeChallengeReason() {
-        SignupState state = new SignupState();
-        state.setUsername("alice");
-        when(signupStateStore.findSignupState("session-1")).thenReturn(state);
-        when(deviceKeyService.verifyRegistration(any(DeviceKeyRegistrationRequest.class), eq("session-1"), eq("alice")))
+        when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new DeviceKeyChallengeException(SECRET_RUNTIME_MESSAGE));
 
         ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
@@ -133,10 +160,7 @@ class DeviceKeyControllerErrorSanitizationTest {
 
     @Test
     void finishOnboardingRegistrationDoesNotExposeProtocolReason() {
-        SignupState state = new SignupState();
-        state.setUsername("alice");
-        when(signupStateStore.findSignupState("session-1")).thenReturn(state);
-        when(deviceKeyService.verifyRegistration(any(DeviceKeyRegistrationRequest.class), eq("session-1"), eq("alice")))
+        when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new DeviceKeyProtocolException(SECRET_RUNTIME_MESSAGE));
 
         ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(

@@ -21,6 +21,7 @@ import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
+import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
@@ -64,6 +65,7 @@ public class DeviceKeyController {
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
     private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase;
     private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase;
+    private final FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase;
 
     public DeviceKeyController(
             DeviceKeyService deviceKeyService,
@@ -77,7 +79,8 @@ public class DeviceKeyController {
             GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
             ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase,
             StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase,
-            FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase) {
+            FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase,
+            FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
         this.userRepository = userRepository;
@@ -90,6 +93,7 @@ public class DeviceKeyController {
         this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
         this.startAuthenticatedDeviceKeyRegistrationUseCase = startAuthenticatedDeviceKeyRegistrationUseCase;
         this.finishAuthenticatedDeviceKeyRegistrationUseCase = finishAuthenticatedDeviceKeyRegistrationUseCase;
+        this.finishOnboardingDeviceKeyRegistrationUseCase = finishOnboardingDeviceKeyRegistrationUseCase;
     }
 
     @PostMapping("/onboarding/start")
@@ -115,31 +119,19 @@ public class DeviceKeyController {
     }
 
     @PostMapping("/onboarding/finish")
-    @Transactional
     public ResponseEntity<ApiResponse<String>> finishOnboardingRegistration(
             @RequestParam String sessionId,
             @RequestBody DeviceKeyRegistrationRequest request) {
-        SignupState state = signupStateStore.findSignupState(sessionId);
-        if (state == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("Session expired", ErrorCodes.AUTH_SESSION_EXPIRED));
-        }
-
         try {
-            DeviceKeyService.VerifiedDeviceKeyRegistration verified =
-                    deviceKeyService.verifyRegistration(request, sessionId, state.getUsername());
-
-            state.setDeviceKeyRegistered(true);
-            state.setPasskeyRegistered(true);
-            signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
-
-            UserDataBase user = finalizeSignupAccount.execute(sessionId);
-            persistDeviceKey(user, verified);
-
-            String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
+            FinishOnboardingDeviceKeyRegistrationUseCase.Result result =
+                    finishOnboardingDeviceKeyRegistrationUseCase.execute(sessionId, request);
+            if (result.status() == FinishOnboardingDeviceKeyRegistrationUseCase.Status.SESSION_EXPIRED) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("Session expired", ErrorCodes.AUTH_SESSION_EXPIRED));
+            }
             return ResponseEntity.ok(ApiResponse.success(
                     "Device key linked and account created.",
-                    token));
+                    result.token()));
         } catch (DeviceKeyChallengeException exception) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
                     .body(ApiResponse.error(DEVICE_KEY_CHALLENGE_ERROR, ErrorCodes.AUTH_PASSKEY_CHALLENGE));
@@ -331,33 +323,6 @@ public class DeviceKeyController {
         }
 
         return ResponseEntity.ok(ApiResponse.success("Device key revoked.", result.devices()));
-    }
-
-    private void persistDeviceKey(
-            UserDataBase user,
-            DeviceKeyService.VerifiedDeviceKeyRegistration verified) {
-        if (deviceKeyRepository.findByCredentialIdAndUserId(verified.credentialId(), user.getId()).isPresent()) {
-            return;
-        }
-        DeviceKeyCredential credential = new DeviceKeyCredential();
-        credential.setUser(user);
-        credential.setCredentialId(verified.credentialId());
-        credential.setUserHandle(verified.userHandle());
-        credential.setPublicKeyEd25519(verified.publicKeyEd25519());
-        credential.setAlgorithm(DeviceKeyService.ALGORITHM);
-        credential.setCounter(verified.counter());
-        credential.setDeviceName(verified.deviceName());
-        credential.setDeviceInstallId(verified.deviceInstallId());
-        credential.setKeyStorage(verified.keyStorage());
-        credential.setPlatform(verified.platform());
-        credential.setBrowser(verified.browser());
-        credential.setBrand(verified.brand());
-        credential.setModel(verified.model());
-        credential.setSerialNumber(verified.serialNumber());
-        credential.setOnionServiceId(verified.onionServiceId());
-        credential.setProtocolVersion(1);
-        credential.setStatus("ACTIVE");
-        deviceKeyRepository.save(credential);
     }
 
     private ResponseEntity<ApiResponse<Object>> credentialNotFound() {
