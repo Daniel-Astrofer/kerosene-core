@@ -6,40 +6,27 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.service.devicekey.DeviceKeyChallengeException;
 import source.auth.application.service.devicekey.DeviceKeyProtocolException;
 import source.auth.application.service.devicekey.DeviceKeyReplayException;
-import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.application.service.util.DevBalanceInjector;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.StartOnboardingDeviceKeyRegistrationUseCase;
+import source.auth.application.usecase.devicekey.VerifyDeviceKeyLoginUseCase;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
-import source.auth.model.entity.DeviceKeyCredential;
-import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 import source.kfe.rail.KfeRailException;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth/device-key")
@@ -51,47 +38,29 @@ public class DeviceKeyController {
     private static final String DEVICE_KEY_ASSERTION_ERROR = "Device key assertion could not be verified.";
     private static final String DEVICE_KEY_REPLAY_ERROR = "Device key request was rejected by replay protection.";
 
-    private final DeviceKeyService deviceKeyService;
-    private final DeviceKeyCredentialRepository deviceKeyRepository;
-    private final UserRepository userRepository;
-    private final FinalizeSignupAccount finalizeSignupAccount;
-    private final JwtServicer jwtServicer;
-    private final DevBalanceInjector balanceInjector;
-    private final RedisServicer redisService;
     private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase;
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
     private final StartOnboardingDeviceKeyRegistrationUseCase startOnboardingDeviceKeyRegistrationUseCase;
     private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase;
     private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase;
     private final FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase;
+    private final VerifyDeviceKeyLoginUseCase verifyDeviceKeyLoginUseCase;
 
     public DeviceKeyController(
-            DeviceKeyService deviceKeyService,
-            DeviceKeyCredentialRepository deviceKeyRepository,
-            UserRepository userRepository,
-            FinalizeSignupAccount finalizeSignupAccount,
-            JwtServicer jwtServicer,
-            DevBalanceInjector balanceInjector,
-            RedisServicer redisService,
             GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
             ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase,
             StartOnboardingDeviceKeyRegistrationUseCase startOnboardingDeviceKeyRegistrationUseCase,
             StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase,
             FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase,
-            FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase) {
-        this.deviceKeyService = deviceKeyService;
-        this.deviceKeyRepository = deviceKeyRepository;
-        this.userRepository = userRepository;
-        this.finalizeSignupAccount = finalizeSignupAccount;
-        this.jwtServicer = jwtServicer;
-        this.balanceInjector = balanceInjector;
-        this.redisService = redisService;
+            FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase,
+            VerifyDeviceKeyLoginUseCase verifyDeviceKeyLoginUseCase) {
         this.getDeviceKeyAuthenticationChallengeUseCase = getDeviceKeyAuthenticationChallengeUseCase;
         this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
         this.startOnboardingDeviceKeyRegistrationUseCase = startOnboardingDeviceKeyRegistrationUseCase;
         this.startAuthenticatedDeviceKeyRegistrationUseCase = startAuthenticatedDeviceKeyRegistrationUseCase;
         this.finishAuthenticatedDeviceKeyRegistrationUseCase = finishAuthenticatedDeviceKeyRegistrationUseCase;
         this.finishOnboardingDeviceKeyRegistrationUseCase = finishOnboardingDeviceKeyRegistrationUseCase;
+        this.verifyDeviceKeyLoginUseCase = verifyDeviceKeyLoginUseCase;
     }
 
     @PostMapping("/onboarding/start")
@@ -197,70 +166,10 @@ public class DeviceKeyController {
     }
 
     @PostMapping("/verify")
-    @Transactional
     public ResponseEntity<ApiResponse<Object>> verifyAndLogin(@RequestBody DeviceKeyVerifyRequest request) {
         try {
-            if (request.getCredentialId() == null || request.getCredentialId().isBlank()) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("credentialId is required", ErrorCodes.SYS_INVALID_ARGUMENTS));
-            }
-
-            UserDataBase user;
-            Optional<DeviceKeyCredential> credentialOpt;
-            String normalizedUsername = normalizeUsername(request.getUsername());
-            if (normalizedUsername.isBlank()) {
-                credentialOpt = deviceKeyRepository.findByCredentialId(request.getCredentialId().trim());
-                if (credentialOpt.isEmpty()) {
-                    return credentialNotFound();
-                }
-                user = credentialOpt.get().getUser();
-            } else {
-                user = userRepository.findByUsername(normalizedUsername);
-                if (user == null) {
-                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                            .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
-                }
-                credentialOpt = deviceKeyRepository.findByCredentialIdAndUserId(
-                        request.getCredentialId().trim(),
-                        user.getId());
-            }
-
-            if (credentialOpt.isEmpty()) {
-                return credentialNotFound();
-            }
-
-            DeviceKeyCredential credential = credentialOpt.get();
-            long newCounter = deviceKeyService.verifyAuthentication(request, user, credential);
-            int updated = deviceKeyRepository.advanceCounter(
-                    credential.getCredentialId(),
-                    user.getId(),
-                    newCounter,
-                    LocalDateTime.now());
-            if (updated != 1) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponse.error(
-                                "Device key counter did not advance.",
-                                ErrorCodes.AUTH_PASSKEY_REPLAY));
-            }
-
-            finalizeSignupAccount.ensureUserFinancialsReady(user, null);
-
-            if (!Boolean.TRUE.equals(user.getIsActive())) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponse.error("Account is inactive", ErrorCodes.AUTH_INVALID_CREDENTIALS));
-            }
-
-            if (user.hasTotpEnabled()) {
-                String preAuthToken = UUID.randomUUID().toString();
-                redisService.setValue(StartLogin.preAuthKey(preAuthToken), user.getUsername(), StartLogin.PRE_AUTH_TTL_SECONDS);
-                return ResponseEntity.status(HttpStatus.ACCEPTED)
-                        .body(ApiResponse.success("Device key verified. TOTP required.", preAuthToken));
-            }
-
-            balanceInjector.injectTestBalance(user);
-
-            String token = jwtServicer.generateToken(user.getId());
-            return ResponseEntity.ok(ApiResponse.success("Device key authentication successful", token));
+            VerifyDeviceKeyLoginUseCase.Result result = verifyDeviceKeyLoginUseCase.execute(request);
+            return mapVerifyResult(result);
         } catch (DeviceKeyReplayException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error(DEVICE_KEY_REPLAY_ERROR, ErrorCodes.AUTH_PASSKEY_REPLAY));
@@ -275,6 +184,25 @@ public class DeviceKeyController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(DEVICE_KEY_GENERIC_ERROR, ErrorCodes.AUTH_GENERIC));
         }
+    }
+
+    private ResponseEntity<ApiResponse<Object>> mapVerifyResult(VerifyDeviceKeyLoginUseCase.Result result) {
+        return switch (result.status()) {
+            case INVALID_CREDENTIAL_ID -> ResponseEntity.badRequest()
+                    .body(ApiResponse.error("credentialId is required", ErrorCodes.SYS_INVALID_ARGUMENTS));
+            case CREDENTIAL_NOT_FOUND -> credentialNotFound();
+            case USER_NOT_FOUND -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
+            case REPLAY_COUNTER_NOT_ADVANCED -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(
+                            "Device key counter did not advance.",
+                            ErrorCodes.AUTH_PASSKEY_REPLAY));
+            case INACTIVE_ACCOUNT -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Account is inactive", ErrorCodes.AUTH_INVALID_CREDENTIALS));
+            case TOTP_REQUIRED -> ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(ApiResponse.success("Device key verified. TOTP required.", result.data()));
+            case AUTHENTICATED -> ResponseEntity.ok(ApiResponse.success("Device key authentication successful", result.data()));
+        };
     }
 
     @GetMapping("/devices")
@@ -330,7 +258,4 @@ public class DeviceKeyController {
         return Long.parseLong(auth.getName());
     }
 
-    private String normalizeUsername(String username) {
-        return username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
-    }
 }

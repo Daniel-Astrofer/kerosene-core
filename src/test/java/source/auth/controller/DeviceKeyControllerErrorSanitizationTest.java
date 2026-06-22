@@ -6,22 +6,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
-import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicekey.DeviceKeyChallengeException;
 import source.auth.application.service.devicekey.DeviceKeyProtocolException;
 import source.auth.application.service.devicekey.DeviceKeyReplayException;
-import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.application.service.util.DevBalanceInjector;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.StartOnboardingDeviceKeyRegistrationUseCase;
+import source.auth.application.usecase.devicekey.VerifyDeviceKeyLoginUseCase;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
@@ -44,13 +38,6 @@ class DeviceKeyControllerErrorSanitizationTest {
 
     private static final String SECRET_RUNTIME_MESSAGE = "sql detail: private-device-key-token";
 
-    private final DeviceKeyService deviceKeyService = mock(DeviceKeyService.class);
-    private final DeviceKeyCredentialRepository deviceKeyRepository = mock(DeviceKeyCredentialRepository.class);
-    private final UserRepository userRepository = mock(UserRepository.class);
-    private final FinalizeSignupAccount finalizeSignupAccount = mock(FinalizeSignupAccount.class);
-    private final JwtServicer jwtServicer = mock(JwtServicer.class);
-    private final DevBalanceInjector balanceInjector = mock(DevBalanceInjector.class);
-    private final RedisServicer redisService = mock(RedisServicer.class);
     private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase =
             mock(GetDeviceKeyAuthenticationChallengeUseCase.class);
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase =
@@ -63,21 +50,17 @@ class DeviceKeyControllerErrorSanitizationTest {
             mock(FinishAuthenticatedDeviceKeyRegistrationUseCase.class);
     private final FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase =
             mock(FinishOnboardingDeviceKeyRegistrationUseCase.class);
+    private final VerifyDeviceKeyLoginUseCase verifyDeviceKeyLoginUseCase =
+            mock(VerifyDeviceKeyLoginUseCase.class);
 
     private final DeviceKeyController controller = new DeviceKeyController(
-            deviceKeyService,
-            deviceKeyRepository,
-            userRepository,
-            finalizeSignupAccount,
-            jwtServicer,
-            balanceInjector,
-            redisService,
             getDeviceKeyAuthenticationChallengeUseCase,
             manageDeviceKeyDevicesUseCase,
             startOnboardingDeviceKeyRegistrationUseCase,
             startAuthenticatedDeviceKeyRegistrationUseCase,
             finishAuthenticatedDeviceKeyRegistrationUseCase,
-            finishOnboardingDeviceKeyRegistrationUseCase);
+            finishOnboardingDeviceKeyRegistrationUseCase,
+            verifyDeviceKeyLoginUseCase);
 
     @AfterEach
     void clearSecurityContext() {
@@ -168,7 +151,7 @@ class DeviceKeyControllerErrorSanitizationTest {
     void verifyAndLoginDoesNotExposeGenericRuntimeMessage() {
         DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
         request.setCredentialId("credential-1");
-        when(deviceKeyRepository.findByCredentialId("credential-1"))
+        when(verifyDeviceKeyLoginUseCase.execute(request))
                 .thenThrow(new RuntimeException(SECRET_RUNTIME_MESSAGE));
 
         ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
@@ -213,7 +196,7 @@ class DeviceKeyControllerErrorSanitizationTest {
     void verifyAndLoginDoesNotExposeReplayReason() {
         DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
         request.setCredentialId("credential-1");
-        when(deviceKeyRepository.findByCredentialId("credential-1"))
+        when(verifyDeviceKeyLoginUseCase.execute(request))
                 .thenThrow(new DeviceKeyReplayException(SECRET_RUNTIME_MESSAGE));
 
         ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
@@ -222,6 +205,48 @@ class DeviceKeyControllerErrorSanitizationTest {
         assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_REPLAY);
         assertThat(response.getBody().getMessage()).isEqualTo("Device key request was rejected by replay protection.");
         assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void verifyAndLoginMapsInvalidCredentialIdResult() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        when(verifyDeviceKeyLoginUseCase.execute(request))
+                .thenReturn(VerifyDeviceKeyLoginUseCase.Result.invalidCredentialId());
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("credentialId is required");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.SYS_INVALID_ARGUMENTS);
+    }
+
+    @Test
+    void verifyAndLoginMapsTotpRequiredResult() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        when(verifyDeviceKeyLoginUseCase.execute(request))
+                .thenReturn(VerifyDeviceKeyLoginUseCase.Result.totpRequired("pre-auth-token"));
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key verified. TOTP required.");
+        assertThat(response.getBody().getData()).isEqualTo("pre-auth-token");
+    }
+
+    @Test
+    void verifyAndLoginMapsAuthenticatedResult() {
+        DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
+        when(verifyDeviceKeyLoginUseCase.execute(request))
+                .thenReturn(VerifyDeviceKeyLoginUseCase.Result.authenticated("jwt-token"));
+
+        ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key authentication successful");
+        assertThat(response.getBody().getData()).isEqualTo("jwt-token");
     }
 
     @Test
