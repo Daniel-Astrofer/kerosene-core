@@ -22,6 +22,7 @@ import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
+import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.dto.SignupState;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
@@ -60,6 +61,7 @@ public class DeviceKeyController {
     private final RedisServicer redisService;
     private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase;
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
+    private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase;
 
     public DeviceKeyController(
             DeviceKeyService deviceKeyService,
@@ -71,7 +73,8 @@ public class DeviceKeyController {
             DevBalanceInjector balanceInjector,
             RedisServicer redisService,
             GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
-            ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase) {
+            ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase,
+            StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
         this.userRepository = userRepository;
@@ -82,6 +85,7 @@ public class DeviceKeyController {
         this.redisService = redisService;
         this.getDeviceKeyAuthenticationChallengeUseCase = getDeviceKeyAuthenticationChallengeUseCase;
         this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
+        this.startAuthenticatedDeviceKeyRegistrationUseCase = startAuthenticatedDeviceKeyRegistrationUseCase;
     }
 
     @PostMapping("/onboarding/start")
@@ -163,14 +167,22 @@ public class DeviceKeyController {
 
     @PostMapping("/register/start")
     public ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> startAuthenticatedRegistration() {
-        UserDataBase user = currentUser();
-        if (user == null) {
+        Long userId = authenticatedUserId();
+        if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Must be logged in to register a device key", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
+
+        StartAuthenticatedDeviceKeyRegistrationUseCase.Result result =
+                startAuthenticatedDeviceKeyRegistrationUseCase.execute(userId);
+        if (result.status() == StartAuthenticatedDeviceKeyRegistrationUseCase.Status.USER_NOT_FOUND) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Must be logged in to register a device key", ErrorCodes.AUTH_SESSION_EXPIRED));
+        }
+
         return ResponseEntity.ok(ApiResponse.success(
                 "Device key registration challenge generated",
-                deviceKeyService.startAuthenticatedRegistrationChallenge(user)));
+                result.challenge()));
     }
 
     @PostMapping("/register/finish")
