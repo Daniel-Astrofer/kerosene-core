@@ -1,7 +1,11 @@
 package source.auth.controller;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
@@ -13,16 +17,23 @@ import source.auth.application.service.devicekey.DeviceKeyReplayException;
 import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.dto.SignupState;
+import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DeviceKeyControllerErrorSanitizationTest {
@@ -37,6 +48,8 @@ class DeviceKeyControllerErrorSanitizationTest {
     private final JwtServicer jwtServicer = mock(JwtServicer.class);
     private final DevBalanceInjector balanceInjector = mock(DevBalanceInjector.class);
     private final RedisServicer redisService = mock(RedisServicer.class);
+    private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase =
+            mock(ManageDeviceKeyDevicesUseCase.class);
 
     private final DeviceKeyController controller = new DeviceKeyController(
             deviceKeyService,
@@ -46,7 +59,13 @@ class DeviceKeyControllerErrorSanitizationTest {
             finalizeSignupAccount,
             jwtServicer,
             balanceInjector,
-            redisService);
+            redisService,
+            manageDeviceKeyDevicesUseCase);
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void finishOnboardingRegistrationDoesNotExposeGenericRuntimeMessage() {
@@ -80,6 +99,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         assertThat(response.getBody().getMessage()).isEqualTo("Device key request failed.");
         assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
     }
+
     @Test
     void finishOnboardingRegistrationDoesNotExposeChallengeReason() {
         SignupState state = new SignupState();
@@ -129,6 +149,115 @@ class DeviceKeyControllerErrorSanitizationTest {
         assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_REPLAY);
         assertThat(response.getBody().getMessage()).isEqualTo("Device key request was rejected by replay protection.");
         assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void getRegisteredDevicesRequiresAuthenticatedUser() {
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.getRegisteredDevices();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Must be logged in to inspect device keys");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+        verify(manageDeviceKeyDevicesUseCase, never()).listDevices(anyLong());
+    }
+
+    @Test
+    void getRegisteredDevicesMapsUserMissingAsSessionExpired() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(manageDeviceKeyDevicesUseCase.listDevices(42L))
+                .thenReturn(new ManageDeviceKeyDevicesUseCase.Result(
+                        ManageDeviceKeyDevicesUseCase.Status.USER_NOT_FOUND,
+                        null));
+
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.getRegisteredDevices();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Must be logged in to inspect device keys");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+    }
+
+    @Test
+    void getRegisteredDevicesMapsSuccess() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        List<DeviceKeyDeviceDTO> devices = List.of();
+        when(manageDeviceKeyDevicesUseCase.listDevices(42L))
+                .thenReturn(new ManageDeviceKeyDevicesUseCase.Result(
+                        ManageDeviceKeyDevicesUseCase.Status.LISTED,
+                        devices));
+
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.getRegisteredDevices();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Registered device keys retrieved.");
+        assertThat(response.getBody().getData()).isEqualTo(devices);
+    }
+
+    @Test
+    void revokeDeviceRequiresAuthenticatedUser() {
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.revokeDevice("credential-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Must be logged in to revoke device keys");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+        verify(manageDeviceKeyDevicesUseCase, never()).revokeDevice(anyLong(), any());
+    }
+
+    @Test
+    void revokeDeviceMapsUserMissingAsSessionExpired() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(manageDeviceKeyDevicesUseCase.revokeDevice(42L, "credential-1"))
+                .thenReturn(new ManageDeviceKeyDevicesUseCase.Result(
+                        ManageDeviceKeyDevicesUseCase.Status.USER_NOT_FOUND,
+                        null));
+
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.revokeDevice("credential-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Must be logged in to revoke device keys");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+    }
+
+    @Test
+    void revokeDeviceMapsMissingCredential() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(manageDeviceKeyDevicesUseCase.revokeDevice(42L, "credential-1"))
+                .thenReturn(new ManageDeviceKeyDevicesUseCase.Result(
+                        ManageDeviceKeyDevicesUseCase.Status.CREDENTIAL_NOT_FOUND,
+                        null));
+
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.revokeDevice("credential-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key not found");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND);
+    }
+
+    @Test
+    void revokeDeviceMapsSuccess() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        List<DeviceKeyDeviceDTO> devices = List.of();
+        when(manageDeviceKeyDevicesUseCase.revokeDevice(42L, "credential-1"))
+                .thenReturn(new ManageDeviceKeyDevicesUseCase.Result(
+                        ManageDeviceKeyDevicesUseCase.Status.REVOKED,
+                        devices));
+
+        ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> response = controller.revokeDevice("credential-1");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key revoked.");
+        assertThat(response.getBody().getData()).isEqualTo(devices);
     }
 
 }

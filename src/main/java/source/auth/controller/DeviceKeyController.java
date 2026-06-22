@@ -20,6 +20,7 @@ import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
+import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.dto.SignupState;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
@@ -56,6 +57,7 @@ public class DeviceKeyController {
     private final JwtServicer jwtServicer;
     private final DevBalanceInjector balanceInjector;
     private final RedisServicer redisService;
+    private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
 
     public DeviceKeyController(
             DeviceKeyService deviceKeyService,
@@ -65,7 +67,8 @@ public class DeviceKeyController {
             FinalizeSignupAccount finalizeSignupAccount,
             JwtServicer jwtServicer,
             DevBalanceInjector balanceInjector,
-            RedisServicer redisService) {
+            RedisServicer redisService,
+            ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
         this.userRepository = userRepository;
@@ -74,6 +77,7 @@ public class DeviceKeyController {
         this.jwtServicer = jwtServicer;
         this.balanceInjector = balanceInjector;
         this.redisService = redisService;
+        this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
     }
 
     @PostMapping("/onboarding/start")
@@ -270,38 +274,40 @@ public class DeviceKeyController {
 
     @GetMapping("/devices")
     public ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> getRegisteredDevices() {
-        UserDataBase user = currentUser();
-        if (user == null) {
+        Long userId = authenticatedUserId();
+        if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Must be logged in to inspect device keys", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
-        List<DeviceKeyDeviceDTO> devices = deviceKeyRepository.findByUserId(user.getId()).stream()
-                .map(DeviceKeyDeviceDTO::from)
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success("Registered device keys retrieved.", devices));
+
+        ManageDeviceKeyDevicesUseCase.Result result = manageDeviceKeyDevicesUseCase.listDevices(userId);
+        if (result.status() == ManageDeviceKeyDevicesUseCase.Status.USER_NOT_FOUND) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Must be logged in to inspect device keys", ErrorCodes.AUTH_SESSION_EXPIRED));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("Registered device keys retrieved.", result.devices()));
     }
 
     @PostMapping("/devices/{credentialId}/revoke")
     public ResponseEntity<ApiResponse<List<DeviceKeyDeviceDTO>>> revokeDevice(@PathVariable String credentialId) {
-        UserDataBase user = currentUser();
-        if (user == null) {
+        Long userId = authenticatedUserId();
+        if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Must be logged in to revoke device keys", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
-        Optional<DeviceKeyCredential> credential =
-                deviceKeyRepository.findByCredentialIdAndUserId(credentialId, user.getId());
-        if (credential.isEmpty()) {
+
+        ManageDeviceKeyDevicesUseCase.Result result = manageDeviceKeyDevicesUseCase.revokeDevice(userId, credentialId);
+        if (result.status() == ManageDeviceKeyDevicesUseCase.Status.USER_NOT_FOUND) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Must be logged in to revoke device keys", ErrorCodes.AUTH_SESSION_EXPIRED));
+        }
+        if (result.status() == ManageDeviceKeyDevicesUseCase.Status.CREDENTIAL_NOT_FOUND) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("Device key not found", ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
         }
-        DeviceKeyCredential deviceKey = credential.get();
-        deviceKey.setStatus("REVOKED");
-        deviceKey.setRevokedAt(LocalDateTime.now());
-        deviceKeyRepository.save(deviceKey);
-        List<DeviceKeyDeviceDTO> devices = deviceKeyRepository.findByUserId(user.getId()).stream()
-                .map(DeviceKeyDeviceDTO::from)
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success("Device key revoked.", devices));
+
+        return ResponseEntity.ok(ApiResponse.success("Device key revoked.", result.devices()));
     }
 
     private void persistDeviceKey(
@@ -344,6 +350,14 @@ public class DeviceKeyController {
             return null;
         }
         return userRepository.findById(Long.parseLong(auth.getName())).orElse(null);
+    }
+
+    private Long authenticatedUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth.getName().equals("anonymousUser")) {
+            return null;
+        }
+        return Long.parseLong(auth.getName());
     }
 
     private String normalizeUsername(String username) {
