@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.devicekey.DeviceKeyChallengeException;
 import source.auth.application.service.devicekey.DeviceKeyProtocolException;
 import source.auth.application.service.devicekey.DeviceKeyReplayException;
@@ -25,7 +24,7 @@ import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegist
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
-import source.auth.dto.SignupState;
+import source.auth.application.usecase.devicekey.StartOnboardingDeviceKeyRegistrationUseCase;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
@@ -36,7 +35,6 @@ import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 import source.kfe.rail.KfeRailException;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -56,13 +54,13 @@ public class DeviceKeyController {
     private final DeviceKeyService deviceKeyService;
     private final DeviceKeyCredentialRepository deviceKeyRepository;
     private final UserRepository userRepository;
-    private final SignupStateStore signupStateStore;
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final JwtServicer jwtServicer;
     private final DevBalanceInjector balanceInjector;
     private final RedisServicer redisService;
     private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase;
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
+    private final StartOnboardingDeviceKeyRegistrationUseCase startOnboardingDeviceKeyRegistrationUseCase;
     private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase;
     private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase;
     private final FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase;
@@ -71,26 +69,26 @@ public class DeviceKeyController {
             DeviceKeyService deviceKeyService,
             DeviceKeyCredentialRepository deviceKeyRepository,
             UserRepository userRepository,
-            SignupStateStore signupStateStore,
             FinalizeSignupAccount finalizeSignupAccount,
             JwtServicer jwtServicer,
             DevBalanceInjector balanceInjector,
             RedisServicer redisService,
             GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
             ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase,
+            StartOnboardingDeviceKeyRegistrationUseCase startOnboardingDeviceKeyRegistrationUseCase,
             StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase,
             FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase,
             FinishOnboardingDeviceKeyRegistrationUseCase finishOnboardingDeviceKeyRegistrationUseCase) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
         this.userRepository = userRepository;
-        this.signupStateStore = signupStateStore;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.jwtServicer = jwtServicer;
         this.balanceInjector = balanceInjector;
         this.redisService = redisService;
         this.getDeviceKeyAuthenticationChallengeUseCase = getDeviceKeyAuthenticationChallengeUseCase;
         this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
+        this.startOnboardingDeviceKeyRegistrationUseCase = startOnboardingDeviceKeyRegistrationUseCase;
         this.startAuthenticatedDeviceKeyRegistrationUseCase = startAuthenticatedDeviceKeyRegistrationUseCase;
         this.finishAuthenticatedDeviceKeyRegistrationUseCase = finishAuthenticatedDeviceKeyRegistrationUseCase;
         this.finishOnboardingDeviceKeyRegistrationUseCase = finishOnboardingDeviceKeyRegistrationUseCase;
@@ -100,22 +98,14 @@ public class DeviceKeyController {
     public ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> startOnboardingRegistration(
             @RequestParam String sessionId,
             @RequestParam(required = false) String username) {
-        SignupState state = signupStateStore.findSignupState(sessionId);
-        if (state == null) {
+        StartOnboardingDeviceKeyRegistrationUseCase.Result result =
+                startOnboardingDeviceKeyRegistrationUseCase.execute(sessionId, username);
+        if (result.status() == StartOnboardingDeviceKeyRegistrationUseCase.Status.SESSION_EXPIRED) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("Session expired", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
 
-        if ((state.getUsername() == null || state.getUsername().isBlank())
-                && username != null && !username.isBlank()) {
-            state.setUsername(normalizeUsername(username));
-            signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
-        }
-
-        DeviceKeyChallengeResponse challenge = deviceKeyService.startRegistrationChallenge(
-                sessionId,
-                state.getUsername());
-        return ResponseEntity.ok(ApiResponse.success("Device key challenge generated", challenge));
+        return ResponseEntity.ok(ApiResponse.success("Device key challenge generated", result.challenge()));
     }
 
     @PostMapping("/onboarding/finish")

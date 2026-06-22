@@ -9,7 +9,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicekey.DeviceKeyChallengeException;
 import source.auth.application.service.devicekey.DeviceKeyProtocolException;
@@ -22,6 +21,7 @@ import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegist
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
+import source.auth.application.usecase.devicekey.StartOnboardingDeviceKeyRegistrationUseCase;
 import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
@@ -47,7 +47,6 @@ class DeviceKeyControllerErrorSanitizationTest {
     private final DeviceKeyService deviceKeyService = mock(DeviceKeyService.class);
     private final DeviceKeyCredentialRepository deviceKeyRepository = mock(DeviceKeyCredentialRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
-    private final SignupStateStore signupStateStore = mock(SignupStateStore.class);
     private final FinalizeSignupAccount finalizeSignupAccount = mock(FinalizeSignupAccount.class);
     private final JwtServicer jwtServicer = mock(JwtServicer.class);
     private final DevBalanceInjector balanceInjector = mock(DevBalanceInjector.class);
@@ -56,6 +55,8 @@ class DeviceKeyControllerErrorSanitizationTest {
             mock(GetDeviceKeyAuthenticationChallengeUseCase.class);
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase =
             mock(ManageDeviceKeyDevicesUseCase.class);
+    private final StartOnboardingDeviceKeyRegistrationUseCase startOnboardingDeviceKeyRegistrationUseCase =
+            mock(StartOnboardingDeviceKeyRegistrationUseCase.class);
     private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase =
             mock(StartAuthenticatedDeviceKeyRegistrationUseCase.class);
     private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase =
@@ -67,13 +68,13 @@ class DeviceKeyControllerErrorSanitizationTest {
             deviceKeyService,
             deviceKeyRepository,
             userRepository,
-            signupStateStore,
             finalizeSignupAccount,
             jwtServicer,
             balanceInjector,
             redisService,
             getDeviceKeyAuthenticationChallengeUseCase,
             manageDeviceKeyDevicesUseCase,
+            startOnboardingDeviceKeyRegistrationUseCase,
             startAuthenticatedDeviceKeyRegistrationUseCase,
             finishAuthenticatedDeviceKeyRegistrationUseCase,
             finishOnboardingDeviceKeyRegistrationUseCase);
@@ -81,6 +82,41 @@ class DeviceKeyControllerErrorSanitizationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void startOnboardingRegistrationMapsSessionExpired() {
+        when(startOnboardingDeviceKeyRegistrationUseCase.execute("session-1", "alice"))
+                .thenReturn(StartOnboardingDeviceKeyRegistrationUseCase.Result.sessionExpired());
+
+        ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> response =
+                controller.startOnboardingRegistration("session-1", "alice");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Session expired");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+    }
+
+    @Test
+    void startOnboardingRegistrationMapsSuccess() {
+        DeviceKeyChallengeResponse challenge = new DeviceKeyChallengeResponse(
+                "challenge-id",
+                "challenge",
+                120L,
+                "onion",
+                "Ed25519",
+                "v1");
+        when(startOnboardingDeviceKeyRegistrationUseCase.execute("session-1", "alice"))
+                .thenReturn(StartOnboardingDeviceKeyRegistrationUseCase.Result.generated(challenge));
+
+        ResponseEntity<ApiResponse<DeviceKeyChallengeResponse>> response =
+                controller.startOnboardingRegistration("session-1", "alice");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key challenge generated");
+        assertThat(response.getBody().getData()).isEqualTo(challenge);
     }
 
     @Test
