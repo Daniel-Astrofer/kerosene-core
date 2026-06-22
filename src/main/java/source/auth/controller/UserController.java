@@ -4,10 +4,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
 import source.auth.application.usecase.user.GeneratePowChallengeUseCase;
+import source.auth.application.usecase.user.LogoutCurrentSessionUseCase;
 import source.auth.dto.UserDTO;
 import source.auth.dto.SignupResponseDTO;
 import source.auth.dto.SignupTotpVerifyRequestDTO;
@@ -26,16 +26,16 @@ public class UserController {
     private final Login login;
     private final Signup signup;
     private final GeneratePowChallengeUseCase generatePowChallengeUseCase;
-    private final JwtServicer jwtService;
+    private final LogoutCurrentSessionUseCase logoutCurrentSessionUseCase;
 
     public UserController(Login login,
             Signup signup,
             GeneratePowChallengeUseCase generatePowChallengeUseCase,
-            JwtServicer jwtService) {
+            LogoutCurrentSessionUseCase logoutCurrentSessionUseCase) {
         this.login = login;
         this.signup = signup;
         this.generatePowChallengeUseCase = generatePowChallengeUseCase;
-        this.jwtService = jwtService;
+        this.logoutCurrentSessionUseCase = logoutCurrentSessionUseCase;
     }
 
     @GetMapping("/pow/challenge")
@@ -80,27 +80,17 @@ public class UserController {
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@RequestHeader(value = "Authorization", required = false) String authorization) {
-        String token = extractBearerToken(authorization);
-        if (token == null) {
+        LogoutCurrentSessionUseCase.Result result = logoutCurrentSessionUseCase.execute(authorization);
+        if (result.status() == LogoutCurrentSessionUseCase.Status.MISSING_TOKEN) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Authentication is required to logout.", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
 
-        try {
-            jwtService.revokeSession(token);
-            return ResponseEntity.ok(ApiResponse.success("Session revoked."));
-        } catch (RuntimeException exception) {
+        if (result.status() == LogoutCurrentSessionUseCase.Status.REVOCATION_FAILED) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Unable to revoke the current session.", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
-    }
 
-    private String extractBearerToken(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return null;
-        }
-        String token = authorization.substring("Bearer ".length()).trim();
-        return token.isBlank() ? null : token;
+        return ResponseEntity.ok(ApiResponse.success("Session revoked."));
     }
-
 }

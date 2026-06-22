@@ -7,8 +7,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.usecase.user.GeneratePowChallengeUseCase;
+import source.auth.application.usecase.user.LogoutCurrentSessionUseCase;
 import source.auth.dto.UserDTO;
 import source.common.exception.GlobalExceptionHandler;
 
@@ -17,7 +17,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,9 +30,9 @@ class UserControllerTest {
     private final Login login = mock(Login.class);
     private final Signup signup = mock(Signup.class);
     private final GeneratePowChallengeUseCase generatePowChallengeUseCase = mock(GeneratePowChallengeUseCase.class);
-    private final JwtServicer jwtService = mock(JwtServicer.class);
+    private final LogoutCurrentSessionUseCase logoutCurrentSessionUseCase = mock(LogoutCurrentSessionUseCase.class);
     private final MockMvc mockMvc = MockMvcBuilders
-            .standaloneSetup(new UserController(login, signup, generatePowChallengeUseCase, jwtService))
+            .standaloneSetup(new UserController(login, signup, generatePowChallengeUseCase, logoutCurrentSessionUseCase))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 
@@ -92,28 +91,36 @@ class UserControllerTest {
 
     @Test
     void logoutRevokesCurrentBearerToken() throws Exception {
+        when(logoutCurrentSessionUseCase.execute("Bearer token-1"))
+                .thenReturn(new LogoutCurrentSessionUseCase.Result(LogoutCurrentSessionUseCase.Status.REVOKED));
+
         mockMvc.perform(post("/auth/logout")
                 .header("Authorization", "Bearer token-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Session revoked."));
 
-        verify(jwtService).revokeSession("token-1");
+        verify(logoutCurrentSessionUseCase).execute("Bearer token-1");
     }
 
     @Test
     void logoutRejectsMissingBearerToken() throws Exception {
+        when(logoutCurrentSessionUseCase.execute(null))
+                .thenReturn(new LogoutCurrentSessionUseCase.Result(LogoutCurrentSessionUseCase.Status.MISSING_TOKEN));
+
         mockMvc.perform(post("/auth/logout"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Authentication is required to logout."))
                 .andExpect(jsonPath("$.errorCode").value("AUTH_013"));
+
+        verify(logoutCurrentSessionUseCase).execute(null);
     }
 
     @Test
     void logoutDoesNotExposeRawRevocationErrors() throws Exception {
-        doThrow(new IllegalArgumentException("raw jwt parse failure"))
-                .when(jwtService).revokeSession("bad-token");
+        when(logoutCurrentSessionUseCase.execute("Bearer bad-token"))
+                .thenReturn(new LogoutCurrentSessionUseCase.Result(LogoutCurrentSessionUseCase.Status.REVOCATION_FAILED));
 
         mockMvc.perform(post("/auth/logout")
                 .header("Authorization", "Bearer bad-token"))
@@ -121,5 +128,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Unable to revoke the current session."))
                 .andExpect(jsonPath("$.errorCode").value("AUTH_013"));
+
+        verify(logoutCurrentSessionUseCase).execute("Bearer bad-token");
     }
 }
