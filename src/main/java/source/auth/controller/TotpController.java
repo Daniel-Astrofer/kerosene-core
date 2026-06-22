@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.application.service.account.TotpManagementService;
+import source.auth.application.usecase.totp.TotpOperationsUseCase;
 import source.auth.dto.BackupCodesStatusDTO;
 import source.auth.dto.TotpSetupResponseDTO;
 import source.common.dto.ApiResponse;
@@ -18,16 +18,15 @@ import java.util.Map;
 @RequestMapping("/auth/totp")
 public class TotpController {
 
-    private final TotpManagementService totpManagementService;
+    private final TotpOperationsUseCase totpOperationsUseCase;
 
-    public TotpController(TotpManagementService totpManagementService) {
-        this.totpManagementService = totpManagementService;
+    public TotpController(TotpOperationsUseCase totpOperationsUseCase) {
+        this.totpOperationsUseCase = totpOperationsUseCase;
     }
 
     @PostMapping("/setup")
     public ResponseEntity<ApiResponse<TotpSetupResponseDTO>> setup(Authentication authentication) {
-        TotpSetupResponseDTO response =
-                totpManagementService.beginSetup(Long.parseLong(authentication.getName()));
+        TotpSetupResponseDTO response = totpOperationsUseCase.setup(Long.parseLong(authentication.getName()));
         return ResponseEntity.ok(ApiResponse.success("TOTP setup secret generated successfully.", response));
     }
 
@@ -35,7 +34,7 @@ public class TotpController {
     public ResponseEntity<ApiResponse<BackupCodesStatusDTO>> verify(
             Authentication authentication,
             @RequestBody Map<String, String> request) {
-        BackupCodesStatusDTO response = totpManagementService.verifySetup(
+        BackupCodesStatusDTO response = totpOperationsUseCase.verify(
                 Long.parseLong(authentication.getName()),
                 request.get("totpCode"));
         return ResponseEntity.ok(ApiResponse.success("TOTP enabled successfully.", response));
@@ -43,7 +42,7 @@ public class TotpController {
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<String>> disable(Authentication authentication) {
-        totpManagementService.disable(Long.parseLong(authentication.getName()));
+        totpOperationsUseCase.disable(Long.parseLong(authentication.getName()));
         return ResponseEntity.ok(ApiResponse.success("TOTP disabled successfully.", "OK"));
     }
 }
