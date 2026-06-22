@@ -20,6 +20,7 @@ import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
+import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
@@ -62,6 +63,7 @@ public class DeviceKeyController {
     private final GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase;
     private final ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase;
     private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase;
+    private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase;
 
     public DeviceKeyController(
             DeviceKeyService deviceKeyService,
@@ -74,7 +76,8 @@ public class DeviceKeyController {
             RedisServicer redisService,
             GetDeviceKeyAuthenticationChallengeUseCase getDeviceKeyAuthenticationChallengeUseCase,
             ManageDeviceKeyDevicesUseCase manageDeviceKeyDevicesUseCase,
-            StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase) {
+            StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase,
+            FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
         this.userRepository = userRepository;
@@ -86,6 +89,7 @@ public class DeviceKeyController {
         this.getDeviceKeyAuthenticationChallengeUseCase = getDeviceKeyAuthenticationChallengeUseCase;
         this.manageDeviceKeyDevicesUseCase = manageDeviceKeyDevicesUseCase;
         this.startAuthenticatedDeviceKeyRegistrationUseCase = startAuthenticatedDeviceKeyRegistrationUseCase;
+        this.finishAuthenticatedDeviceKeyRegistrationUseCase = finishAuthenticatedDeviceKeyRegistrationUseCase;
     }
 
     @PostMapping("/onboarding/start")
@@ -186,18 +190,20 @@ public class DeviceKeyController {
     }
 
     @PostMapping("/register/finish")
-    @Transactional
     public ResponseEntity<ApiResponse<String>> finishAuthenticatedRegistration(
             @RequestBody DeviceKeyRegistrationRequest request) {
-        UserDataBase user = currentUser();
-        if (user == null) {
+        Long userId = authenticatedUserId();
+        if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Must be logged in to register a device key", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
         try {
-            DeviceKeyService.VerifiedDeviceKeyRegistration verified =
-                    deviceKeyService.verifyRegistration(request, "", user.getUsername());
-            persistDeviceKey(user, verified);
+            FinishAuthenticatedDeviceKeyRegistrationUseCase.Result result =
+                    finishAuthenticatedDeviceKeyRegistrationUseCase.execute(userId, request);
+            if (result.status() == FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.USER_NOT_FOUND) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Must be logged in to register a device key", ErrorCodes.AUTH_SESSION_EXPIRED));
+            }
             return ResponseEntity.ok(ApiResponse.success("Device key registered successfully", "OK"));
         } catch (DeviceKeyChallengeException exception) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
@@ -359,14 +365,6 @@ public class DeviceKeyController {
                 .body(ApiResponse.error(
                         "Esta chave deste dispositivo nao esta vinculada a conta.",
                         ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
-    }
-
-    private UserDataBase currentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getName().equals("anonymousUser")) {
-            return null;
-        }
-        return userRepository.findById(Long.parseLong(auth.getName())).orElse(null);
     }
 
     private Long authenticatedUserId() {

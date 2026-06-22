@@ -17,6 +17,7 @@ import source.auth.application.service.devicekey.DeviceKeyReplayException;
 import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.util.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
 import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
 import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
 import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
@@ -57,6 +58,8 @@ class DeviceKeyControllerErrorSanitizationTest {
             mock(ManageDeviceKeyDevicesUseCase.class);
     private final StartAuthenticatedDeviceKeyRegistrationUseCase startAuthenticatedDeviceKeyRegistrationUseCase =
             mock(StartAuthenticatedDeviceKeyRegistrationUseCase.class);
+    private final FinishAuthenticatedDeviceKeyRegistrationUseCase finishAuthenticatedDeviceKeyRegistrationUseCase =
+            mock(FinishAuthenticatedDeviceKeyRegistrationUseCase.class);
 
     private final DeviceKeyController controller = new DeviceKeyController(
             deviceKeyService,
@@ -69,7 +72,8 @@ class DeviceKeyControllerErrorSanitizationTest {
             redisService,
             getDeviceKeyAuthenticationChallengeUseCase,
             manageDeviceKeyDevicesUseCase,
-            startAuthenticatedDeviceKeyRegistrationUseCase);
+            startAuthenticatedDeviceKeyRegistrationUseCase,
+            finishAuthenticatedDeviceKeyRegistrationUseCase);
 
     @AfterEach
     void clearSecurityContext() {
@@ -249,6 +253,86 @@ class DeviceKeyControllerErrorSanitizationTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getMessage()).isEqualTo("Device key registration challenge generated");
         assertThat(response.getBody().getData()).isEqualTo(challenge);
+    }
+
+    @Test
+    void finishAuthenticatedRegistrationRequiresAuthenticatedUser() {
+        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Must be logged in to register a device key");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+        verify(finishAuthenticatedDeviceKeyRegistrationUseCase, never()).execute(anyLong(), any());
+    }
+
+    @Test
+    void finishAuthenticatedRegistrationMapsUserMissingAsSessionExpired() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
+                .thenReturn(new FinishAuthenticatedDeviceKeyRegistrationUseCase.Result(
+                        FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.USER_NOT_FOUND));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Must be logged in to register a device key");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_SESSION_EXPIRED);
+    }
+
+    @Test
+    void finishAuthenticatedRegistrationMapsChallengeFailure() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
+                .thenThrow(new DeviceKeyChallengeException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key challenge is required or expired.");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_CHALLENGE);
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void finishAuthenticatedRegistrationMapsProtocolFailure() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
+                .thenThrow(new DeviceKeyProtocolException(SECRET_RUNTIME_MESSAGE));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key assertion could not be verified.");
+        assertThat(response.getBody().getErrorCode()).isEqualTo(ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED);
+        assertThat(response.getBody().getMessage()).doesNotContain(SECRET_RUNTIME_MESSAGE);
+    }
+
+    @Test
+    void finishAuthenticatedRegistrationMapsSuccess() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
+        when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
+                .thenReturn(new FinishAuthenticatedDeviceKeyRegistrationUseCase.Result(
+                        FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.REGISTERED));
+
+        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+                new DeviceKeyRegistrationRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).isEqualTo("Device key registered successfully");
+        assertThat(response.getBody().getData()).isEqualTo("OK");
     }
 
     @Test
