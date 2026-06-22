@@ -10,13 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.auth.AuthExceptions;
+import source.auth.application.usecase.security.GetAccountSecurityProfileUseCase;
 import source.auth.application.usecase.security.UpdateAccountSecurityProfileUseCase;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.application.service.account.AppPinService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.dto.AccountSecurityProfileDTO;
 import source.auth.dto.AccountSecurityUpdateRequestDTO;
-import source.auth.dto.PasskeyInventoryDTO;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 
@@ -25,18 +23,15 @@ import source.common.dto.ApiResponse;
 public class AccountSecurityController {
 
     private final UserServiceContract userService;
-    private final PasskeyInventoryService passkeyInventoryService;
-    private final AppPinService appPinService;
+    private final GetAccountSecurityProfileUseCase getAccountSecurityProfileUseCase;
     private final UpdateAccountSecurityProfileUseCase updateAccountSecurityProfileUseCase;
 
     public AccountSecurityController(
             UserServiceContract userService,
-            PasskeyInventoryService passkeyInventoryService,
-            AppPinService appPinService,
+            GetAccountSecurityProfileUseCase getAccountSecurityProfileUseCase,
             UpdateAccountSecurityProfileUseCase updateAccountSecurityProfileUseCase) {
         this.userService = userService;
-        this.passkeyInventoryService = passkeyInventoryService;
-        this.appPinService = appPinService;
+        this.getAccountSecurityProfileUseCase = getAccountSecurityProfileUseCase;
         this.updateAccountSecurityProfileUseCase = updateAccountSecurityProfileUseCase;
     }
 
@@ -44,15 +39,9 @@ public class AccountSecurityController {
     public ResponseEntity<ApiResponse<AccountSecurityProfileDTO>> getProfile(
             @RequestHeader(value = "X-Device-Hash", required = false) String deviceHash) {
         UserDataBase user = getAuthenticatedUser();
-        PasskeyInventoryDTO passkeys = passkeyInventoryService.inventoryFor(user);
-        boolean passkeyAvailable = passkeys.passkeyRegistered();
         return ResponseEntity.ok(ApiResponse.success(
                 "Account security profile retrieved successfully.",
-                AccountSecurityProfileDTO.fromUser(
-                        user,
-                        passkeyAvailable,
-                        passkeys,
-                        appPinService.getStatus(user, deviceHash))));
+                getAccountSecurityProfileUseCase.execute(user, deviceHash)));
     }
 
     @PutMapping("/profile")
