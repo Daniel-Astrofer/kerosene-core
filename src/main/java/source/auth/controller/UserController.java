@@ -7,10 +7,10 @@ import jakarta.validation.Valid;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
+import source.auth.application.usecase.user.GeneratePowChallengeUseCase;
 import source.auth.dto.UserDTO;
 import source.auth.dto.SignupResponseDTO;
 import source.auth.dto.SignupTotpVerifyRequestDTO;
-import source.auth.application.service.pow.PowService;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 
@@ -25,23 +25,23 @@ import java.util.Map;
 public class UserController {
     private final Login login;
     private final Signup signup;
-    private final PowService powService;
+    private final GeneratePowChallengeUseCase generatePowChallengeUseCase;
     private final JwtServicer jwtService;
 
     public UserController(Login login,
             Signup signup,
-            PowService powService,
+            GeneratePowChallengeUseCase generatePowChallengeUseCase,
             JwtServicer jwtService) {
         this.login = login;
         this.signup = signup;
-        this.powService = powService;
+        this.generatePowChallengeUseCase = generatePowChallengeUseCase;
         this.jwtService = jwtService;
     }
 
     @GetMapping("/pow/challenge")
     public ResponseEntity<ApiResponse<Map<String, String>>> getPowChallenge() {
-        String challenge = powService.generateChallenge();
-        return ResponseEntity.ok(ApiResponse.success("PoW Challenge generated", Map.of("challenge", challenge)));
+        return ResponseEntity.ok(
+                ApiResponse.success("PoW Challenge generated", generatePowChallengeUseCase.execute()));
     }
 
     @PostMapping("/login")

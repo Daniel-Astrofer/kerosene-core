@@ -7,10 +7,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import source.auth.application.orchestrator.login.contracts.Login;
 import source.auth.application.orchestrator.login.contracts.Signup;
-import source.auth.application.service.pow.PowService;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import source.auth.application.usecase.user.GeneratePowChallengeUseCase;
 import source.auth.dto.UserDTO;
 import source.common.exception.GlobalExceptionHandler;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -19,6 +21,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -27,12 +30,25 @@ class UserControllerTest {
 
     private final Login login = mock(Login.class);
     private final Signup signup = mock(Signup.class);
-    private final PowService powService = mock(PowService.class);
+    private final GeneratePowChallengeUseCase generatePowChallengeUseCase = mock(GeneratePowChallengeUseCase.class);
     private final JwtServicer jwtService = mock(JwtServicer.class);
     private final MockMvc mockMvc = MockMvcBuilders
-            .standaloneSetup(new UserController(login, signup, powService, jwtService))
+            .standaloneSetup(new UserController(login, signup, generatePowChallengeUseCase, jwtService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
+
+    @Test
+    void getPowChallengeReturnsUseCasePayloadWithExistingResponseContract() throws Exception {
+        when(generatePowChallengeUseCase.execute()).thenReturn(Map.of("challenge", "challenge-1"));
+
+        mockMvc.perform(get("/auth/pow/challenge"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("PoW Challenge generated"))
+                .andExpect(jsonPath("$.data.challenge").value("challenge-1"));
+
+        verify(generatePowChallengeUseCase).execute();
+    }
 
     @Test
     void signupTotpVerifyAcceptsSessionPayloadWithoutUsername() throws Exception {
