@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.application.service.account.AccountActivationService;
+import source.auth.application.usecase.activation.AccountActivationOperationsUseCase;
 import source.auth.dto.AccountActivationStatusDTO;
 import source.common.dto.ApiResponse;
 
@@ -18,22 +18,22 @@ import java.util.Map;
 @RequestMapping("/auth/activation-status")
 public class AccountActivationController {
 
-    private final AccountActivationService accountActivationService;
+    private final AccountActivationOperationsUseCase accountActivationOperationsUseCase;
 
-    public AccountActivationController(AccountActivationService accountActivationService) {
-        this.accountActivationService = accountActivationService;
+    public AccountActivationController(AccountActivationOperationsUseCase accountActivationOperationsUseCase) {
+        this.accountActivationOperationsUseCase = accountActivationOperationsUseCase;
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse<AccountActivationStatusDTO>> getStatus(Authentication authentication) {
-        AccountActivationStatusDTO status = accountActivationService.getStatus(authenticatedUserId(authentication));
+        AccountActivationStatusDTO status = accountActivationOperationsUseCase.getStatus(authenticatedUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success("Activation status retrieved successfully.", status));
     }
 
     @PostMapping("/funding-link")
     public ResponseEntity<ApiResponse<AccountActivationStatusDTO>> createFundingLink(Authentication authentication) {
         AccountActivationStatusDTO status =
-                accountActivationService.createOrReuseLink(authenticatedUserId(authentication));
+                accountActivationOperationsUseCase.createOrReuseLink(authenticatedUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success(
                 "Initial funding is prepared inside the KFE flow.",
                 status));
@@ -44,7 +44,7 @@ public class AccountActivationController {
             @PathVariable String linkId,
             @RequestBody Map<String, String> request,
             Authentication authentication) {
-        AccountActivationStatusDTO status = accountActivationService.confirm(
+        AccountActivationStatusDTO status = accountActivationOperationsUseCase.confirm(
                 authenticatedUserId(authentication),
                 linkId,
                 request.get("txid"),
