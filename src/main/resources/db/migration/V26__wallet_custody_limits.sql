@@ -1,5 +1,7 @@
--- Limita uma carteira ativa/criando para custodia interna e custodial on-chain.
--- Carteiras frias/watch-only podem existir em ate duas entradas ativas por usuario.
+-- Ajusta limites de custodia em bases que ja rodaram a regra antiga:
+-- INTERNAL e CUSTODIAL_ONCHAIN continuam unicas; WATCH_ONLY aceita ate duas carteiras ativas.
+DROP INDEX IF EXISTS financial.ux_wallets_core_user_kind_active_custody;
+
 WITH ranked_single_custody_wallets AS (
     SELECT
         id,

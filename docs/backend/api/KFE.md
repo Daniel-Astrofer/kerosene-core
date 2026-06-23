@@ -121,7 +121,7 @@ sequenceDiagram
 
 **Quando usar:** Use na criação de carteira interna, custodial on-chain ou cold/watch-only.
 
-**Regras de negócio e limitações:** Existe limitação de uma carteira ativa/em criação por `kind`; `WATCH_ONLY` exige material público como xpub/descriptor quando usado como cold wallet. `issueInitialAddress=true` tenta emitir endereço inicial.
+**Regras de negócio e limitações:** Existe limitação de uma carteira ativa/em criação para `INTERNAL` e `CUSTODIAL_ONCHAIN`; `WATCH_ONLY` aceita no máximo duas carteiras ativas/em criação por usuário e exige material público como xpub/descriptor quando usado como cold wallet. `issueInitialAddress=true` tenta emitir endereço inicial.
 
 ### Headers obrigatórios
 
@@ -1960,7 +1960,7 @@ Exemplo completo:
 | Campo | Tipo | Restrições/regras |
 |---|---:|---|
 | `id` | uuid | Chave primária pública da carteira. |
-| `kind` | enum | `INTERNAL`, `CUSTODIAL_ONCHAIN`, `WATCH_ONLY`; há limitação de uma carteira ativa/em criação por `kind` por usuário. |
+| `kind` | enum | `INTERNAL`, `CUSTODIAL_ONCHAIN`, `WATCH_ONLY`; `INTERNAL` e `CUSTODIAL_ONCHAIN` são únicos por usuário entre carteiras ativas/em criação, e `WATCH_ONLY` permite até duas carteiras ativas/em criação. |
 | `status` | enum | `CREATING`, `ACTIVE`, `FROZEN`, `ROTATING_ADDRESS`, `KEYGEN_FAILED`, `QUORUM_BLOCKED`, `ARCHIVED`. |
 | `label` | string | Até 96 caracteres quando recebido no create. |
 | `walletName` | enum/string | `INVESTMENT`, `DAILY`, `VEHICLE`, `FUTURE_EXPENSES`. |

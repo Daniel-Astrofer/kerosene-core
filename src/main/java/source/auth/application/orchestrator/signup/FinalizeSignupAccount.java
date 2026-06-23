@@ -198,7 +198,7 @@ public class FinalizeSignupAccount {
                 new KfeCreateWalletRequest(
                         KfeWalletKind.INTERNAL,
                         null,
-                        "Carteira Global",
+                        "carteira global",
                         null,
                         null,
                         null,

@@ -33,7 +33,9 @@ public class KfeWalletService {
 
     private static final Logger log = LoggerFactory.getLogger(KfeWalletService.class);
     private static final String ASSET_BTC = "BTC";
+    private static final String INTERNAL_GLOBAL_WALLET_LABEL = "carteira global";
     private static final int FAILURE_REASON_MAX_LENGTH = 180;
+    private static final int MAX_ACTIVE_WATCH_ONLY_WALLETS = 2;
     private static final List<KfeWalletStatus> UNIQUE_WALLET_STATUSES = List.of(
             KfeWalletStatus.CREATING,
             KfeWalletStatus.ACTIVE,
@@ -106,7 +108,7 @@ public class KfeWalletService {
     }
 
     private PendingWallet createPendingWallet(Long userId, KfeCreateWalletRequest request) {
-        requireNoExistingWalletForKind(userId, request.kind());
+        requireWalletCapacity(userId, request.kind());
         KfeWalletEntity wallet = new KfeWalletEntity();
         wallet.setUserId(userId);
         wallet.setKind(request.kind());
@@ -125,8 +127,15 @@ public class KfeWalletService {
         return new PendingWallet(wallet.getId(), wallet.getKind(), wallet.getQuorumPolicyHash());
     }
 
-    private void requireNoExistingWalletForKind(Long userId, KfeWalletKind kind) {
-        if (walletRepository.existsByUserIdAndKindAndStatusIn(userId, kind, UNIQUE_WALLET_STATUSES)) {
+    private void requireWalletCapacity(Long userId, KfeWalletKind kind) {
+        long activeWallets = walletRepository.countByUserIdAndKindAndStatusIn(userId, kind, UNIQUE_WALLET_STATUSES);
+        if (kind == KfeWalletKind.WATCH_ONLY) {
+            if (activeWallets >= MAX_ACTIVE_WATCH_ONLY_WALLETS) {
+                throw new IllegalArgumentException("É permitido criar no máximo duas carteiras frias ativas.");
+            }
+            return;
+        }
+        if (activeWallets > 0) {
             throw new IllegalArgumentException("Já existe uma carteira ativa ou em criação para este método de custódia.");
         }
     }
@@ -499,6 +508,9 @@ public class KfeWalletService {
     }
 
     private String resolveWalletLabel(KfeCreateWalletRequest request) {
+        if (request.kind() == KfeWalletKind.INTERNAL) {
+            return INTERNAL_GLOBAL_WALLET_LABEL;
+        }
         if (hasText(request.label())) {
             return request.label().trim();
         }

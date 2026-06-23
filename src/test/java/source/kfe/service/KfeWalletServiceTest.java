@@ -175,16 +175,74 @@ class KfeWalletServiceTest {
     }
 
     @Test
+    void createWalletForcesInternalLabelToGlobalWallet() {
+        AtomicReference<KfeWalletEntity> persistedWallet = new AtomicReference<>();
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        when(walletRepository.save(any(KfeWalletEntity.class))).thenAnswer(invocation -> {
+            KfeWalletEntity wallet = invocation.getArgument(0);
+            persistedWallet.set(wallet);
+            return wallet;
+        });
+        when(hashService.sha256(anyString())).thenReturn("proposal-hash");
+        when(quorumGateway.requireHealthyUnanimousConsensus(anyString()))
+                .thenReturn(new KfeQuorumGateway.Result(2, 2));
+        when(walletRepository.findByIdAndUserIdForUpdate(any(UUID.class), eq(1L)))
+                .thenAnswer(invocation -> Optional.ofNullable(persistedWallet.get()));
+        when(responseMapper.toWalletResponse(any(KfeWalletEntity.class)))
+                .thenAnswer(invocation -> {
+                    KfeWalletEntity wallet = invocation.getArgument(0);
+                    return new KfeWalletResponse(
+                            wallet.getId(),
+                            wallet.getKind(),
+                            wallet.getStatus(),
+                            wallet.getLabel(),
+                            wallet.getLabel(),
+                            "Carteira Global",
+                            "BTC",
+                            wallet.isSpendable(),
+                            false,
+                            true,
+                            null,
+                            java.time.LocalDateTime.now(),
+                            java.time.LocalDateTime.now());
+                });
+
+        KfeWalletResponse response = service.createWallet(
+                1L,
+                new KfeCreateWalletRequest(
+                        KfeWalletKind.INTERNAL,
+                        null,
+                        "Outro nome",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false));
+
+        assertEquals("carteira global", response.label());
+        assertEquals("carteira global", persistedWallet.get().getLabel());
+        verifyNoInteractions(mpcKeyService);
+    }
+
+    @Test
     void createWalletRejectsSecondActiveWalletForSameKind() {
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         });
-        when(walletRepository.existsByUserIdAndKindAndStatusIn(
+        when(walletRepository.countByUserIdAndKindAndStatusIn(
                 eq(1L),
                 eq(KfeWalletKind.CUSTODIAL_ONCHAIN),
                 any()
-        )).thenReturn(true);
+        )).thenReturn(1L);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -205,6 +263,41 @@ class KfeWalletServiceTest {
                                 false)));
 
         assertEquals("Já existe uma carteira ativa ou em criação para este método de custódia.", exception.getMessage());
+        verify(walletRepository, never()).save(any(KfeWalletEntity.class));
+        verifyNoInteractions(quorumGateway, mpcKeyService);
+    }
+
+    @Test
+    void createWalletRejectsThirdActiveWatchOnlyWallet() {
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        when(walletRepository.countByUserIdAndKindAndStatusIn(
+                eq(1L),
+                eq(KfeWalletKind.WATCH_ONLY),
+                any()
+        )).thenReturn(2L);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createWallet(
+                        1L,
+                        new KfeCreateWalletRequest(
+                                KfeWalletKind.WATCH_ONLY,
+                                null,
+                                "Cold wallet 3",
+                                "xpub6CUGRU...",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                false)));
+
+        assertEquals("É permitido criar no máximo duas carteiras frias ativas.", exception.getMessage());
         verify(walletRepository, never()).save(any(KfeWalletEntity.class));
         verifyNoInteractions(quorumGateway, mpcKeyService);
     }
