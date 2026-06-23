@@ -1,5 +1,7 @@
 package source.kfe.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import source.kfe.model.KfeBalanceMovementEntity;
@@ -11,7 +13,14 @@ import source.kfe.repository.KfeBalanceMovementRepository;
 import source.kfe.repository.KfeExecutionOutboxRepository;
 import source.kfe.repository.KfeIdempotencyRepository;
 import source.kfe.repository.KfeTransactionRepository;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
+import source.notification.model.NotificationKind;
+import source.notification.model.NotificationSeverity;
+import source.notification.service.NotificationService;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -20,6 +29,7 @@ import java.util.UUID;
 @Service
 public class KfeInboundSettlementService {
 
+    private static final Logger log = LoggerFactory.getLogger(KfeInboundSettlementService.class);
     private static final String ASSET_BTC = "BTC";
 
     private final KfeTransactionRepository transactionRepository;
@@ -31,6 +41,7 @@ public class KfeInboundSettlementService {
     private final KfeStatementService statementService;
     private final KfeDashboardPublisher dashboardPublisher;
     private final KfeHashService hashService;
+    private final NotificationService notificationService;
 
     public KfeInboundSettlementService(
             KfeTransactionRepository transactionRepository,
@@ -41,7 +52,8 @@ public class KfeInboundSettlementService {
             KfeAuditLogService auditLogService,
             KfeStatementService statementService,
             KfeDashboardPublisher dashboardPublisher,
-            KfeHashService hashService) {
+            KfeHashService hashService,
+            NotificationService notificationService) {
         this.transactionRepository = transactionRepository;
         this.outboxRepository = outboxRepository;
         this.movementRepository = movementRepository;
@@ -51,6 +63,7 @@ public class KfeInboundSettlementService {
         this.statementService = statementService;
         this.dashboardPublisher = dashboardPublisher;
         this.hashService = hashService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -124,6 +137,7 @@ public class KfeInboundSettlementService {
                         "creditedSats", creditSats,
                         "confirmations", proof.confirmations()));
         recordStatement(tx, proof.rawPayload());
+        notifyInboundDepositCredited(tx, creditSats);
         updateIdempotency(tx);
         markOutboxDispatched(outbox, proof.providerReference());
         dashboardPublisher.publishAfterCommit(tx.getUserId());
@@ -206,6 +220,42 @@ public class KfeInboundSettlementService {
             payload.put("providerPayloadHash", hashService.sha256(providerPayload));
         }
         statementService.recordUserStatement(tx.getUserId(), tx.getDestinationWalletId(), tx, payload);
+    }
+
+    private void notifyInboundDepositCredited(KfeTransactionEntity tx, long creditSats) {
+        try {
+            NotificationMessageKey messageKey = tx.getRail() == KfeRail.LIGHTNING
+                    ? NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_CONFIRMED
+                    : NotificationMessageKey.EXTERNAL_ONCHAIN_DEPOSIT_CONFIRMED;
+            String creditBtc = satsToBtc(creditSats);
+            notificationService.notifyUser(
+                    tx.getUserId(),
+                    NotificationMessages.payload(
+                            NotificationKind.DEPOSIT_CONFIRMED,
+                            NotificationSeverity.SUCCESS,
+                            messageKey,
+                            "/home",
+                            "transaction",
+                            tx.getId().toString(),
+                            Map.of(
+                                    "transactionId", tx.getId().toString(),
+                                    "walletId", tx.getDestinationWalletId().toString(),
+                                    "rail", tx.getRail().name(),
+                                    "creditedSats", String.valueOf(creditSats),
+                                    "confirmations", String.valueOf(tx.getConfirmations())),
+                            creditBtc));
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "KFE inbound deposit was credited but notification failed. transactionId={} error={}",
+                    tx.getId(),
+                    exception.getMessage());
+        }
+    }
+
+    private String satsToBtc(long sats) {
+        return BigDecimal.valueOf(sats)
+                .divide(BigDecimal.valueOf(100_000_000L), 8, RoundingMode.UNNECESSARY)
+                .toPlainString();
     }
 
     private void updateIdempotency(KfeTransactionEntity tx) {

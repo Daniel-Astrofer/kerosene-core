@@ -107,7 +107,7 @@ class FinalizeSignupAccountTest {
         verify(kfeWalletService).createWallet(eq(7L), walletRequestCaptor.capture());
         KfeCreateWalletRequest walletRequest = walletRequestCaptor.getValue();
         assertEquals(KfeWalletKind.INTERNAL, walletRequest.kind());
-        assertEquals("Carteira Global", walletRequest.label());
+        assertEquals("carteira global", walletRequest.label());
         assertNull(walletRequest.xpub());
         assertNull(walletRequest.initialAddress());
         assertEquals(Boolean.FALSE, walletRequest.issueInitialAddress());

@@ -34,6 +34,34 @@ public record TransactionalAuthenticationRequest(
                 TransactionalAuthenticationScope.LEDGER_TRANSFER);
     }
 
+    public static TransactionalAuthenticationRequest kfeCustodialTransfer(
+            UserDataBase sender,
+            String passkeyAssertionJson) {
+        return new TransactionalAuthenticationRequest(
+                sender,
+                sender != null ? sender.getId() : null,
+                sender != null ? sender.getId() : null,
+                null,
+                null,
+                passkeyAssertionJson,
+                null,
+                TransactionalAuthenticationScope.KFE_CUSTODIAL_TRANSFER);
+    }
+
+    public static TransactionalAuthenticationRequest kfeColdWalletPsbt(
+            UserDataBase sender,
+            String totpCode) {
+        return new TransactionalAuthenticationRequest(
+                sender,
+                sender != null ? sender.getId() : null,
+                sender != null ? sender.getId() : null,
+                sender != null ? sender.getTOTPSecret() : null,
+                totpCode,
+                null,
+                null,
+                TransactionalAuthenticationScope.KFE_COLD_WALLET_PSBT);
+    }
+
     public static TransactionalAuthenticationRequest walletOutbound(
             Long authenticatedUserId,
             Long walletOwnerUserId,

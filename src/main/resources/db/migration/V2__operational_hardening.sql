@@ -5,6 +5,32 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 001: Adicionar coluna totp_secret na tabela financial.wallets
 -- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS financial.wallets (
+    id BIGSERIAL PRIMARY KEY,
+    version BIGINT NOT NULL DEFAULT 0,
+    user_id BIGINT NOT NULL REFERENCES auth.users_credentials(id) ON DELETE CASCADE,
+    address VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    totp_secret VARCHAR(255) NOT NULL DEFAULT '',
+    deposit_address VARCHAR(100),
+    lightning_address VARCHAR(255),
+    external_wallet_reference VARCHAR(255),
+    card_number_suffix VARCHAR(4),
+    card_issued_at TIMESTAMP,
+    card_expires_at TIMESTAMP,
+    card_last_rotated_at TIMESTAMP,
+    card_sequence INTEGER NOT NULL DEFAULT 1,
+    previous_card_number_suffix VARCHAR(4),
+    previous_card_expires_at TIMESTAMP,
+    xpub TEXT,
+    wallet_mode VARCHAR(32) NOT NULL DEFAULT 'KEROSENE',
+    last_derived_index INTEGER NOT NULL DEFAULT -1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    UNIQUE(user_id, name)
+);
+
 ALTER TABLE financial.wallets
     ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255) NOT NULL DEFAULT '';
 
@@ -12,6 +38,34 @@ ALTER TABLE financial.wallets
 -- Migration 002: Critical Performance Indexes (Issue 2.5)
 -- All indexes use IF NOT EXISTS — safe to re-run on restart.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS financial.ledger (
+    id SERIAL PRIMARY KEY,
+    wallet_id BIGINT NOT NULL REFERENCES financial.wallets(id) ON DELETE CASCADE,
+    balance TEXT NOT NULL,
+    balance_signature VARCHAR(256),
+    nonce INTEGER NOT NULL DEFAULT 0,
+    last_hash VARCHAR(256) NOT NULL,
+    context VARCHAR(256) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS financial.ledger_transaction_history (
+    id UUID PRIMARY KEY,
+    sender_identifier VARCHAR(255) NOT NULL,
+    sender_user_id BIGINT,
+    receiver_identifier VARCHAR(255) NOT NULL,
+    receiver_user_id BIGINT,
+    transaction_type VARCHAR(50) NOT NULL,
+    amount NUMERIC(18, 8) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    network_fee NUMERIC(18, 8),
+    blockchain_txid VARCHAR(255),
+    context TEXT,
+    created_at TIMESTAMP NOT NULL,
+    confirmations INTEGER
+);
 
 -- Ledger table
 CREATE INDEX IF NOT EXISTS idx_ledger_wallet_id   ON financial.ledger(wallet_id);

@@ -85,7 +85,12 @@ public class KfeSubmitTransactionUseCase {
      */
     @Transactional
     public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request) {
-        SubmissionAttempt attempt = validateAndReserve(userId, request);
+        return submit(userId, request, null);
+    }
+
+    @Transactional
+    public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request, String deviceHash) {
+        SubmissionAttempt attempt = validateAndReserve(userId, request, deviceHash);
         if (attempt.existingResponse() != null) {
             return attempt.existingResponse();
         }
@@ -100,9 +105,9 @@ public class KfeSubmitTransactionUseCase {
         return completePublishAndRespond(userId, attempt.idempotency(), prepared.tx(), lock.destinationWallet());
     }
 
-    private SubmissionAttempt validateAndReserve(Long userId, KfeSubmitTransactionRequest request) {
+    private SubmissionAttempt validateAndReserve(Long userId, KfeSubmitTransactionRequest request, String deviceHash) {
         validator.validate(request);
-        authorizationUseCase.authorize(userId, request);
+        authorizationUseCase.authorize(userId, request, deviceHash);
 
         String requestHash = idempotencyUseCase.requestHash(userId, request);
         KfeIdempotencyEntity existingIdempotency = idempotencyUseCase.find(userId, request.idempotencyKey());

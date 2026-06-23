@@ -3,6 +3,7 @@ package source.common.service;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -10,9 +11,13 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.model.entity.UserDataBase;
+import source.notification.service.NotificationService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -36,13 +41,31 @@ public class TickerService {
 
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
+    private long lastEngagementSentTime = 0;
 
     public TickerService(
             StringRedisTemplate redisTemplate,
             @Qualifier("tickerRestTemplate") RestTemplate restTemplate) {
         this.redisTemplate = redisTemplate;
         this.restTemplate = restTemplate;
+        this.notificationService = null;
+        this.userRepository = null;
     }
+
+    @Autowired
+    public TickerService(
+            StringRedisTemplate redisTemplate,
+            @Qualifier("tickerRestTemplate") RestTemplate restTemplate,
+            NotificationService notificationService,
+            UserRepository userRepository) {
+        this.redisTemplate = redisTemplate;
+        this.restTemplate = restTemplate;
+        this.notificationService = notificationService;
+        this.userRepository = userRepository;
+    }
+
 
     @PostConstruct
     void initializeFallbackCache() {
@@ -57,35 +80,76 @@ public class TickerService {
      */
     @Scheduled(fixedRate = 300000)
     public void updatePrices() {
-        if (!coingeckoEnabled) {
-            return;
+        if (coingeckoEnabled) {
+            try {
+                log.info("[Ticker] Fetching BTC prices from CoinGecko...");
+                Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
+
+                if (response != null && response.containsKey("bitcoin")) {
+                    Object bitcoinNode = response.get("bitcoin");
+                    if (!(bitcoinNode instanceof Map<?, ?> prices)) {
+                        log.warn("[Ticker] Unexpected payload structure from CoinGecko");
+                        return;
+                    }
+
+                    BigDecimal usd = toBigDecimal(prices.get("usd"));
+                    BigDecimal brl = toBigDecimal(prices.get("brl"));
+
+                    if (usd != null) savePrice("usd", usd);
+                    if (brl != null) savePrice("brl", brl);
+
+                    log.info("[Ticker] Prices updated: USD={}, BRL={}", usd, brl);
+                } else {
+                    log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
+                }
+            } catch (Exception e) {
+                seedFallbackCacheIfReachable();
+                log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
+            }
+        } else {
+            seedFallbackCacheIfReachable();
         }
 
+        // Send engagement notification using current cached or fallback price
         try {
-            log.info("[Ticker] Fetching BTC prices from CoinGecko...");
-            Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
-
-            if (response != null && response.containsKey("bitcoin")) {
-                Object bitcoinNode = response.get("bitcoin");
-                if (!(bitcoinNode instanceof Map<?, ?> prices)) {
-                    log.warn("[Ticker] Unexpected payload structure from CoinGecko");
-                    return;
-                }
-
-                BigDecimal usd = toBigDecimal(prices.get("usd"));
-                BigDecimal brl = toBigDecimal(prices.get("brl"));
-
-                if (usd != null) savePrice("usd", usd);
-                if (brl != null) savePrice("brl", brl);
-
-                log.info("[Ticker] Prices updated: USD={}, BRL={}", usd, brl);
-                return;
+            BigDecimal usd = getPrice("usd");
+            if (usd != null) {
+                sendEngagementNotifications(12.4, usd);
             }
-
-            log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
         } catch (Exception e) {
-            seedFallbackCacheIfReachable();
-            log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
+            log.warn("[Ticker] Failed to trigger scheduled engagement notification: {}", e.getMessage());
+        }
+    }
+
+    private void sendEngagementNotifications(double percent, BigDecimal priceUsd) {
+        long now = System.currentTimeMillis();
+        if (now - lastEngagementSentTime < 600000) { // Limit to once every 10 minutes
+            return;
+        }
+        lastEngagementSentTime = now;
+        if (userRepository == null || notificationService == null) {
+            return;
+        }
+        try {
+            List<UserDataBase> users = userRepository.findAll();
+            for (UserDataBase user : users) {
+                notificationService.notifyUser(
+                        user.getId(),
+                        source.notification.model.NotificationKind.SYSTEM_INFO,
+                        source.notification.model.NotificationSeverity.INFO,
+                        "Bitcoin em Alta! 🚀",
+                        String.format("O Bitcoin subiu %.1f%% nas últimas 24 horas e atingiu US$ %,.2f! Veja seu saldo.", percent, priceUsd),
+                        "/home",
+                        "price_alert",
+                        "btc",
+                        Map.of(
+                                "percentChange", String.valueOf(percent),
+                                "priceUsd", priceUsd.toPlainString())
+                );
+            }
+            log.info("Sent engagement notifications to {} users", users.size());
+        } catch (Exception e) {
+            log.error("Failed to send engagement notifications", e);
         }
     }
 

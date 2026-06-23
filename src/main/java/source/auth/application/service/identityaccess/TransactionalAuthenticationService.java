@@ -21,6 +21,8 @@ import source.common.exception.ErrorCodes;
 import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
 
+import java.util.Map;
+
 @Service
 public class TransactionalAuthenticationService implements TransactionalAuthenticationPort {
 
@@ -69,6 +71,16 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                 user.getUsername(),
                 accountSecurity,
                 request.scope());
+
+        if (request.scope() == TransactionalAuthenticationScope.KFE_CUSTODIAL_TRANSFER) {
+            boolean passkeyValid = verifyPasskeyIfPresented(user, request.passkeyAssertionJson());
+            requirePasskey(user, passkeyValid);
+            return new TransactionalAuthenticationResult(user, "");
+        }
+        if (request.scope() == TransactionalAuthenticationScope.KFE_COLD_WALLET_PSBT) {
+            verifyRequiredTotp(user, request, "Codigo TOTP obrigatorio para operacao de carteira fria.");
+            return new TransactionalAuthenticationResult(user, "");
+        }
 
         boolean totpValid = false;
         if (request.scope() == TransactionalAuthenticationScope.WALLET_OUTBOUND) {
@@ -160,6 +172,26 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         } else {
             totpVerifier.totpVerify(totpSecret, request.totpCode());
         }
+        log.info("Transaction TOTP factor verified for userId={}", user.getId());
+        return true;
+    }
+
+    private boolean verifyRequiredTotp(
+            UserDataBase user,
+            TransactionalAuthenticationRequest request,
+            String missingMessage) {
+        if (!hasText(request.totpCode())) {
+            throw new AuthExceptions.StructuredAuthException(
+                    missingMessage,
+                    HttpStatus.UNAUTHORIZED,
+                    ErrorCodes.AUTH_TRANSACTIONAL_AUTH_REQUIRED,
+                    Map.of("required", "totpCode"));
+        }
+        String totpSecret = hasText(request.totpSecret()) ? request.totpSecret() : user.getTOTPSecret();
+        if (!hasText(totpSecret)) {
+            throw new AuthExceptions.IncorrectTotpException("TOTP not configured for this operation.");
+        }
+        totpVerifier.totpVerify(totpSecret, request.totpCode());
         log.info("Transaction TOTP factor verified for userId={}", user.getId());
         return true;
     }

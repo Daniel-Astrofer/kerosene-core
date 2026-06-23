@@ -1,7 +1,11 @@
 package source.auth.controller;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -29,13 +33,16 @@ import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 import source.kfe.rail.KfeRailException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -158,6 +165,146 @@ class PasskeyControllerTest {
         verify(userRepository, never()).findByUsername(any());
         verify(passkeyCredentialRepository).findVerificationByCredentialId(any(byte[].class));
         verify(passkeyService).consumeChallengeFromRedis("alice");
+    }
+
+    @Test
+    void passkeyVerifyLogsSafeFailureDiagnosticsWhenCredentialIsNotFound() {
+        byte[] credentialId = "raw-credential-secret".getBytes(StandardCharsets.UTF_8);
+        String credentialIdBase64 = Base64.getEncoder().encodeToString(credentialId);
+        UserDataBase user = new UserDataBase();
+        setUserId(user, 42L);
+        user.setUsername("alice");
+        user.setIsActive(true);
+
+        PasskeyVerifyRequest request = new PasskeyVerifyRequest();
+        request.setUsername("  Alice  ");
+        request.setCredentialId(credentialIdBase64);
+        request.setSignature("raw-signature-secret");
+        request.setAuthData("raw-authdata-secret");
+        request.setClientDataJSON("raw-clientdata-secret");
+
+        when(userRepository.findByUsername("alice")).thenReturn(user);
+        when(passkeyCredentialRepository.findVerificationByCredentialIdAndUserId(any(byte[].class), eq(42L)))
+                .thenReturn(Optional.empty());
+
+        ListAppender<ILoggingEvent> appender = attachPasskeyOrchestratorLogAppender();
+        try {
+            ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+            assertNotNull(response.getBody());
+            assertEquals(ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND, response.getBody().getErrorCode());
+
+            String logs = formattedMessages(appender);
+            assertTrue(logs.contains("event=AUTH_PASSKEY_VERIFY_FAILED"));
+            assertTrue(logs.contains("failureBranch=credential_not_found"));
+            assertTrue(logs.contains("errorCode=" + ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
+            assertTrue(logs.contains("usernamePresent=true"));
+            assertTrue(logs.contains("credentialIdPresent=true"));
+            assertTrue(logs.contains("credentialRef=sha256:"));
+            assertTrue(hasAuthMarker(appender));
+
+            assertFalse(logs.contains("alice"));
+            assertFalse(logs.contains(credentialIdBase64));
+            assertFalse(logs.contains("raw-credential-secret"));
+            assertFalse(logs.contains("raw-signature-secret"));
+            assertFalse(logs.contains("raw-authdata-secret"));
+            assertFalse(logs.contains("raw-clientdata-secret"));
+        } finally {
+            detachPasskeyOrchestratorLogAppender(appender);
+        }
+    }
+
+    @Test
+    void passkeyVerifyLogsSafeFailureDiagnosticsWhenAssertionFails() {
+        byte[] credentialId = "raw-credential-secret".getBytes(StandardCharsets.UTF_8);
+        UserDataBase user = activeUser("alice", 42L);
+        PasskeyVerificationProjection credential = activeCredential(credentialId, 7L);
+        PasskeyVerifyRequest request = verifyRequest("  Alice  ", credentialId);
+
+        when(userRepository.findByUsername("alice")).thenReturn(user);
+        when(passkeyCredentialRepository.findVerificationByCredentialIdAndUserId(any(byte[].class), eq(42L)))
+                .thenReturn(Optional.of(credential));
+        when(passkeyInventoryService.isKnownIncompatibleForCurrentLogin("kerosene-device", "localhost"))
+                .thenReturn(false);
+        when(passkeyService.isClientDataOriginAllowed("raw-clientdata-secret")).thenReturn(true);
+        when(passkeyService.consumeChallengeFromRedis("alice")).thenReturn("challenge-hex");
+        when(passkeyService.verifyAuthenticationAssertion(
+                eq("alice"),
+                eq("challenge-hex"),
+                eq("raw-signature-secret"),
+                any(byte[].class),
+                eq("raw-authdata-secret"),
+                eq("raw-clientdata-secret"))).thenReturn(new PasskeyService.PasskeyVerificationResult(false, -1L));
+        when(passkeyService.resolveCurrentRelyingPartyId()).thenReturn("kerosene-device");
+        when(passkeyService.resolveCurrentRequestHost()).thenReturn("localhost");
+
+        ListAppender<ILoggingEvent> appender = attachPasskeyOrchestratorLogAppender();
+        try {
+            ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+            assertNotNull(response.getBody());
+            assertEquals(ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED, response.getBody().getErrorCode());
+
+            String logs = formattedMessages(appender);
+            assertTrue(logs.contains("event=AUTH_PASSKEY_VERIFY_FAILED"));
+            assertTrue(logs.contains("failureBranch=assertion_failed"));
+            assertTrue(logs.contains("errorCode=" + ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
+            assertTrue(logs.contains("savedRpIdRef=sha256:"));
+            assertTrue(logs.contains("savedOriginHost=localhost"));
+            assertTrue(logs.contains("currentRpId=kerosene-device"));
+            assertTrue(logs.contains("currentHost=localhost"));
+            assertTrue(hasAuthMarker(appender));
+            assertSafePasskeyFailureLog(logs, request, credentialId);
+        } finally {
+            detachPasskeyOrchestratorLogAppender(appender);
+        }
+    }
+
+    @Test
+    void passkeyVerifyLogsSafeFailureDiagnosticsWhenCounterDoesNotAdvance() {
+        byte[] credentialId = "raw-credential-secret".getBytes(StandardCharsets.UTF_8);
+        UserDataBase user = activeUser("alice", 42L);
+        PasskeyVerificationProjection credential = activeCredential(credentialId, 7L);
+        PasskeyVerifyRequest request = verifyRequest("  Alice  ", credentialId);
+
+        when(userRepository.findByUsername("alice")).thenReturn(user);
+        when(passkeyCredentialRepository.findVerificationByCredentialIdAndUserId(any(byte[].class), eq(42L)))
+                .thenReturn(Optional.of(credential));
+        when(passkeyInventoryService.isKnownIncompatibleForCurrentLogin("kerosene-device", "localhost"))
+                .thenReturn(false);
+        when(passkeyService.isClientDataOriginAllowed("raw-clientdata-secret")).thenReturn(true);
+        when(passkeyService.consumeChallengeFromRedis("alice")).thenReturn("challenge-hex");
+        when(passkeyService.verifyAuthenticationAssertion(
+                eq("alice"),
+                eq("challenge-hex"),
+                eq("raw-signature-secret"),
+                any(byte[].class),
+                eq("raw-authdata-secret"),
+                eq("raw-clientdata-secret"))).thenReturn(new PasskeyService.PasskeyVerificationResult(true, 7L));
+        when(passkeyService.resolveCurrentRelyingPartyId()).thenReturn("kerosene-device");
+        when(passkeyService.resolveCurrentRequestHost()).thenReturn("localhost");
+
+        ListAppender<ILoggingEvent> appender = attachPasskeyOrchestratorLogAppender();
+        try {
+            ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
+
+            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+            assertNotNull(response.getBody());
+            assertEquals(ErrorCodes.AUTH_PASSKEY_REPLAY, response.getBody().getErrorCode());
+
+            String logs = formattedMessages(appender);
+            assertTrue(logs.contains("event=AUTH_PASSKEY_VERIFY_FAILED"));
+            assertTrue(logs.contains("failureBranch=replay_counter_not_advanced"));
+            assertTrue(logs.contains("errorCode=" + ErrorCodes.AUTH_PASSKEY_REPLAY));
+            assertTrue(logs.contains("storedSignatureCount=7"));
+            assertTrue(logs.contains("receivedSignatureCount=7"));
+            assertTrue(hasAuthMarker(appender));
+            assertSafePasskeyFailureLog(logs, request, credentialId);
+        } finally {
+            detachPasskeyOrchestratorLogAppender(appender);
+        }
     }
 
     @Test
@@ -435,6 +582,37 @@ class PasskeyControllerTest {
         return state;
     }
 
+    private UserDataBase activeUser(String username, Long id) {
+        UserDataBase user = new UserDataBase();
+        setUserId(user, id);
+        user.setUsername(username);
+        user.setIsActive(true);
+        return user;
+    }
+
+    private PasskeyVerificationProjection activeCredential(byte[] credentialId, long signatureCount) {
+        return new PasskeyVerificationProjection(
+                credentialId,
+                new byte[32],
+                signatureCount,
+                "ACTIVE",
+                "kerosene-device",
+                "localhost",
+                42L,
+                "alice",
+                true);
+    }
+
+    private PasskeyVerifyRequest verifyRequest(String username, byte[] credentialId) {
+        PasskeyVerifyRequest request = new PasskeyVerifyRequest();
+        request.setUsername(username);
+        request.setCredentialId(Base64.getEncoder().encodeToString(credentialId));
+        request.setSignature("raw-signature-secret");
+        request.setAuthData("raw-authdata-secret");
+        request.setClientDataJSON("raw-clientdata-secret");
+        return request;
+    }
+
     private PasskeyRegistrationRequest registrationRequest(String clientDataJson) {
         PasskeyRegistrationRequest request = new PasskeyRegistrationRequest();
         request.setClientDataJSON(clientDataJson);
@@ -455,5 +633,43 @@ class PasskeyControllerTest {
         } catch (ReflectiveOperationException exception) {
             throw new RuntimeException(exception);
         }
+    }
+
+    private ListAppender<ILoggingEvent> attachPasskeyOrchestratorLogAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(PasskeyOrchestrator.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private void detachPasskeyOrchestratorLogAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(PasskeyOrchestrator.class);
+        logger.detachAppender(appender);
+    }
+
+    private String formattedMessages(ListAppender<ILoggingEvent> appender) {
+        return appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .reduce("", (left, right) -> left + "\n" + right);
+    }
+
+    private boolean hasAuthMarker(ListAppender<ILoggingEvent> appender) {
+        return appender.list.stream()
+                .anyMatch(event -> event.getMarkerList() != null
+                        && event.getMarkerList().stream().anyMatch(marker -> "AUTH".equals(marker.getName())));
+    }
+
+    private void assertSafePasskeyFailureLog(String logs, PasskeyVerifyRequest request, byte[] credentialId) {
+        assertTrue(logs.contains("usernamePresent=true"));
+        assertTrue(logs.contains("credentialIdPresent=true"));
+        assertTrue(logs.contains("credentialRef=sha256:"));
+
+        assertFalse(logs.contains("alice"));
+        assertFalse(logs.contains(request.getCredentialId()));
+        assertFalse(logs.contains(new String(credentialId, StandardCharsets.UTF_8)));
+        assertFalse(logs.contains(request.getSignature()));
+        assertFalse(logs.contains(request.getAuthData()));
+        assertFalse(logs.contains(request.getClientDataJSON()));
     }
 }

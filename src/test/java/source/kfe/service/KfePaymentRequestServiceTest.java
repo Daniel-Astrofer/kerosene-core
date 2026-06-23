@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import source.common.service.AddressDerivationService;
 import source.kfe.model.KfePaymentRequestEntity;
 import source.kfe.model.KfePaymentRequestStatus;
+import source.kfe.repository.KfeBalanceMovementRepository;
 import source.kfe.repository.KfePaymentRequestRepository;
 import source.kfe.repository.KfeWalletAddressRepository;
 import source.kfe.repository.KfeWalletRepository;
@@ -28,14 +29,29 @@ class KfePaymentRequestServiceTest {
     private final KfeReceiveAddressIssuer receiveAddressIssuer = mock(KfeReceiveAddressIssuer.class);
     private final KfeAuditLogService auditLogService = mock(KfeAuditLogService.class);
 
+    // New dependencies mocked
+    private final source.kfe.repository.KfeTransactionRepository transactionRepository = mock(source.kfe.repository.KfeTransactionRepository.class);
+    private final KfeBalanceMovementRepository movementRepository = mock(KfeBalanceMovementRepository.class);
+    private final KfeBalanceService balanceService = mock(KfeBalanceService.class);
+    private final KfeStatementService statementService = mock(KfeStatementService.class);
+    private final KfeDashboardPublisher dashboardPublisher = mock(KfeDashboardPublisher.class);
+    private final source.notification.service.NotificationService notificationService = mock(source.notification.service.NotificationService.class);
+
     private final KfePaymentRequestService service = new KfePaymentRequestService(
             paymentRequestRepository,
+            transactionRepository,
+            movementRepository,
             walletRepository,
             addressRepository,
             walletService,
             addressDerivationService,
             receiveAddressIssuer,
-            auditLogService);
+            auditLogService,
+            balanceService,
+            statementService,
+            dashboardPublisher,
+            notificationService,
+            false);
 
     @Test
     void publicGetExpiresOverdueOpenRequestBeforeReturningIt() {

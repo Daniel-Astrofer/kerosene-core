@@ -74,6 +74,7 @@ public class StartupDiagnosticsService {
             "bitcoin.mock-mode",
             "custody.mock-mode",
             "app.dev.inject-test-balance",
+            "app.dev.deposit.instant-credit-enabled",
             "quorum.allow-local-simulation",
             "treasury.siphon.manual-settlement-enabled",
             "transactions.onchain.test-instant-settlement-enabled",

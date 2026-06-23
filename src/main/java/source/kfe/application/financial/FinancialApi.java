@@ -50,7 +50,11 @@ public class FinancialApi {
     }
 
     public KfeTransactionResponse submitTransaction(Long userId, KfeSubmitTransactionRequest request) {
-        return transactionEngine.submit(userId, request);
+        return submitTransaction(userId, request, null);
+    }
+
+    public KfeTransactionResponse submitTransaction(Long userId, KfeSubmitTransactionRequest request, String deviceHash) {
+        return transactionEngine.submit(userId, request, deviceHash);
     }
 
     public KfeTransactionResponse existingTransactionByIdempotency(

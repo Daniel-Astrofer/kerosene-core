@@ -25,6 +25,7 @@ import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
+import source.common.infra.logging.LogDomain;
 import source.common.infra.logging.LogSanitizer;
 import source.kfe.rail.KfeRailException;
 
@@ -152,15 +153,24 @@ public class PasskeyOrchestrator {
 
     @Transactional
     public ResponseEntity<ApiResponse<Object>> verifyAndLogin(PasskeyVerifyRequest request) {
+        byte[] credentialIdBytes = null;
         try {
             String normalizedUsername = normalizeUsername(request.getUsername());
             if (request.getCredentialId() == null) {
+                logVerifyFailure(
+                        "missing_credential_id",
+                        "MISSING_CREDENTIAL_ID",
+                        request,
+                        normalizedUsername,
+                        null,
+                        null,
+                        null,
+                        null);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                         ApiResponse.error("Frontend must send the credentialId for secure lookup.",
                                 "MISSING_CREDENTIAL_ID"));
             }
 
-            byte[] credentialIdBytes;
             try {
                 credentialIdBytes = java.util.Base64.getUrlDecoder().decode(request.getCredentialId());
             } catch (Exception e) {
@@ -172,8 +182,15 @@ public class PasskeyOrchestrator {
             if (normalizedUsername.isBlank()) {
                 credOpt = passkeyCredentialRepository.findVerificationByCredentialId(credentialIdBytes);
                 if (credOpt.isEmpty() || credOpt.get().userId() == null) {
-                    log.error("Passkey credential not linked to any user for credentialRef={}",
-                            LogSanitizer.fingerprint(credentialIdBytes));
+                    logVerifyFailure(
+                            "credential_unlinked",
+                            ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                            request,
+                            normalizedUsername,
+                            credentialIdBytes,
+                            credOpt.orElse(null),
+                            null,
+                            null);
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                             .body(ApiResponse.error(
                                     "A passkey enviada nao esta vinculada a nenhuma conta.",
@@ -181,6 +198,15 @@ public class PasskeyOrchestrator {
                 }
                 user = userRepository.findById(credOpt.get().userId()).orElse(null);
                 if (user == null) {
+                    logVerifyFailure(
+                            "credential_user_missing",
+                            ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                            request,
+                            normalizedUsername,
+                            credentialIdBytes,
+                            credOpt.get(),
+                            null,
+                            null);
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                             .body(ApiResponse.error("Passkey credential user no longer exists.",
                                     ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND));
@@ -189,6 +215,15 @@ public class PasskeyOrchestrator {
             } else {
                 user = userRepository.findByUsername(normalizedUsername);
                 if (user == null) {
+                    logVerifyFailure(
+                            "user_not_found",
+                            ErrorCodes.AUTH_USER_NOT_FOUND,
+                            request,
+                            normalizedUsername,
+                            credentialIdBytes,
+                            null,
+                            null,
+                            null);
                     return ResponseEntity.status(HttpStatus.NOT_FOUND)
                             .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
                 }
@@ -196,9 +231,15 @@ public class PasskeyOrchestrator {
             }
 
             if (credOpt.isEmpty()) {
-                log.error("Possible passkey identity squatting attempt for userRef={} credentialRef={}",
-                        LogSanitizer.fingerprint(normalizedUsername),
-                        LogSanitizer.fingerprint(credentialIdBytes));
+                logVerifyFailure(
+                        "credential_not_found",
+                        ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        null,
+                        null,
+                        null);
                 return passkeyLinkRequired(
                         user,
                         HttpStatus.UNAUTHORIZED,
@@ -209,6 +250,15 @@ public class PasskeyOrchestrator {
 
             PasskeyVerificationProjection cred = credOpt.get();
             if (!isActiveCredential(cred.status())) {
+                logVerifyFailure(
+                        "credential_inactive",
+                        ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        cred,
+                        null,
+                        null);
                 return passkeyLinkRequired(
                         user,
                         HttpStatus.UNAUTHORIZED,
@@ -217,6 +267,15 @@ public class PasskeyOrchestrator {
                         "Revise os dispositivos autenticados no app antes de tentar novamente.");
             }
             if (passkeyInventoryService.isKnownIncompatibleForCurrentLogin(cred.relyingPartyId(), cred.originHost())) {
+                logVerifyFailure(
+                        "credential_incompatible",
+                        ErrorCodes.AUTH_PASSKEY_LINK_REQUIRED,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        cred,
+                        null,
+                        null);
                 return passkeyLinkRequired(
                         user,
                         HttpStatus.CONFLICT,
@@ -228,12 +287,30 @@ public class PasskeyOrchestrator {
             ResponseEntity<ApiResponse<Object>> invalidOrigin = rejectInvalidPasskeyOrigin(
                     normalizedUsername, request.getClientDataJSON());
             if (invalidOrigin != null) {
+                logVerifyFailure(
+                        "invalid_origin",
+                        ErrorCodes.AUTH_PASSKEY_INVALID_ORIGIN,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        cred,
+                        null,
+                        null);
                 return invalidOrigin;
             }
 
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(normalizedUsername);
             if (consumedChallenge == null) {
                 String renewedChallenge = passkeyService.generateChallenge(normalizedUsername);
+                logVerifyFailure(
+                        "challenge_missing",
+                        ErrorCodes.AUTH_PASSKEY_CHALLENGE,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        cred,
+                        null,
+                        null);
                 return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
                         .body(ApiResponse.error(
                                 "PASSKEY_CHALLENGE_REQUIRED:" + renewedChallenge,
@@ -255,8 +332,15 @@ public class PasskeyOrchestrator {
             if (verification.verified()) {
                 long newSignatureCount = verification.signatureCount();
                 if (newSignatureCount <= cred.signatureCount()) {
-                    log.error("Passkey signature counter replay detected for userRef={}. stored={} received={}",
-                            LogSanitizer.fingerprint(normalizedUsername), cred.signatureCount(), newSignatureCount);
+                    logVerifyFailure(
+                            "replay_counter_not_advanced",
+                            ErrorCodes.AUTH_PASSKEY_REPLAY,
+                            request,
+                            normalizedUsername,
+                            credentialIdBytes,
+                            cred,
+                            cred.signatureCount(),
+                            newSignatureCount);
                     return passkeyLinkRequired(
                             user,
                             HttpStatus.UNAUTHORIZED,
@@ -269,8 +353,15 @@ public class PasskeyOrchestrator {
                         user.getId(),
                         newSignatureCount);
                 if (updated != 1) {
-                    log.error("Passkey signature counter atomic advance rejected for userRef={} received={}",
-                            LogSanitizer.fingerprint(normalizedUsername), newSignatureCount);
+                    logVerifyFailure(
+                            "replay_counter_update_rejected",
+                            ErrorCodes.AUTH_PASSKEY_REPLAY,
+                            request,
+                            normalizedUsername,
+                            credentialIdBytes,
+                            cred,
+                            cred.signatureCount(),
+                            newSignatureCount);
                     return passkeyLinkRequired(
                             user,
                             HttpStatus.UNAUTHORIZED,
@@ -298,6 +389,15 @@ public class PasskeyOrchestrator {
                 String token = jwtServicer.generateToken(user.getId());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));
             } else {
+                logVerifyFailure(
+                        "assertion_failed",
+                        ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        cred,
+                        null,
+                        verification.signatureCount());
                 return passkeyLinkRequired(
                         user,
                         HttpStatus.UNAUTHORIZED,
@@ -307,6 +407,15 @@ public class PasskeyOrchestrator {
             }
 
         } catch (Exception e) {
+            logVerifyFailure(
+                    "exception",
+                    ErrorCodes.AUTH_GENERIC,
+                    request,
+                    request == null ? "" : normalizeUsername(request.getUsername()),
+                    credentialIdBytes,
+                    null,
+                    null,
+                    null);
             log.error("Passkey verification failed", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Passkey verification failed.", ErrorCodes.AUTH_GENERIC));
@@ -428,6 +537,69 @@ public class PasskeyOrchestrator {
         return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
     }
 
+    private void logVerifyFailure(
+            String failureBranch,
+            String errorCode,
+            PasskeyVerifyRequest request,
+            String normalizedUsername,
+            byte[] credentialIdBytes,
+            PasskeyVerificationProjection credential,
+            Long storedSignatureCount,
+            Long receivedSignatureCount) {
+        log.warn(
+                LogDomain.AUTH,
+                "event=AUTH_PASSKEY_VERIFY_FAILED failureBranch={} errorCode={} usernamePresent={} credentialIdPresent={} credentialRef={} userRef={} savedRpIdRef={} savedOriginHost={} currentRpId={} currentHost={} storedSignatureCount={} receivedSignatureCount={}",
+                failureBranch,
+                errorCode,
+                request != null && hasText(request.getUsername()),
+                request != null && hasText(request.getCredentialId()),
+                credentialRef(request, credentialIdBytes),
+                LogSanitizer.fingerprint(normalizedUsername),
+                credential == null ? "absent" : LogSanitizer.fingerprint(credential.relyingPartyId()),
+                credential == null ? "absent" : safeLogMetadata(credential.originHost()),
+                safeLogMetadata(resolveCurrentRelyingPartyIdForLog()),
+                safeLogMetadata(resolveCurrentRequestHostForLog()),
+                storedSignatureCount == null ? "n/a" : storedSignatureCount,
+                receivedSignatureCount == null ? "n/a" : receivedSignatureCount);
+    }
+
+    private String credentialRef(PasskeyVerifyRequest request, byte[] credentialIdBytes) {
+        if (credentialIdBytes != null && credentialIdBytes.length > 0) {
+            return LogSanitizer.fingerprint(credentialIdBytes);
+        }
+        if (request == null || !hasText(request.getCredentialId())) {
+            return "absent";
+        }
+        return LogSanitizer.fingerprint(request.getCredentialId());
+    }
+
+    private String resolveCurrentRelyingPartyIdForLog() {
+        try {
+            return passkeyService.resolveCurrentRelyingPartyId();
+        } catch (RuntimeException exception) {
+            return "unavailable";
+        }
+    }
+
+    private String resolveCurrentRequestHostForLog() {
+        try {
+            return passkeyService.resolveCurrentRequestHost();
+        } catch (RuntimeException exception) {
+            return "unavailable";
+        }
+    }
+
+    private String safeLogMetadata(String value) {
+        if (!hasText(value)) {
+            return "absent";
+        }
+        String sanitized = LogSanitizer.sanitizeFinancialPayload(value.trim());
+        if (!hasText(sanitized)) {
+            return "absent";
+        }
+        return sanitized.length() > 128 ? LogSanitizer.fingerprint(sanitized) : sanitized;
+    }
+
     private void applyPasskeyContextMetadata(PasskeyCredential credential, PasskeyRegistrationRequest request) {
         credential.setRelyingPartyId(resolveRelyingPartyIdFromProof(request));
         credential.setOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
@@ -458,5 +630,9 @@ public class PasskeyOrchestrator {
 
     private boolean isActiveCredential(String status) {
         return status == null || status.isBlank() || "ACTIVE".equalsIgnoreCase(status);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }
