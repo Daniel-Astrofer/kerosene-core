@@ -19,4 +19,6 @@ public interface KfeWalletAddressRepository extends JpaRepository<KfeWalletAddre
     Optional<KfeWalletAddressEntity> findTopByWalletIdAndStatusOrderByCreatedAtDesc(
             UUID walletId,
             KfeWalletAddressStatus status);
+
+    Optional<KfeWalletAddressEntity> findFirstByAddressIgnoreCase(String address);
 }

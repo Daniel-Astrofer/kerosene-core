@@ -59,6 +59,9 @@ class KfeInboundSettlementServiceTest {
     @Mock
     private KfeHashService hashService;
 
+    @Mock
+    private source.notification.service.NotificationService notificationService;
+
     private KfeInboundSettlementService service;
 
     @BeforeEach
@@ -72,7 +75,8 @@ class KfeInboundSettlementServiceTest {
                 auditLogService,
                 statementService,
                 dashboardPublisher,
-                hashService
+                hashService,
+                notificationService
         );
     }
 

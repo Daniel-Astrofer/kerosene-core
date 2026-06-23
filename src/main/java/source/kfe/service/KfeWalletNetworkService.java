@@ -1,13 +1,18 @@
 package source.kfe.service;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.auth.AuthExceptions;
 import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
+import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
 import source.auth.model.entity.UserDataBase;
 import source.kfe.dto.KfeColdWalletPsbtRequest;
 import source.kfe.dto.KfeColdWalletPsbtResponse;
 import source.kfe.dto.KfeReceivingCapabilitiesResponse;
+import source.common.exception.ErrorCodes;
 import source.kfe.dto.KfeUtxoResponse;
 import source.kfe.model.KfeWalletAddressEntity;
 import source.kfe.model.KfeWalletAddressStatus;
@@ -46,6 +51,7 @@ public class KfeWalletNetworkService {
     private final KfeHashService hashService;
     private final KfeAuditLogService auditLogService;
     private final KfePsbtWorkflowService psbtWorkflowService;
+    private final TransactionalAuthenticationPort transactionalAuthPort;
 
     public KfeWalletNetworkService(
             UserRepository userRepository,
@@ -55,7 +61,8 @@ public class KfeWalletNetworkService {
             ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClientProvider,
             KfeHashService hashService,
             KfeAuditLogService auditLogService,
-            KfePsbtWorkflowService psbtWorkflowService) {
+            KfePsbtWorkflowService psbtWorkflowService,
+            TransactionalAuthenticationPort transactionalAuthPort) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.addressRepository = addressRepository;
@@ -64,6 +71,7 @@ public class KfeWalletNetworkService {
         this.hashService = hashService;
         this.auditLogService = auditLogService;
         this.psbtWorkflowService = psbtWorkflowService;
+        this.transactionalAuthPort = transactionalAuthPort;
     }
 
     @Transactional(readOnly = true)
@@ -140,6 +148,13 @@ public class KfeWalletNetworkService {
         if (wallet.getKind() != KfeWalletKind.WATCH_ONLY) {
             throw new IllegalArgumentException("Cold wallet PSBT creation requires a WATCH_ONLY wallet.");
         }
+        UserDataBase user = userRepository.findById(userId)
+                .orElseThrow(() -> new AuthExceptions.StructuredAuthException(
+                        "Usuário autenticado não encontrado. Faça login novamente.",
+                        HttpStatus.UNAUTHORIZED,
+                        ErrorCodes.AUTH_INVALID_CREDENTIALS,
+                        null));
+        transactionalAuthPort.authorize(TransactionalAuthenticationRequest.kfeColdWalletPsbt(user, request.totpCode()));
 
         BitcoinCoreRpcClient bitcoinCore = bitcoinCoreRpcClientProvider.getIfAvailable();
         if (bitcoinCore == null) {

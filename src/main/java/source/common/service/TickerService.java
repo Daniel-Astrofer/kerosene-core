@@ -24,12 +24,13 @@ import java.util.concurrent.TimeUnit;
 public class TickerService {
 
     private static final Logger log = LoggerFactory.getLogger(TickerService.class);
-    private static final String COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,brl";
+    private static final String COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,brl,eur";
     private static final String REDIS_PRICE_KEY_PREFIX = "btc_price:";
 
     // Fallback prices in case the API is unreachable
     private static final BigDecimal FALLBACK_USD = new BigDecimal("65000");
     private static final BigDecimal FALLBACK_BRL = new BigDecimal("325000");
+    private static final BigDecimal FALLBACK_EUR = new BigDecimal("60000");
 
     @Value("${ticker.coingecko.enabled:true}")
     private boolean coingeckoEnabled;
@@ -57,42 +58,47 @@ public class TickerService {
      */
     @Scheduled(fixedRate = 300000)
     public void updatePrices() {
-        if (!coingeckoEnabled) {
-            return;
-        }
+        if (coingeckoEnabled) {
+            try {
+                log.info("[Ticker] Fetching BTC prices from CoinGecko...");
+                Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
 
-        try {
-            log.info("[Ticker] Fetching BTC prices from CoinGecko...");
-            Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
+                if (response != null && response.containsKey("bitcoin")) {
+                    Object bitcoinNode = response.get("bitcoin");
+                    if (!(bitcoinNode instanceof Map<?, ?> prices)) {
+                        log.warn("[Ticker] Unexpected payload structure from CoinGecko");
+                        return;
+                    }
 
-            if (response != null && response.containsKey("bitcoin")) {
-                Object bitcoinNode = response.get("bitcoin");
-                if (!(bitcoinNode instanceof Map<?, ?> prices)) {
-                    log.warn("[Ticker] Unexpected payload structure from CoinGecko");
-                    return;
+                    BigDecimal usd = toBigDecimal(prices.get("usd"));
+                    BigDecimal brl = toBigDecimal(prices.get("brl"));
+                    BigDecimal eur = toBigDecimal(prices.get("eur"));
+
+                    if (usd != null) savePrice("usd", usd);
+                    if (brl != null) savePrice("brl", brl);
+                    if (eur != null) savePrice("eur", eur);
+
+                    log.info("[Ticker] Prices updated: USD={}, BRL={}, EUR={}", usd, brl, eur);
+                } else {
+                    log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
                 }
-
-                BigDecimal usd = toBigDecimal(prices.get("usd"));
-                BigDecimal brl = toBigDecimal(prices.get("brl"));
-
-                if (usd != null) savePrice("usd", usd);
-                if (brl != null) savePrice("brl", brl);
-
-                log.info("[Ticker] Prices updated: USD={}, BRL={}", usd, brl);
-                return;
+            } catch (Exception e) {
+                seedFallbackCacheIfReachable();
+                log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
             }
-
-            log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
-        } catch (Exception e) {
+        } else {
             seedFallbackCacheIfReachable();
-            log.warn("[Ticker] CoinGecko unavailable. Keeping cached/fallback prices: {}", e.getMessage());
         }
+
+        // Price fallback/cache is only for conversion display. Market movement
+        // notifications must not be emitted from cached or fallback values.
     }
 
     private void seedFallbackCacheIfReachable() {
         try {
             ensurePricePresent("usd", FALLBACK_USD);
             ensurePricePresent("brl", FALLBACK_BRL);
+            ensurePricePresent("eur", FALLBACK_EUR);
         } catch (Exception e) {
             log.warn("[Ticker] Redis fallback cache refresh unavailable. Using in-memory defaults: {}", e.getMessage());
         }
@@ -137,11 +143,13 @@ public class TickerService {
             log.warn("[Ticker] Redis read failed for {}: {}", currency, e.getMessage());
         }
 
+        log.warn("[Ticker] Price not found in Redis for {}, using fallback", currency);
         if ("usd".equalsIgnoreCase(currency)) {
-            log.warn("[Ticker] Price not found in Redis for {}, using fallback", currency);
             return FALLBACK_USD;
         }
-        log.warn("[Ticker] Price not found in Redis for {}, using fallback", currency);
+        if ("eur".equalsIgnoreCase(currency)) {
+            return FALLBACK_EUR;
+        }
         return FALLBACK_BRL;
     }
 
@@ -153,7 +161,8 @@ public class TickerService {
     public Map<String, BigDecimal> getAllFiatValues(BigDecimal btcAmount) {
         return Map.of(
             "usd", convertToFiat(btcAmount, "usd"),
-            "brl", convertToFiat(btcAmount, "brl")
+            "brl", convertToFiat(btcAmount, "brl"),
+            "eur", convertToFiat(btcAmount, "eur")
         );
     }
 }

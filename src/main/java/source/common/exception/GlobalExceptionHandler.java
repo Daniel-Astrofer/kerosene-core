@@ -15,8 +15,8 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.common.dto.ApiResponse;
 import source.common.infra.logging.StructuredLogField;
 import source.common.observability.FinancialOperationsMetrics;
+import source.kfe.exception.KfeSelfPaymentException;
 import source.kfe.rail.KfeRailException;
-import source.mining.exception.MiningExceptions;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -175,35 +175,23 @@ public class GlobalExceptionHandler {
                 Map.of("guidance", "Os serviços de custódia e trilhos financeiros estão indisponíveis no momento. Tente novamente mais tarde."));
     }
 
+
+    @ExceptionHandler(KfeSelfPaymentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleKfeSelfPayment(KfeSelfPaymentException ex) {
+        incrementFinancialMetric("validation_rejected", "rejected", "self_payment");
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage(),
+                ErrorCodes.LEDGER_PAYMENT_SELF_PAY,
+                Map.of("guidance", "Use um link ou destino de outra conta para concluir esta transacao."));
+    }
+
     @ExceptionHandler(KeroseneException.class)
     public ResponseEntity<ApiResponse<Void>> handleKeroseneException(KeroseneException ex) {
         return buildErrorResponse(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 sanitizeMessage(ex.getMessage(), "The requested platform service is temporarily unavailable."),
                 ex.getErrorCode());
-    }
-
-    @ExceptionHandler(MiningExceptions.RigNotFound.class)
-    public ResponseEntity<ApiResponse<Void>> handleRigNotFound(MiningExceptions.RigNotFound ex) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "ERR_MINING_RIG_NOT_FOUND");
-    }
-
-    @ExceptionHandler(MiningExceptions.MiningAllocationNotFound.class)
-    public ResponseEntity<ApiResponse<Void>> handleMiningAllocationNotFound(
-            MiningExceptions.MiningAllocationNotFound ex) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "ERR_MINING_ALLOCATION_NOT_FOUND");
-    }
-
-    @ExceptionHandler(MiningExceptions.InvalidMiningAllocation.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidMiningAllocation(
-            MiningExceptions.InvalidMiningAllocation ex) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "ERR_MINING_ALLOCATION_INVALID");
-    }
-
-    @ExceptionHandler(MiningExceptions.MiningAllocationStateException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMiningAllocationState(
-            MiningExceptions.MiningAllocationStateException ex) {
-        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), "ERR_MINING_ALLOCATION_STATE");
     }
 
     @ExceptionHandler(IllegalStateException.class)

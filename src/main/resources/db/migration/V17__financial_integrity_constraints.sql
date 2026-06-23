@@ -39,28 +39,30 @@ BEGIN
             ) NOT VALID;
     END IF;
 
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'chk_ledger_entries_non_negative_amounts'
-          AND conrelid = 'financial.ledger_entries'::regclass
-    ) THEN
-        ALTER TABLE financial.ledger_entries
-            ADD CONSTRAINT chk_ledger_entries_non_negative_amounts
-            CHECK (amount_net >= 0 AND fee_amount >= 0) NOT VALID;
-    END IF;
+    IF to_regclass('financial.ledger_entries') IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'chk_ledger_entries_non_negative_amounts'
+              AND conrelid = 'financial.ledger_entries'::regclass
+        ) THEN
+            ALTER TABLE financial.ledger_entries
+                ADD CONSTRAINT chk_ledger_entries_non_negative_amounts
+                CHECK (amount_net >= 0 AND fee_amount >= 0) NOT VALID;
+        END IF;
 
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'chk_ledger_entries_platform_fee_rows'
-          AND conrelid = 'financial.ledger_entries'::regclass
-    ) THEN
-        ALTER TABLE financial.ledger_entries
-            ADD CONSTRAINT chk_ledger_entries_platform_fee_rows
-            CHECK (
-                (user_id <> 'PLATFORM' OR amount_net = 0)
-                AND (status <> 'COLLECTED' OR user_id = 'PLATFORM')
-            ) NOT VALID;
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'chk_ledger_entries_platform_fee_rows'
+              AND conrelid = 'financial.ledger_entries'::regclass
+        ) THEN
+            ALTER TABLE financial.ledger_entries
+                ADD CONSTRAINT chk_ledger_entries_platform_fee_rows
+                CHECK (
+                    (user_id <> 'PLATFORM' OR amount_net = 0)
+                    AND (status <> 'COLLECTED' OR user_id = 'PLATFORM')
+                ) NOT VALID;
+        END IF;
     END IF;
 END $$;

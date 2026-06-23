@@ -47,6 +47,7 @@ public class EconomyController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBtcPrice() {
         BigDecimal btcUsd = tickerService.getPrice("usd");
         BigDecimal btcBrl = tickerService.getPrice("brl");
+        BigDecimal btcEur = tickerService.getPrice("eur");
         BigDecimal usdBrl = BigDecimal.ZERO;
 
         if (btcUsd.compareTo(BigDecimal.ZERO) > 0) {
@@ -56,6 +57,7 @@ public class EconomyController {
         Map<String, Object> data = new HashMap<>();
         data.put("btcUsd", btcUsd);
         data.put("btcBrl", btcBrl);
+        data.put("btcEur", btcEur);
         data.put("usdBrl", usdBrl);
 
         return ResponseEntity.ok(ApiResponse.success(

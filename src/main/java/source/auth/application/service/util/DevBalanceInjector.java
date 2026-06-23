@@ -9,9 +9,11 @@ import source.auth.model.entity.UserDataBase;
 import source.kfe.model.KfeWalletEntity;
 import source.kfe.repository.KfeWalletRepository;
 import source.kfe.service.KfeBalanceService;
+import source.notification.service.NotificationService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -30,15 +32,18 @@ public class DevBalanceInjector {
     private final KfeWalletRepository walletRepository;
     private final KfeBalanceService balanceService;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final boolean enabled;
 
     public DevBalanceInjector(KfeWalletRepository walletRepository,
                                KfeBalanceService balanceService,
                                UserRepository userRepository,
+                               NotificationService notificationService,
                                @Value("${app.dev.inject-test-balance:false}") boolean enabled) {
         this.walletRepository = walletRepository;
         this.balanceService = balanceService;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
         this.enabled = enabled;
     }
 
@@ -93,6 +98,23 @@ public class DevBalanceInjector {
             userRepository.save(user);
 
             log.info("[DEV] Successfully injected 100 BTC one-time bonus for user {}", user.getUsername());
+
+            // Emit a persistent notification for the mock balance
+            notificationService.notifyUser(
+                    user.getId(),
+                    source.notification.model.NotificationKind.TRANSFER_RECEIVED,
+                    source.notification.model.NotificationSeverity.SUCCESS,
+                    "Saldo de Teste Creditado",
+                    "Você recebeu " + amount.toPlainString() + " BTC de saldo mockado na carteira \"" + wallet.getLabel() + "\".",
+                    "/home",
+                    "wallet",
+                    wallet.getId().toString(),
+                    Map.of(
+                            "walletId", wallet.getId().toString(),
+                            "walletName", wallet.getLabel(),
+                            "amountBtc", amount.toPlainString())
+            );
+
             return ClaimOutcome.CLAIMED;
         } catch (Exception e) {
             log.error("[DEV] Failed to inject test balance for user {}", user.getUsername(), e);

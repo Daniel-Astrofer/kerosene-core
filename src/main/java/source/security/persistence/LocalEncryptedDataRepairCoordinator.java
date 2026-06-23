@@ -281,7 +281,6 @@ public class LocalEncryptedDataRepairCoordinator implements SmartLifecycle {
         List<String> tables = new ArrayList<>();
         addIfTableExists(connection, tables, "financial", "blockchain_address_watch");
         addIfTableExists(connection, tables, "financial", "network_transfers");
-        addIfTableExists(connection, tables, "financial", "mining_allocations");
         addIfTableExists(connection, tables, "financial", "ledger");
         addIfTableExists(connection, tables, "financial", "wallets");
         addIfTableExists(connection, tables, "financial", "ledger_transactions");

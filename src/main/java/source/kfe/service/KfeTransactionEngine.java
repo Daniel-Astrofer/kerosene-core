@@ -20,7 +20,11 @@ public class KfeTransactionEngine {
     }
 
     public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request) {
-        return submitTransactionUseCase.submit(userId, request);
+        return submit(userId, request, null);
+    }
+
+    public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request, String deviceHash) {
+        return submitTransactionUseCase.submit(userId, request, deviceHash);
     }
 
     public KfeTransactionResponse getExistingByIdempotency(Long userId, String idempotencyKey, String requestHash) {

@@ -33,6 +33,12 @@ public class KfeTransactionStatementRecorder {
         payload.put("networkFeeSats", tx.getNetworkFeeSats());
         payload.put("keroseneFeeSats", tx.getKeroseneFeeSats());
         payload.put("totalDebitSats", tx.getTotalDebitSats());
+        payload.put("displayBtcUsd", tx.getDisplayBtcUsd());
+        payload.put("displayBtcEur", tx.getDisplayBtcEur());
+        payload.put("displayBtcBrl", tx.getDisplayBtcBrl());
+        payload.put("displayAmountUsd", tx.getDisplayAmountUsd());
+        payload.put("displayAmountEur", tx.getDisplayAmountEur());
+        payload.put("displayAmountBrl", tx.getDisplayAmountBrl());
         if (request != null && request.memo() != null && !request.memo().isBlank()) {
             payload.put("memo", request.memo());
         }

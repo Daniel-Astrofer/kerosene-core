@@ -18,10 +18,7 @@ public enum NotificationMessageKey {
     EXTERNAL_ONCHAIN_DEPOSIT_CONFIRMED("notification.transaction.external.onchain.deposit_confirmed"),
     EXTERNAL_ONCHAIN_DEPOSIT_RECONCILED("notification.transaction.external.onchain.deposit_reconciled"),
     EXTERNAL_LIGHTNING_DEPOSIT_CONFIRMED("notification.transaction.external.lightning.deposit_confirmed"),
-    EXTERNAL_LIGHTNING_DEPOSIT_RECONCILED("notification.transaction.external.lightning.deposit_reconciled"),
-    MINING_STARTED("notification.mining.started"),
-    MINING_COMPLETED("notification.mining.completed"),
-    MINING_CANCELLED("notification.mining.cancelled");
+    EXTERNAL_LIGHTNING_DEPOSIT_RECONCILED("notification.transaction.external.lightning.deposit_reconciled");
 
     private final String baseKey;
 

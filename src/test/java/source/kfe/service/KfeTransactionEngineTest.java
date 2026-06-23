@@ -38,6 +38,6 @@ class KfeTransactionEngineTest {
 
         engine.submit(userId, request);
 
-        verify(submitTransactionUseCase).submit(userId, request);
+        verify(submitTransactionUseCase).submit(userId, request, null);
     }
 }

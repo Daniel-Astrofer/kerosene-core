@@ -4,6 +4,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import source.common.service.TickerService;
 import source.kfe.dto.KfeSubmitTransactionRequest;
 import source.kfe.dto.KfeTransactionResponse;
 import source.kfe.model.KfeDirection;
@@ -20,6 +21,8 @@ import source.kfe.service.KfePricingService;
 import source.kfe.service.KfeQuorumGateway;
 import source.kfe.service.KfeResponseMapper;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,9 +30,11 @@ import java.util.UUID;
 public class KfeSubmitTransactionUseCase {
 
     private static final String ASSET_BTC = "BTC";
+    private static final BigDecimal SATS_PER_BTC = new BigDecimal("100000000");
 
     private final KfeTransactionRepository transactionRepository;
     private final KfePricingService pricingService;
+    private final TickerService tickerService;
     private final KfeBalanceService balanceService;
     private final KfeQuorumGateway quorumGateway;
     private final KfeHashService hashService;
@@ -47,6 +52,7 @@ public class KfeSubmitTransactionUseCase {
     public KfeSubmitTransactionUseCase(
             KfeTransactionRepository transactionRepository,
             KfePricingService pricingService,
+            TickerService tickerService,
             KfeBalanceService balanceService,
             KfeQuorumGateway quorumGateway,
             KfeHashService hashService,
@@ -62,6 +68,7 @@ public class KfeSubmitTransactionUseCase {
             KfeTransactionStatementRecorder statementRecorder) {
         this.transactionRepository = transactionRepository;
         this.pricingService = pricingService;
+        this.tickerService = tickerService;
         this.balanceService = balanceService;
         this.quorumGateway = quorumGateway;
         this.hashService = hashService;
@@ -85,7 +92,13 @@ public class KfeSubmitTransactionUseCase {
      */
     @Transactional
     public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request) {
-        SubmissionAttempt attempt = validateAndReserve(userId, request);
+        return submit(userId, request, null);
+    }
+
+    @Transactional
+    public KfeTransactionResponse submit(Long userId, KfeSubmitTransactionRequest request, String deviceHash) {
+        request = walletResolver.resolveInternalDestinationReference(request);
+        SubmissionAttempt attempt = validateAndReserve(userId, request, deviceHash);
         if (attempt.existingResponse() != null) {
             return attempt.existingResponse();
         }
@@ -100,9 +113,10 @@ public class KfeSubmitTransactionUseCase {
         return completePublishAndRespond(userId, attempt.idempotency(), prepared.tx(), lock.destinationWallet());
     }
 
-    private SubmissionAttempt validateAndReserve(Long userId, KfeSubmitTransactionRequest request) {
+    private SubmissionAttempt validateAndReserve(Long userId, KfeSubmitTransactionRequest request, String deviceHash) {
         validator.validate(request);
-        authorizationUseCase.authorize(userId, request);
+        walletResolver.requireNotSelfPayment(userId, request);
+        authorizationUseCase.authorize(userId, request, deviceHash);
 
         String requestHash = idempotencyUseCase.requestHash(userId, request);
         KfeIdempotencyEntity existingIdempotency = idempotencyUseCase.find(userId, request.idempotencyKey());
@@ -215,7 +229,30 @@ public class KfeSubmitTransactionUseCase {
         tx.setNetworkFeeSats(quote.networkFeeSats());
         tx.setKeroseneFeeSats(quote.keroseneFeeSats());
         tx.setTotalDebitSats(quote.totalDebitSats());
+        applyDisplaySnapshot(tx);
         transactionRepository.save(tx);
+    }
+
+    private void applyDisplaySnapshot(KfeTransactionEntity tx) {
+        BigDecimal amountBtc = BigDecimal.valueOf(tx.getReceiverAmountSats())
+                .divide(SATS_PER_BTC, 8, RoundingMode.HALF_UP);
+        BigDecimal btcUsd = tickerService.getPrice("usd");
+        BigDecimal btcEur = tickerService.getPrice("eur");
+        BigDecimal btcBrl = tickerService.getPrice("brl");
+
+        tx.setDisplayBtcUsd(btcUsd);
+        tx.setDisplayBtcEur(btcEur);
+        tx.setDisplayBtcBrl(btcBrl);
+        tx.setDisplayAmountUsd(convertSnapshot(amountBtc, btcUsd));
+        tx.setDisplayAmountEur(convertSnapshot(amountBtc, btcEur));
+        tx.setDisplayAmountBrl(convertSnapshot(amountBtc, btcBrl));
+    }
+
+    private BigDecimal convertSnapshot(BigDecimal amountBtc, BigDecimal btcPrice) {
+        if (btcPrice == null || btcPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return amountBtc.multiply(btcPrice).setScale(2, RoundingMode.HALF_UP);
     }
 
     private String proposalHash(KfeTransactionEntity tx, KfeSubmitTransactionRequest request) {

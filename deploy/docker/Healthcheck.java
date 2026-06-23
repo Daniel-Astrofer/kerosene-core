@@ -7,6 +7,15 @@ import java.time.Duration;
 public class Healthcheck {
 
     public static void main(String[] args) throws Exception {
+        if (args.length >= 2 && "--sleep-seconds".equals(args[0])) {
+            long seconds = Long.parseLong(args[1]);
+            if (seconds < 0 || seconds > 300) {
+                throw new IllegalArgumentException("sleep seconds must be between 0 and 300");
+            }
+            Thread.sleep(Duration.ofSeconds(seconds).toMillis());
+            return;
+        }
+
         String target = args.length > 0 ? args[0] : "http://127.0.0.1:8080/health/ready";
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))

@@ -42,6 +42,7 @@ class KfeWalletNetworkServiceTest {
     private final KfeHashService hashService = new KfeHashService();
     private final KfeAuditLogService auditLogService = mock(KfeAuditLogService.class);
     private final KfePsbtWorkflowService psbtWorkflowService = mock(KfePsbtWorkflowService.class);
+    private final source.auth.application.service.identityaccess.TransactionalAuthenticationPort transactionalAuthPort = mock(source.auth.application.service.identityaccess.TransactionalAuthenticationPort.class);
     private final KfeWalletNetworkService service = new KfeWalletNetworkService(
             userRepository,
             walletRepository,
@@ -50,7 +51,8 @@ class KfeWalletNetworkServiceTest {
             bitcoinCoreProvider,
             hashService,
             auditLogService,
-            psbtWorkflowService);
+            psbtWorkflowService,
+            transactionalAuthPort);
 
     @Test
     void returnsKfeReceivingCapabilitiesFromActiveWallets() {
@@ -112,8 +114,11 @@ class KfeWalletNetworkServiceTest {
                 10_000L,
                 6,
                 null,
-                List.of(new KfeColdWalletPsbtRequest.Input("txid-1", 0)));
+                List.of(new KfeColdWalletPsbtRequest.Input("txid-1", 0)),
+                "totp-code");
 
+        UserDataBase user = mock(UserDataBase.class);
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
         when(walletRepository.findByIdAndUserId(wallet.getId(), 42L)).thenReturn(Optional.of(wallet));
         when(bitcoinCoreProvider.getIfAvailable()).thenReturn(bitcoinCore);
         when(bitcoinCore.createWatchOnlyPsbt(

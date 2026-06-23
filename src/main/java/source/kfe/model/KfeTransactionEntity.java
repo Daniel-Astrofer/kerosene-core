@@ -10,6 +10,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -63,6 +64,24 @@ public class KfeTransactionEntity {
 
     @Column(name = "total_debit_sats", nullable = false)
     private long totalDebitSats;
+
+    @Column(name = "display_btc_usd", precision = 19, scale = 8)
+    private BigDecimal displayBtcUsd;
+
+    @Column(name = "display_btc_eur", precision = 19, scale = 8)
+    private BigDecimal displayBtcEur;
+
+    @Column(name = "display_btc_brl", precision = 19, scale = 8)
+    private BigDecimal displayBtcBrl;
+
+    @Column(name = "display_amount_usd", precision = 19, scale = 2)
+    private BigDecimal displayAmountUsd;
+
+    @Column(name = "display_amount_eur", precision = 19, scale = 2)
+    private BigDecimal displayAmountEur;
+
+    @Column(name = "display_amount_brl", precision = 19, scale = 2)
+    private BigDecimal displayAmountBrl;
 
     @Column(name = "quorum_proposal_hash", length = 64)
     private String quorumProposalHash;
@@ -207,6 +226,54 @@ public class KfeTransactionEntity {
 
     public void setTotalDebitSats(long totalDebitSats) {
         this.totalDebitSats = totalDebitSats;
+    }
+
+    public BigDecimal getDisplayBtcUsd() {
+        return displayBtcUsd;
+    }
+
+    public void setDisplayBtcUsd(BigDecimal displayBtcUsd) {
+        this.displayBtcUsd = displayBtcUsd;
+    }
+
+    public BigDecimal getDisplayBtcEur() {
+        return displayBtcEur;
+    }
+
+    public void setDisplayBtcEur(BigDecimal displayBtcEur) {
+        this.displayBtcEur = displayBtcEur;
+    }
+
+    public BigDecimal getDisplayBtcBrl() {
+        return displayBtcBrl;
+    }
+
+    public void setDisplayBtcBrl(BigDecimal displayBtcBrl) {
+        this.displayBtcBrl = displayBtcBrl;
+    }
+
+    public BigDecimal getDisplayAmountUsd() {
+        return displayAmountUsd;
+    }
+
+    public void setDisplayAmountUsd(BigDecimal displayAmountUsd) {
+        this.displayAmountUsd = displayAmountUsd;
+    }
+
+    public BigDecimal getDisplayAmountEur() {
+        return displayAmountEur;
+    }
+
+    public void setDisplayAmountEur(BigDecimal displayAmountEur) {
+        this.displayAmountEur = displayAmountEur;
+    }
+
+    public BigDecimal getDisplayAmountBrl() {
+        return displayAmountBrl;
+    }
+
+    public void setDisplayAmountBrl(BigDecimal displayAmountBrl) {
+        this.displayAmountBrl = displayAmountBrl;
     }
 
     public String getQuorumProposalHash() {

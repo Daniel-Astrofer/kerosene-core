@@ -38,7 +38,6 @@ public class EndpointPolicyRegistry {
             "/audit/**",
             "/health/dependencies",
             "/kfe/**",
-            "/mining/**",
             "/notifications",
             "/notifications/**",
             "/quorum/**",

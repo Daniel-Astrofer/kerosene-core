@@ -299,10 +299,6 @@
         <appender-ref ref="ASYNC_KFE"/>
     </logger>
 
-    <!-- KFE/mining: reserve, liquidity, reconciliation -->
-    <logger name="source.mining"                                  level="INFO"  additivity="false">
-        <appender-ref ref="ASYNC_KFE"/>
-    </logger>
 
     <logger name="source.vault"                                   level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_VAULT"/>

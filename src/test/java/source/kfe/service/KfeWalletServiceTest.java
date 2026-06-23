@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,7 +100,8 @@ class KfeWalletServiceTest {
         wallet.setId(UUID.randomUUID());
         wallet.setUserId(1L);
 
-        when(walletRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(wallet));
+        when(walletRepository.findByUserIdAndStatusInOrderByCreatedAtDesc(eq(1L), any()))
+                .thenReturn(List.of(wallet));
         when(responseMapper.toWalletResponse(wallet)).thenReturn(new KfeWalletResponse(
                 wallet.getId(), KfeWalletKind.CUSTODIAL_ONCHAIN, KfeWalletStatus.ACTIVE, "label", "label",
                 "Carteira Onchain", "BTC",
@@ -109,7 +111,7 @@ class KfeWalletServiceTest {
         List<KfeWalletResponse> responses = service.listWallets(1L);
 
         assertEquals(1, responses.size());
-        verify(walletRepository).findByUserIdOrderByCreatedAtDesc(1L);
+        verify(walletRepository).findByUserIdAndStatusInOrderByCreatedAtDesc(eq(1L), any());
         verify(responseMapper).toWalletResponse(wallet);
     }
 

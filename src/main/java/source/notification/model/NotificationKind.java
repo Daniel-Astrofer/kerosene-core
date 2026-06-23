@@ -12,10 +12,7 @@ public enum NotificationKind {
     PAYMENT_REQUEST_PAID("payment_request_paid"),
     DEPOSIT_DETECTED("deposit_detected"),
     DEPOSIT_CONFIRMED("deposit_confirmed"),
-    PAYMENT_SENT("payment_sent"),
-    MINING_STARTED("mining_started"),
-    MINING_COMPLETED("mining_completed"),
-    MINING_CANCELLED("mining_cancelled");
+    PAYMENT_SENT("payment_sent");
 
     private final String wireValue;
 

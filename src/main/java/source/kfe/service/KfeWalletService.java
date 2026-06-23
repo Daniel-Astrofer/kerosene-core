@@ -36,11 +36,12 @@ public class KfeWalletService {
     private static final String INTERNAL_GLOBAL_WALLET_LABEL = "carteira global";
     private static final int FAILURE_REASON_MAX_LENGTH = 180;
     private static final int MAX_ACTIVE_WATCH_ONLY_WALLETS = 2;
-    private static final List<KfeWalletStatus> UNIQUE_WALLET_STATUSES = List.of(
+    private static final List<KfeWalletStatus> USER_VISIBLE_WALLET_STATUSES = List.of(
             KfeWalletStatus.CREATING,
             KfeWalletStatus.ACTIVE,
             KfeWalletStatus.FROZEN,
             KfeWalletStatus.ROTATING_ADDRESS);
+    private static final List<KfeWalletStatus> UNIQUE_WALLET_STATUSES = USER_VISIBLE_WALLET_STATUSES;
 
     private final KfeWalletRepository walletRepository;
     private final KfeWalletAddressRepository addressRepository;
@@ -226,7 +227,7 @@ public class KfeWalletService {
 
     @Transactional(readOnly = true)
     public List<KfeWalletResponse> listWallets(Long userId) {
-        return walletRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        return walletRepository.findByUserIdAndStatusInOrderByCreatedAtDesc(userId, USER_VISIBLE_WALLET_STATUSES).stream()
                 .map(responseMapper::toWalletResponse)
                 .toList();
     }

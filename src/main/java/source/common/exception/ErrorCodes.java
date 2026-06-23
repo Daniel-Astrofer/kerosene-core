@@ -31,6 +31,7 @@ public final class ErrorCodes {
     public static final String AUTH_APP_PIN_LOCKED = "AUTH_020";
     public static final String AUTH_APP_PIN_DEVICE_REQUIRED = "AUTH_021";
     public static final String AUTH_PASSKEY_INVALID_ORIGIN = "AUTH_022";
+    public static final String AUTH_TRANSACTIONAL_AUTH_REQUIRED = "AUTH_023";
     public static final String AUTH_GENERIC = "AUTH_099";
 
     // Ledger Errors

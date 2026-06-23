@@ -2,6 +2,7 @@ package source.kfe.application.transaction;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import source.common.service.TickerService;
 import source.kfe.dto.KfeSubmitTransactionRequest;
 import source.kfe.dto.KfeTransactionResponse;
 import source.kfe.model.KfeDirection;
@@ -28,6 +29,7 @@ class KfeSubmitTransactionUseCaseTest {
 
     private final KfeTransactionRepository transactionRepository = mock(KfeTransactionRepository.class);
     private final KfePricingService pricingService = mock(KfePricingService.class);
+    private final TickerService tickerService = mock(TickerService.class);
     private final KfeBalanceService balanceService = mock(KfeBalanceService.class);
     private final KfeQuorumGateway quorumGateway = mock(KfeQuorumGateway.class);
     private final KfeHashService hashService = mock(KfeHashService.class);
@@ -45,6 +47,7 @@ class KfeSubmitTransactionUseCaseTest {
     private final KfeSubmitTransactionUseCase useCase = new KfeSubmitTransactionUseCase(
             transactionRepository,
             pricingService,
+            tickerService,
             balanceService,
             quorumGateway,
             hashService,
@@ -65,6 +68,7 @@ class KfeSubmitTransactionUseCaseTest {
         Long userId = 123L;
         KfeSubmitTransactionRequest request = outboundRequest();
         String requestHash = "request-hash";
+        when(walletResolver.resolveInternalDestinationReference(request)).thenReturn(request);
         KfeTransactionResponse existingResponse = transactionResponse();
 
         when(idempotencyUseCase.requestHash(userId, request)).thenReturn(requestHash);
@@ -86,6 +90,7 @@ class KfeSubmitTransactionUseCaseTest {
         Long userId = 123L;
         KfeSubmitTransactionRequest request = outboundRequest();
         String requestHash = "request-hash";
+        when(walletResolver.resolveInternalDestinationReference(request)).thenReturn(request);
 
         when(idempotencyUseCase.requestHash(userId, request)).thenReturn(requestHash);
         when(idempotencyUseCase.find(userId, request.idempotencyKey())).thenReturn(null);
@@ -128,6 +133,12 @@ class KfeSubmitTransactionUseCaseTest {
                 1000L,
                 0L,
                 101_000L,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 "proposal-hash",
                 3,
                 null,

@@ -240,6 +240,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS enforce_append_only_audit_log ON financial.financial_audit_log;
+
 CREATE TRIGGER enforce_append_only_audit_log
 BEFORE UPDATE OR DELETE ON financial.financial_audit_log
 FOR EACH ROW

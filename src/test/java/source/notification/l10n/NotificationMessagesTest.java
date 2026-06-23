@@ -117,20 +117,7 @@ class NotificationMessagesTest {
                         NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_RECONCILED,
                         "Depósito confirmado",
                         "Depósito Lightning liquidado. Crédito líquido: 0.00099000 BTC.",
-                        "0.00099000"),
-                new ExpectedNotification(
-                        NotificationMessageKey.MINING_STARTED,
-                        "Hashpower iniciado",
-                        "Locação do rig Antminer S21 iniciada com sucesso.",
-                        "Antminer S21"),
-                new ExpectedNotification(
-                        NotificationMessageKey.MINING_COMPLETED,
-                        "Hashpower concluído",
-                        "Rendimentos projetados creditados na sua carteira."),
-                new ExpectedNotification(
-                        NotificationMessageKey.MINING_CANCELLED,
-                        "Hashpower cancelado",
-                        "Locação cancelada. Ajuste proporcional creditado."));
+                        "0.00099000"));
 
         for (ExpectedNotification expected : expectedNotifications) {
             LocalizedNotificationMessage message = NotificationMessages.resolve(

@@ -20,6 +20,10 @@ public interface KfeWalletRepository extends JpaRepository<KfeWalletEntity, UUID
 
     List<KfeWalletEntity> findByUserIdOrderByCreatedAtDesc(Long userId);
 
+    List<KfeWalletEntity> findByUserIdAndStatusInOrderByCreatedAtDesc(
+            Long userId,
+            Collection<KfeWalletStatus> statuses);
+
     boolean existsByUserIdAndKindAndStatusIn(
             Long userId,
             KfeWalletKind kind,
@@ -54,6 +58,7 @@ public interface KfeWalletRepository extends JpaRepository<KfeWalletEntity, UUID
                 updated_at AS updatedAt
             FROM financial.wallet_dashboard_view
             WHERE user_id = :userId
+              AND status IN ('CREATING', 'ACTIVE', 'FROZEN', 'ROTATING_ADDRESS')
             ORDER BY created_at DESC
             """, nativeQuery = true)
     List<KfeDashboardWalletRow> findDashboardRows(@Param("userId") Long userId);
