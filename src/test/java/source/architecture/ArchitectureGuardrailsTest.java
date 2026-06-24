@@ -10,7 +10,10 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
+import org.springframework.core.type.classreading.MetadataReaderFactory;
 import org.springframework.context.annotation.Profile;
+import org.springframework.mock.env.MockEnvironment;
 import source.Application;
 import source.config.KfeProfileCoreControllerExclusionFilter;
 
@@ -137,6 +140,26 @@ class ArchitectureGuardrailsTest {
         assertTrue(
                 excludesCoreControllersForKfe,
                 "KFE runtime must not publish Core controllers from the shared executable");
+    }
+
+    @Test
+    void kfeProfileControllerFilterKeepsOperationalHealthPublished() throws Exception {
+        KfeProfileCoreControllerExclusionFilter filter = new KfeProfileCoreControllerExclusionFilter();
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("kfe");
+        filter.setEnvironment(environment);
+        MetadataReaderFactory metadataReaderFactory = new CachingMetadataReaderFactory();
+
+        assertTrue(
+                !filter.match(
+                        metadataReaderFactory.getMetadataReader("source.common.controller.HealthController"),
+                        metadataReaderFactory),
+                "KFE runtime must keep shared health endpoints available for Kubernetes probes");
+        assertTrue(
+                filter.match(
+                        metadataReaderFactory.getMetadataReader("source.auth.controller.UserController"),
+                        metadataReaderFactory),
+                "KFE runtime must still exclude Core HTTP controllers");
     }
 
     @Test
