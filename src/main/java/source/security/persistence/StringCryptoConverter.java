@@ -3,6 +3,7 @@ package source.security.persistence;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import source.auth.application.service.security.CosignerSecretService;
 
@@ -14,6 +15,7 @@ import java.util.Base64;
 
 @Converter
 @Component
+@Profile("!kfe")
 public class StringCryptoConverter implements AttributeConverter<String, String> {
 
     private static CosignerSecretService cryptoService;
