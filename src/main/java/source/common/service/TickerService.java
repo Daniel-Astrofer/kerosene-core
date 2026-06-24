@@ -3,6 +3,7 @@ package source.common.service;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -10,9 +11,13 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.model.entity.UserDataBase;
+import source.notification.service.NotificationService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -37,13 +42,31 @@ public class TickerService {
 
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
+    private long lastEngagementSentTime = 0;
 
     public TickerService(
             StringRedisTemplate redisTemplate,
             @Qualifier("tickerRestTemplate") RestTemplate restTemplate) {
         this.redisTemplate = redisTemplate;
         this.restTemplate = restTemplate;
+        this.notificationService = null;
+        this.userRepository = null;
     }
+
+    @Autowired
+    public TickerService(
+            StringRedisTemplate redisTemplate,
+            @Qualifier("tickerRestTemplate") RestTemplate restTemplate,
+            NotificationService notificationService,
+            UserRepository userRepository) {
+        this.redisTemplate = redisTemplate;
+        this.restTemplate = restTemplate;
+        this.notificationService = notificationService;
+        this.userRepository = userRepository;
+    }
+
 
     @PostConstruct
     void initializeFallbackCache() {
