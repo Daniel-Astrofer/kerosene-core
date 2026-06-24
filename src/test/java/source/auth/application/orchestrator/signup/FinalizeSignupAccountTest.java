@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import source.common.financial.FinancialWalletProvisioningPort;
 import source.auth.application.orchestrator.signup.port.PasskeyGateway;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.orchestrator.signup.port.UserNotifier;
@@ -17,9 +18,6 @@ import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 import source.security.VaultKeyProvider;
 import source.notification.model.UserNotificationPayload;
-import source.kfe.dto.KfeCreateWalletRequest;
-import source.kfe.model.KfeWalletKind;
-import source.kfe.service.KfeWalletService;
 
 import java.util.List;
 
@@ -29,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,13 +49,13 @@ class FinalizeSignupAccountTest {
     @Mock
     private VaultKeyProvider vaultKeyProvider;
     @Mock
-    private KfeWalletService kfeWalletService;
+    private FinancialWalletProvisioningPort financialWalletProvisioningPort;
 
     private FinalizeSignupAccount service;
 
     @BeforeEach
     void setUp() {
-        when(vaultKeyProvider.isReady()).thenReturn(true);
+        lenient().when(vaultKeyProvider.isReady()).thenReturn(true);
         service = new FinalizeSignupAccount(
                 stateStore,
                 userService,
@@ -63,7 +63,7 @@ class FinalizeSignupAccountTest {
                 userNotifier,
                 cosignerSecretService,
                 vaultKeyProvider,
-                kfeWalletService);
+                financialWalletProvisioningPort);
     }
 
     @Test
@@ -78,7 +78,6 @@ class FinalizeSignupAccountTest {
         });
         when(passkeyGateway.findByUserId(7L)).thenReturn(List.of());
         when(passkeyGateway.save(any(PasskeyCredential.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(kfeWalletService.listWallets(7L)).thenReturn(List.of());
 
         UserDataBase created = service.execute("session-1");
 
@@ -102,15 +101,7 @@ class FinalizeSignupAccountTest {
         assertEquals("Conta criada", notificationCaptor.getValue().title());
         assertEquals("Sua conta foi criada com sucesso.", notificationCaptor.getValue().body());
 
-        ArgumentCaptor<KfeCreateWalletRequest> walletRequestCaptor =
-                ArgumentCaptor.forClass(KfeCreateWalletRequest.class);
-        verify(kfeWalletService).createWallet(eq(7L), walletRequestCaptor.capture());
-        KfeCreateWalletRequest walletRequest = walletRequestCaptor.getValue();
-        assertEquals(KfeWalletKind.INTERNAL, walletRequest.kind());
-        assertEquals("carteira global", walletRequest.label());
-        assertNull(walletRequest.xpub());
-        assertNull(walletRequest.initialAddress());
-        assertEquals(Boolean.FALSE, walletRequest.issueInitialAddress());
+        verify(financialWalletProvisioningPort).ensurePrimaryWalletReady(eq(7L), eq(null));
     }
 
     @Test
@@ -125,13 +116,22 @@ class FinalizeSignupAccountTest {
         });
         when(passkeyGateway.findByUserId(7L)).thenReturn(List.of());
         when(passkeyGateway.save(any(PasskeyCredential.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(kfeWalletService.listWallets(7L)).thenReturn(List.of());
 
         UserDataBase created = service.execute("session-1");
 
         assertEquals("BASE32SECRET", created.getTOTPSecret());
         assertEquals(List.of("hash-a", "hash-b"), created.getBackupCodes());
         assertNotNull(created.getPasswordHash());
+    }
+
+    @Test
+    void ensureUserFinancialsReadyDoesNotProvisionWithoutSignupState() {
+        UserDataBase user = new UserDataBase();
+        setUserId(user, 7L);
+
+        service.ensureUserFinancialsReady(user, null);
+
+        verify(financialWalletProvisioningPort, never()).ensurePrimaryWalletReady(any(), any());
     }
 
     private SignupState signupState(boolean totpVerified) {

@@ -1,73 +1,44 @@
 package source.common.admin;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import source.common.financial.FinancialOperationsAdminPort;
 import source.common.infra.health.OperationalHealthService;
 import source.common.infra.health.OperationalHealthSnapshot;
 import source.common.release.ReleaseManifestService;
-import source.kfe.model.KfeAuditLogEntity;
-import source.kfe.model.KfeExecutionOutboxEntity;
-import source.kfe.model.KfeRail;
-import source.kfe.model.KfeTransactionEntity;
-import source.kfe.model.KfeTransactionStatus;
-import source.kfe.rail.BitcoinCoreRpcClient;
-import source.kfe.rail.BlockchainClient;
-import source.kfe.rail.LightningClient;
-import source.kfe.repository.KfeAuditLogRepository;
-import source.kfe.repository.KfeExecutionOutboxRepository;
-import source.kfe.repository.KfeTransactionRepository;
 import source.security.vault.VaultRaftHealthService;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
 
 @RestController
 @RequestMapping("/api/admin/operations")
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminOperationsController {
 
-    private static final BigDecimal SATOSHIS_PER_BITCOIN = new BigDecimal("100000000");
-
     private final OperationalHealthService operationalHealthService;
-    private final ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClient;
-    private final ObjectProvider<LightningClient> lightningClient;
+    private final ObjectProvider<FinancialOperationsAdminPort> financialOperationsAdminPort;
     private final VaultRaftHealthService vaultRaftHealthService;
     private final ReleaseManifestService releaseManifestService;
     private final MobileDownloadService mobileDownloadService;
-    private final KfeAuditLogRepository auditLogRepository;
-    private final KfeTransactionRepository transactionRepository;
-    private final KfeExecutionOutboxRepository outboxRepository;
 
     public AdminOperationsController(
             OperationalHealthService operationalHealthService,
-            ObjectProvider<BitcoinCoreRpcClient> bitcoinCoreRpcClient,
-            ObjectProvider<LightningClient> lightningClient,
+            ObjectProvider<FinancialOperationsAdminPort> financialOperationsAdminPort,
             VaultRaftHealthService vaultRaftHealthService,
             ReleaseManifestService releaseManifestService,
-            MobileDownloadService mobileDownloadService,
-            KfeAuditLogRepository auditLogRepository,
-            KfeTransactionRepository transactionRepository,
-            KfeExecutionOutboxRepository outboxRepository) {
+            MobileDownloadService mobileDownloadService) {
         this.operationalHealthService = operationalHealthService;
-        this.bitcoinCoreRpcClient = bitcoinCoreRpcClient;
-        this.lightningClient = lightningClient;
+        this.financialOperationsAdminPort = financialOperationsAdminPort;
         this.vaultRaftHealthService = vaultRaftHealthService;
         this.releaseManifestService = releaseManifestService;
         this.mobileDownloadService = mobileDownloadService;
-        this.auditLogRepository = auditLogRepository;
-        this.transactionRepository = transactionRepository;
-        this.outboxRepository = outboxRepository;
     }
 
     @GetMapping("/overview")
@@ -90,84 +61,20 @@ public class AdminOperationsController {
 
     @GetMapping("/blockchain")
     public Map<String, Object> blockchain() {
-        BitcoinCoreRpcClient client = bitcoinCoreRpcClient.getIfAvailable();
-        if (client == null) {
-            return Map.of(
-                    "status", "DOWN",
-                    "primarySource", "BITCOIN_CORE_RPC",
-                    "checkedAt", Instant.now(),
-                    "message", "Bitcoin Core RPC is not configured");
+        FinancialOperationsAdminPort port = financialOperationsAdminPort.getIfAvailable();
+        if (port == null) {
+            return financialAdminUnavailable("BITCOIN_CORE_RPC", "KFE financial operations admin port is not configured");
         }
-
-        try {
-            JsonNode chain = unwrap(client.executeRpc("getblockchaininfo"));
-            JsonNode mempool = unwrap(client.executeRpc("getmempoolinfo"));
-            BlockchainClient.FeeRates feeRates = client.estimateSmartFee(2, 3, 6);
-            Map<String, Object> state = new LinkedHashMap<>();
-            state.put("height", chain.path("blocks").asLong(0));
-            state.put("headers", chain.path("headers").asLong(0));
-            state.put("bestBlockHash", chain.path("bestblockhash").asText(""));
-            state.put("chain", chain.path("chain").asText(""));
-            state.put("initialBlockDownload", chain.path("initialblockdownload").asBoolean(false));
-            state.put("pruned", chain.path("pruned").asBoolean(false));
-
-            Map<String, Object> mempoolState = new LinkedHashMap<>();
-            mempoolState.put("transactions", mempool.path("size").asLong(0));
-            mempoolState.put("bytes", mempool.path("bytes").asLong(0));
-            mempoolState.put("feesSatPerVByte", Map.of(
-                    "fast", feeRates.fastSatPerVByte(),
-                    "halfHour", feeRates.halfHourSatPerVByte(),
-                    "hour", feeRates.hourSatPerVByte()));
-
-            return Map.of(
-                    "status", chain.path("blocks").asLong(0) > 0 ? "UP" : "DEGRADED",
-                    "primarySource", "BITCOIN_CORE_RPC",
-                    "checkedAt", Instant.now(),
-                    "chain", state,
-                    "mempool", mempoolState,
-                    "message", "KFE Bitcoin provider probe completed");
-        } catch (RuntimeException exception) {
-            return Map.of(
-                    "status", "DOWN",
-                    "primarySource", "BITCOIN_CORE_RPC",
-                    "checkedAt", Instant.now(),
-                    "message", "Bitcoin Core RPC probe failed",
-                    "exception", exception.getClass().getSimpleName());
-        }
+        return port.blockchain();
     }
 
     @GetMapping("/lightning")
     public Map<String, Object> lightning() {
-        LightningClient client = lightningClient.getIfAvailable();
-        if (client == null) {
-            return Map.of(
-                    "status", "DOWN",
-                    "primarySource", "LIGHTNING_PROVIDER",
-                    "checkedAt", Instant.now(),
-                    "message", "Lightning provider is not configured");
+        FinancialOperationsAdminPort port = financialOperationsAdminPort.getIfAvailable();
+        if (port == null) {
+            return financialAdminUnavailable("LIGHTNING_PROVIDER", "KFE financial operations admin port is not configured");
         }
-
-        try {
-            Map<String, Object> state = new LinkedHashMap<>();
-            state.put("localBalanceSats", client.getLocalBalance());
-            state.put("remoteBalanceSats", client.getRemoteBalance());
-            state.put("nodeBalanceSats", client.getLightningNodeBalance());
-            state.put("uptime", client.getNodeUptime());
-            state.put("lspLatencyMs", client.getLspLatency());
-            return Map.of(
-                    "status", client.getNodeUptime() > 0 ? "UP" : "DEGRADED",
-                    "primarySource", "LIGHTNING_PROVIDER",
-                    "checkedAt", Instant.now(),
-                    "node", state,
-                    "message", "KFE Lightning provider probe completed");
-        } catch (RuntimeException exception) {
-            return Map.of(
-                    "status", "DOWN",
-                    "primarySource", "LIGHTNING_PROVIDER",
-                    "checkedAt", Instant.now(),
-                    "message", "Lightning provider probe failed",
-                    "exception", exception.getClass().getSimpleName());
-        }
+        return port.lightning();
     }
 
     @GetMapping("/vault-raft")
@@ -187,89 +94,27 @@ public class AdminOperationsController {
 
     @GetMapping("/logs")
     public List<Map<String, Object>> logs(@RequestParam(defaultValue = "50") int limit) {
-        int safeLimit = Math.max(1, Math.min(100, limit));
-        return auditLogRepository.findAllByOrderBySequenceNumberDesc(org.springframework.data.domain.PageRequest.of(0, safeLimit))
-                .stream()
-                .map(this::toSafeLog)
-                .toList();
+        FinancialOperationsAdminPort port = financialOperationsAdminPort.getIfAvailable();
+        if (port == null) {
+            return List.of();
+        }
+        return port.logs(limit);
     }
 
     @GetMapping("/metrics")
     public Map<String, Object> metrics() {
-        List<KfeTransactionEntity> transactions = transactionRepository.findAll();
-        List<KfeExecutionOutboxEntity> outboxItems = outboxRepository.findAll();
-
-        Map<KfeTransactionStatus, Long> byStatus = transactions.stream()
-                .collect(Collectors.groupingBy(KfeTransactionEntity::getStatus, () -> new EnumMap<>(KfeTransactionStatus.class), Collectors.counting()));
-        Map<KfeRail, Long> byRail = transactions.stream()
-                .collect(Collectors.groupingBy(KfeTransactionEntity::getRail, () -> new EnumMap<>(KfeRail.class), Collectors.counting()));
-        BigDecimal totalVolume = transactions.stream()
-                .map(transaction -> satsToBtc(transaction.getGrossAmountSats()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalFees = transactions.stream()
-                .map(transaction -> satsToBtc(transaction.getKeroseneFeeSats() + transaction.getNetworkFeeSats()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("checkedAt", Instant.now());
-        payload.put("totalVolumeBtc", totalVolume);
-        payload.put("totalFeesBtc", totalFees);
-        payload.put("totalTransactions", transactions.size());
-        payload.put("avgTicketBtc", transactions.isEmpty()
-                ? BigDecimal.ZERO
-                : totalVolume.divide(BigDecimal.valueOf(transactions.size()), 8, RoundingMode.HALF_UP));
-        payload.put("confirmedTransactions", byStatus.getOrDefault(KfeTransactionStatus.SETTLED, 0L));
-        payload.put("pendingTransactions", pendingCount(byStatus));
-        payload.put("failedTransactions", byStatus.getOrDefault(KfeTransactionStatus.FAILED, 0L));
-        payload.put("transactionsByStatus", stringifyKeys(byStatus));
-        payload.put("transactionsByRail", stringifyKeys(byRail));
-        payload.put("executionOutboxByStatus", outboxItems.stream()
-                .collect(Collectors.groupingBy(KfeExecutionOutboxEntity::getStatus, Collectors.counting())));
-        payload.put("privacyBoundary",
-                "Aggregate KFE metrics only; no user timeline, destination, txid, invoice payload, or wallet name.");
-        return payload;
-    }
-
-    private Map<String, Object> toSafeLog(KfeAuditLogEntity event) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("sequenceNumber", event.getSequenceNumber());
-        row.put("id", event.getId());
-        row.put("createdAt", event.getCreatedAt());
-        row.put("eventType", event.getEventType());
-        row.put("transactionRef", fingerprint(event.getTransactionId() != null ? event.getTransactionId().toString() : null));
-        row.put("walletRef", fingerprint(event.getWalletId() != null ? event.getWalletId().toString() : null));
-        row.put("payloadHash", event.getPayloadHash());
-        row.put("eventHash", event.getEventHash());
-        return row;
-    }
-
-    private long pendingCount(Map<KfeTransactionStatus, Long> byStatus) {
-        return byStatus.getOrDefault(KfeTransactionStatus.INTENT, 0L)
-                + byStatus.getOrDefault(KfeTransactionStatus.VALIDATING, 0L)
-                + byStatus.getOrDefault(KfeTransactionStatus.QUORUM_SYNC, 0L)
-                + byStatus.getOrDefault(KfeTransactionStatus.LOCKED, 0L)
-                + byStatus.getOrDefault(KfeTransactionStatus.EXECUTING, 0L)
-                + byStatus.getOrDefault(KfeTransactionStatus.REQUIRES_RECONCILIATION, 0L);
-    }
-
-    private BigDecimal satsToBtc(long sats) {
-        return BigDecimal.valueOf(sats).divide(SATOSHIS_PER_BITCOIN, 8, RoundingMode.HALF_UP);
-    }
-
-    private JsonNode unwrap(JsonNode response) {
-        if (response != null && response.has("result")) {
-            return response.get("result");
+        FinancialOperationsAdminPort port = financialOperationsAdminPort.getIfAvailable();
+        if (port == null) {
+            return financialAdminUnavailable("KFE_METRICS", "KFE financial operations admin port is not configured");
         }
-        return response;
+        return port.metrics();
     }
 
-    private Map<String, Long> stringifyKeys(Map<?, Long> source) {
-        Map<String, Long> result = new LinkedHashMap<>();
-        source.forEach((key, value) -> result.put(String.valueOf(key), value));
-        return result;
-    }
-
-    private String fingerprint(String value) {
-        return source.common.infra.logging.LogSanitizer.fingerprint(value);
+    private Map<String, Object> financialAdminUnavailable(String primarySource, String message) {
+        return Map.of(
+                "status", "DOWN",
+                "primarySource", primarySource,
+                "checkedAt", Instant.now(),
+                "message", message);
     }
 }

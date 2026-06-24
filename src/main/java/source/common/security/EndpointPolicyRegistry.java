@@ -87,6 +87,7 @@ public class EndpointPolicyRegistry {
             "/health/live",
             "/health/ready",
             "/api/public/**",
+            "/internal/kfe/**",
             "/system/release",
             "/auth/signup",
             "/auth/signup/totp/verify",

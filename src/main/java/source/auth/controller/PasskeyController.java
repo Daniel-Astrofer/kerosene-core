@@ -13,7 +13,7 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
 import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.util.DevBalanceInjector;
+import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.dto.PasskeyInventoryDTO;

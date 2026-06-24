@@ -3,6 +3,7 @@ package source.auth.application.service.security;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import source.common.security.StringColumnCryptoPort;
 import source.auth.application.service.cripto.encrypter.AES256;
 import source.security.VaultKeyProvider;
 
@@ -38,7 +39,7 @@ import java.util.Base64;
  * </ul>
  */
 @Service
-public class CosignerSecretService {
+public class CosignerSecretService implements StringColumnCryptoPort {
 
     private static final Logger log = LoggerFactory.getLogger(CosignerSecretService.class);
 
@@ -61,6 +62,7 @@ public class CosignerSecretService {
      * @param secretBytes raw secret bytes (never logged)
      * @return Base64-encoded AES-GCM ciphertext (IV + ciphertext), safe for DB
      */
+    @Override
     public String encrypt(byte[] secretBytes) {
         try {
             byte[] cipherText = aes.encrypt(secretBytes, vaultKeyProvider.getMasterKey());
@@ -76,6 +78,7 @@ public class CosignerSecretService {
      * @param encryptedB64 Base64 ciphertext from DB
      * @return decrypted raw bytes — CALLER MUST zero this array after use
      */
+    @Override
     public byte[] decrypt(String encryptedB64) {
         try {
             byte[] cipherBytes = Base64.getDecoder().decode(encryptedB64);
@@ -113,6 +116,7 @@ public class CosignerSecretService {
      * computations (e.g., StringCryptoConverter integrity tags).
      * The caller MUST zero the returned array after use.
      */
+    @Override
     public byte[] getMasterKeyBytes() {
         return vaultKeyProvider.getMasterKey().getEncoded();
     }

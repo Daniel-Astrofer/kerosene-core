@@ -48,6 +48,9 @@ configurations.configureEach {
 }
 
 dependencies {
+    implementation(project(":kerosene-contracts"))
+    implementation(project(":kerosene-shared"))
+    implementation(project(":kfe-service"))
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")

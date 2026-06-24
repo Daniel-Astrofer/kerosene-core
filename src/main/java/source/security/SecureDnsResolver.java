@@ -37,16 +37,16 @@ public class SecureDnsResolver {
      * so they map to 127.0.0.1 as a sentinel to skip local resolution check.
      */
     private static final Map<String, String> PINNED = Map.ofEntries(
-            Map.entry("kerosene_db_is", "172.20.1.10"),
-            Map.entry("kerosene_db_ch", "172.20.2.10"),
-            Map.entry("kerosene_db_sg", "172.20.3.10"),
-            Map.entry("kerosene-tor-is", "172.20.1.50"),
-            Map.entry("kerosene-tor-ch", "172.20.2.50"),
-            Map.entry("kerosene-tor-sg", "172.20.3.50"),
-            Map.entry("kerosene_redis_is", "172.20.1.30"),
-            Map.entry("kerosene_redis_ch", "172.20.2.30"),
-            Map.entry("kerosene_redis_sg", "172.20.3.30"),
-            Map.entry("mpc-sidecar-is", "172.20.1.70"),
+            Map.entry("db-wvo", "172.20.1.10"),
+            Map.entry("db-iw5", "172.20.2.10"),
+            Map.entry("db-ltv", "172.20.3.10"),
+            Map.entry("tor-wvo", "172.20.1.50"),
+            Map.entry("tor-iw5", "172.20.2.50"),
+            Map.entry("tor-ltv", "172.20.3.50"),
+            Map.entry("redis-wvo", "172.20.1.30"),
+            Map.entry("redis-iw5", "172.20.2.30"),
+            Map.entry("redis-ltv", "172.20.3.30"),
+            Map.entry("mpc-sidecar-wvo", "172.20.1.70"),
             // .onion addresses bypass local DNS — they resolve inside Tor circuit.
             // We pin them to 127.0.0.1 as a sentinel to skip local resolution check.
             Map.entry("kvaultv3xsc3mol7ughlcsazgt2najfhgbjmwq74gmy4jclnkcjrwc4.onion", "127.0.0.1"));

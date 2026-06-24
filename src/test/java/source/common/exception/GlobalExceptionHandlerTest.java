@@ -9,7 +9,7 @@ import source.auth.AuthExceptions;
 import source.common.dto.ApiResponse;
 import source.common.infra.logging.StructuredLogField;
 import source.common.observability.FinancialOperationsMetrics;
-import source.kfe.rail.KfeRailException;
+import source.common.exception.FinancialProviderUnavailableException;
 
 import java.util.Map;
 
@@ -88,8 +88,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnUnavailableWhenKfeProviderIsUnavailable() {
-        KfeRailException.ProviderUnavailable ex =
-                new KfeRailException.ProviderUnavailable("KFE rail provider is offline.");
+        FinancialProviderUnavailableException ex =
+                new FinancialProviderUnavailableException("KFE rail provider is offline.");
 
         ResponseEntity<ApiResponse<Object>> response = handler.handleKfeProviderUnavailable(ex);
 

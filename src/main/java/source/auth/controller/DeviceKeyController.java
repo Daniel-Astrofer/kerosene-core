@@ -24,7 +24,7 @@ import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
-import source.kfe.rail.KfeRailException;
+import source.common.exception.FinancialProviderUnavailableException;
 
 import java.util.List;
 
@@ -97,7 +97,7 @@ public class DeviceKeyController {
         } catch (DeviceKeyProtocolException exception) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error(DEVICE_KEY_ASSERTION_ERROR, ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED));
-        } catch (KfeRailException.ProviderUnavailable
+        } catch (FinancialProviderUnavailableException
                  | FinalizeSignupAccount.VaultNotReadyException exception) {
             throw exception;
         } catch (RuntimeException exception) {

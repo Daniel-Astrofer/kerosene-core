@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import source.common.financial.FinancialWalletProvisioningPort;
 import source.auth.application.orchestrator.signup.port.PasskeyGateway;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.orchestrator.signup.port.UserNotifier;
@@ -22,9 +23,6 @@ import source.notification.model.UserNotificationPayload;
 import source.security.VaultKeyProvider;
 import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
-import source.kfe.dto.KfeCreateWalletRequest;
-import source.kfe.model.KfeWalletKind;
-import source.kfe.service.KfeWalletService;
 
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -47,7 +45,7 @@ public class FinalizeSignupAccount {
     private final UserNotifier userNotifier;
     private final CosignerSecretService cosignerSecretService;
     private final VaultKeyProvider vaultKeyProvider;
-    private final KfeWalletService kfeWalletService;
+    private final FinancialWalletProvisioningPort financialWalletProvisioningPort;
 
     public FinalizeSignupAccount(
             SignupStateStore stateStore,
@@ -56,14 +54,14 @@ public class FinalizeSignupAccount {
             UserNotifier userNotifier,
             CosignerSecretService cosignerSecretService,
             VaultKeyProvider vaultKeyProvider,
-            KfeWalletService kfeWalletService) {
+            FinancialWalletProvisioningPort financialWalletProvisioningPort) {
         this.stateStore = stateStore;
         this.userService = userService;
         this.passkeyGateway = passkeyGateway;
         this.userNotifier = userNotifier;
         this.cosignerSecretService = cosignerSecretService;
         this.vaultKeyProvider = vaultKeyProvider;
-        this.kfeWalletService = kfeWalletService;
+        this.financialWalletProvisioningPort = financialWalletProvisioningPort;
     }
 
     @Transactional
@@ -189,33 +187,10 @@ public class FinalizeSignupAccount {
     }
 
     public void ensureUserFinancialsReady(UserDataBase user, SignupState optionalState) {
-        if (!kfeWalletService.listWallets(user.getId()).isEmpty() || optionalState == null) {
+        if (optionalState == null) {
             return;
         }
-        String initialAddress = blankToNull(optionalState.getBtcDepositAddress());
-        kfeWalletService.createWallet(
-                user.getId(),
-                new KfeCreateWalletRequest(
-                        KfeWalletKind.INTERNAL,
-                        null,
-                        "carteira global",
-                        null,
-                        null,
-                        null,
-                        null,
-                        initialAddress,
-                        null,
-                        null,
-                        initialAddress != null ? "SIGNUP_STATE_DEPOSIT_ADDRESS" : null,
-                        false));
-        log.info("[Onboarding] Primary KFE wallet created for userId={}", user.getId());
-    }
-
-    private String blankToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+        financialWalletProvisioningPort.ensurePrimaryWalletReady(user.getId(), optionalState.getBtcDepositAddress());
     }
 
     private void schedulePostCommitCleanup(String sessionId, Long userId) {

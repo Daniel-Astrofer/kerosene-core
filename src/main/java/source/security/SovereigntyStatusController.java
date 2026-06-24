@@ -4,8 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import source.kfe.dto.KfeAuditRootResponse;
-import source.kfe.service.KfeAuditAdminService;
+import source.common.financial.FinancialAuditIntegrityPort;
 import source.sovereign.quorum.QuorumSyncService;
 
 import java.time.Duration;
@@ -30,7 +29,7 @@ public class SovereigntyStatusController {
 
     private final RemoteAttestationService attestationService;
     private final QuorumSyncService quorumSyncService;
-    private final KfeAuditAdminService kfeAuditAdminService;
+    private final FinancialAuditIntegrityPort financialAuditIntegrityPort;
     private final TelemetryService telemetryService;
     private static final Instant SERVER_START_TIME = Instant.now();
 
@@ -40,11 +39,11 @@ public class SovereigntyStatusController {
     public SovereigntyStatusController(
             RemoteAttestationService attestationService,
             QuorumSyncService quorumSyncService,
-            KfeAuditAdminService kfeAuditAdminService,
+            FinancialAuditIntegrityPort financialAuditIntegrityPort,
             TelemetryService telemetryService) {
         this.attestationService = attestationService;
         this.quorumSyncService = quorumSyncService;
-        this.kfeAuditAdminService = kfeAuditAdminService;
+        this.financialAuditIntegrityPort = financialAuditIntegrityPort;
         this.telemetryService = telemetryService;
     }
 
@@ -94,7 +93,7 @@ public class SovereigntyStatusController {
         // 3. Merkle Audit
         Map<String, Object> merkle = new LinkedHashMap<>();
         try {
-            KfeAuditRootResponse root = kfeAuditAdminService.root();
+            FinancialAuditIntegrityPort.AuditRoot root = financialAuditIntegrityPort.root();
             if (root.eventCount() > 0) {
                 merkle.put("status", "VALID");
                 merkle.put("lastRootHash", abbreviate(root.merkleRoot()));

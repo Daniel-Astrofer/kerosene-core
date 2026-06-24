@@ -37,7 +37,6 @@ class StartupDiagnosticsServiceTest {
     @Test
     void reportsKfeOnlyViolations() {
         MockEnvironment environment = baseEnvironment()
-                .withProperty("kfe.legacy-financial.enabled", "true")
                 .withProperty("transactions.local-derived-address-fallback-enabled", "true");
 
         StartupDiagnosticReport report = new StartupDiagnosticsService(environment).diagnose();
@@ -45,7 +44,6 @@ class StartupDiagnosticsServiceTest {
         assertThat(report.status()).isEqualTo(StartupDiagnosticStatus.FAIL);
         assertThat(report.toLogSummary())
                 .contains("kfe-only:FAIL")
-                .contains("kfe.legacy-financial.enabled must not be true")
                 .contains("transactions.local-derived-address-fallback-enabled must be false");
     }
 

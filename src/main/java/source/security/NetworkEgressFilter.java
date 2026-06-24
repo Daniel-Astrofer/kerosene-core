@@ -47,18 +47,18 @@ public class NetworkEgressFilter {
      * Update deploy/host/init-iptables.sh when adding new infrastructure endpoints.
      */
     public static final Set<String> DOCUMENTED_ALLOWED_HOSTS = Set.of(
-            "kerosene_db_is",
-            "kerosene_db_ch",
-            "kerosene_db_sg",
-            "kerosene_redis_is",
-            "kerosene_redis_ch",
-            "kerosene_redis_sg",
-            "mpc-sidecar-is",
-            "mpc-sidecar-ch",
-            "mpc-sidecar-sg",
-            "kerosene-tor-is", // Tor SOCKS5 proxy (port 9050)
-            "kerosene-tor-ch",
-            "kerosene-tor-sg");
+            "db-wvo",
+            "db-iw5",
+            "db-ltv",
+            "redis-wvo",
+            "redis-iw5",
+            "redis-ltv",
+            "mpc-sidecar-wvo",
+            "mpc-sidecar-iw5",
+            "mpc-sidecar-ltv",
+            "tor-wvo", // Tor SOCKS5 proxy (port 9050)
+            "tor-iw5",
+            "tor-ltv");
 
     /**
      * Called at startup for informational logging only.

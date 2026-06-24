@@ -15,6 +15,9 @@ RUN chmod +x gradlew
 # Cache dependencies before copying sources (layer-cache optimization)
 COPY build.gradle.kts settings.gradle.kts ./
 COPY gradle.properties ./
+COPY kerosene-contracts kerosene-contracts/
+COPY kerosene-shared kerosene-shared/
+COPY kfe-service kfe-service/
 ARG GRADLE_MAX_WORKERS=2
 RUN ./gradlew dependencies --no-daemon --max-workers=${GRADLE_MAX_WORKERS} --quiet || true
 

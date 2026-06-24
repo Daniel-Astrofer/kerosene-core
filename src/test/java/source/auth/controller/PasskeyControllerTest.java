@@ -17,7 +17,7 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.util.DevBalanceInjector;
+import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
@@ -31,7 +31,7 @@ import source.auth.dto.passkey.PasskeyVerifyRequest;
 import source.auth.model.entity.UserDataBase;
 import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
-import source.kfe.rail.KfeRailException;
+import source.common.exception.FinancialProviderUnavailableException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -450,10 +450,10 @@ class PasskeyControllerTest {
         when(passkeyService.extractOriginHostFromClientData("android-client-data"))
                 .thenReturn("android:apk-key-hash:kerosene");
         when(finalizeSignupAccount.execute("session-1"))
-                .thenThrow(new KfeRailException.ProviderUnavailable("custody unavailable"));
+                .thenThrow(new FinancialProviderUnavailableException("custody unavailable"));
 
         assertThrows(
-                KfeRailException.ProviderUnavailable.class,
+                FinancialProviderUnavailableException.class,
                 () -> controller.finishOnboardingRegistration(
                     "session-1",
                     registrationRequest("android-client-data")));

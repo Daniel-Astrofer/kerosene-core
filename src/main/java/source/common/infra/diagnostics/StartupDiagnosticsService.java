@@ -169,9 +169,6 @@ public class StartupDiagnosticsService {
 
     private StartupDiagnosticCheck checkKfeOnlyAssumptions() {
         List<String> violations = new ArrayList<>();
-        if (environment.getProperty("kfe.legacy-financial.enabled", Boolean.class, false)) {
-            violations.add("kfe.legacy-financial.enabled must not be true");
-        }
         if (!isBlank("transactions.local-derived-address-fallback-enabled")
                 && environment.getProperty("transactions.local-derived-address-fallback-enabled", Boolean.class, false)) {
             violations.add("transactions.local-derived-address-fallback-enabled must be false");

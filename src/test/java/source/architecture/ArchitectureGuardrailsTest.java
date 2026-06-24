@@ -8,11 +8,21 @@ import com.tngtech.archunit.core.domain.JavaFieldAccess;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Profile;
+import source.Application;
+import source.config.KfeProfileCoreControllerExclusionFilter;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArchitectureGuardrailsTest {
@@ -59,6 +69,96 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void nonKfeProductionCodeDoesNotDependOnKfeImplementationPackages() {
+        noClasses()
+                .that().resideOutsideOfPackage("source.kfe..")
+                .should().dependOnClassesThat().resideInAPackage("source.kfe..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+
+    @Test
+    void kfeProductionCodeDoesNotDependOnAuthImplementationPackages() {
+        noClasses()
+                .that().resideInAPackage("source.kfe..")
+                .should().dependOnClassesThat().resideInAPackage("source.auth..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+
+    @Test
+    void kfeProductionCodeDoesNotDependOnNotificationImplementationPackages() {
+        noClasses()
+                .that().resideInAPackage("source.kfe..")
+                .should().dependOnClassesThat().resideInAPackage("source.notification..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+
+    @Test
+    void kfeProductionCodeDoesNotDependOnSecurityImplementationPackages() {
+        noClasses()
+                .that().resideInAPackage("source.kfe..")
+                .should().dependOnClassesThat().resideInAPackage("source.security..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+
+    @Test
+    void kfeProductionCodeDoesNotDependOnSovereignImplementationPackages() {
+        noClasses()
+                .that().resideInAPackage("source.kfe..")
+                .should().dependOnClassesThat().resideInAPackage("source.sovereign..")
+                .check(PRODUCTION_CLASSES);
+    }
+
+
+    @Test
+    void coreApplicationExcludesKfeRuntimeFromDefaultComponentScan() {
+        ComponentScan componentScan = Application.class.getAnnotation(ComponentScan.class);
+        assertNotNull(componentScan, "Application must declare an explicit component scan boundary");
+
+        boolean excludesKfePackage = Arrays.stream(componentScan.excludeFilters())
+                .anyMatch(filter -> filter.type() == FilterType.REGEX
+                        && Arrays.asList(filter.pattern()).contains("source\\.kfe\\..*"));
+
+        assertTrue(excludesKfePackage, "Core runtime must exclude source.kfe from the default component scan");
+    }
+
+    @Test
+    void kfeProfileApplicationExcludesCoreControllersFromRuntimeComponentScan() {
+        ComponentScan componentScan = Application.class.getAnnotation(ComponentScan.class);
+        assertNotNull(componentScan, "Application must declare an explicit component scan boundary");
+
+        boolean excludesCoreControllersForKfe = Arrays.stream(componentScan.excludeFilters())
+                .anyMatch(filter -> filter.type() == FilterType.CUSTOM
+                        && Arrays.asList(filter.classes()).contains(KfeProfileCoreControllerExclusionFilter.class));
+
+        assertTrue(
+                excludesCoreControllersForKfe,
+                "KFE runtime must not publish Core controllers from the shared executable");
+    }
+
+    @Test
+    void kfeRuntimeIsImportedOnlyThroughKfeProfileAutoConfiguration() throws Exception {
+        String imports = readAutoConfigurationImports();
+        assertTrue(
+                imports.contains("source.kfe.config.KfeServiceRuntimeConfiguration"),
+                "kfe-service must publish a Spring Boot auto-configuration import");
+
+        Class<?> kfeRuntimeConfig = Class.forName("source.kfe.config.KfeServiceRuntimeConfiguration");
+        Profile profile = kfeRuntimeConfig.getAnnotation(Profile.class);
+        assertNotNull(profile, "KFE runtime configuration must be profile gated");
+        assertTrue(Arrays.asList(profile.value()).contains("kfe"), "KFE runtime configuration must require profile kfe");
+
+        ComponentScan componentScan = kfeRuntimeConfig.getAnnotation(ComponentScan.class);
+        assertNotNull(componentScan, "KFE runtime configuration must explicitly import source.kfe components");
+        assertTrue(
+                Arrays.asList(componentScan.basePackages()).contains("source.kfe"),
+                "KFE runtime configuration must scan source.kfe only when profile kfe is active");
+    }
+
+    @Test
     void applicationAndDomainLayersDoNotDependOnControllers() {
         noClasses()
                 .that().resideInAnyPackage("source..application..", "source..domain..")
@@ -76,6 +176,15 @@ class ArchitectureGuardrailsTest {
                         "source..infra..",
                         "source..repository..")
                 .check(PRODUCTION_CLASSES);
+    }
+
+
+    private String readAutoConfigurationImports() throws IOException {
+        try (InputStream inputStream = Thread.currentThread().getContextClassLoader()
+                .getResourceAsStream("META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports")) {
+            assertNotNull(inputStream, "AutoConfiguration.imports resource must be present on the test classpath");
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private Predicate<JavaClass> hasMisspelledPackageOrClassName() {

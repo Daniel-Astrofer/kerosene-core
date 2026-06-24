@@ -14,8 +14,7 @@ import source.config.production.ProductionProfileDetector;
 import source.config.production.ProductionSafetyCheckChain;
 import source.security.MasterKeyMemoryStore;
 import source.security.vault.VaultRaftHealthService;
-import source.kfe.rail.CustodyGateway;
-import source.kfe.rail.ExternalRailProviderRegistry;
+import source.common.financial.FinancialRailHealthPort;
 
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
@@ -64,8 +63,7 @@ public class OperationalHealthService {
     private final MasterKeyMemoryStore masterKeyMemoryStore;
     private final ObjectProvider<TorHealthIndicator> torHealthIndicator;
     private final ObjectProvider<VaultRaftHealthService> vaultRaftHealthService;
-    private final ObjectProvider<CustodyGateway> custodyGateway;
-    private final ObjectProvider<ExternalRailProviderRegistry> externalRailProviderRegistry;
+    private final ObjectProvider<FinancialRailHealthPort> financialRailHealthPort;
     private final ProductionProfileDetector productionProfileDetector;
     private final ProductionSafetyCheckChain productionSafetyCheckChain;
     private final HealthMetricRecorder metricRecorder;
@@ -79,8 +77,7 @@ public class OperationalHealthService {
             MasterKeyMemoryStore masterKeyMemoryStore,
             ObjectProvider<TorHealthIndicator> torHealthIndicator,
             ObjectProvider<VaultRaftHealthService> vaultRaftHealthService,
-            ObjectProvider<CustodyGateway> custodyGateway,
-            ObjectProvider<ExternalRailProviderRegistry> externalRailProviderRegistry,
+            ObjectProvider<FinancialRailHealthPort> financialRailHealthPort,
             ProductionProfileDetector productionProfileDetector,
             ProductionSafetyCheckChain productionSafetyCheckChain,
             HealthMetricRecorder metricRecorder,
@@ -92,8 +89,7 @@ public class OperationalHealthService {
         this.masterKeyMemoryStore = masterKeyMemoryStore;
         this.torHealthIndicator = torHealthIndicator;
         this.vaultRaftHealthService = vaultRaftHealthService;
-        this.custodyGateway = custodyGateway;
-        this.externalRailProviderRegistry = externalRailProviderRegistry;
+        this.financialRailHealthPort = financialRailHealthPort;
         this.productionProfileDetector = productionProfileDetector;
         this.productionSafetyCheckChain = productionSafetyCheckChain;
         this.metricRecorder = metricRecorder;
@@ -599,8 +595,18 @@ public class OperationalHealthService {
     private DependencyHealth checkCustodyProvider(boolean critical) {
         long start = System.nanoTime();
         try {
-            CustodyGateway gateway = custodyGateway.getIfAvailable();
-            if (gateway == null) {
+            FinancialRailHealthPort healthPort = financialRailHealthPort.getIfAvailable();
+            if (healthPort == null) {
+                return record(new DependencyHealth(
+                        "custodyProvider",
+                        UNKNOWN,
+                        critical,
+                        elapsedMs(start),
+                        "No financial rail health port is available",
+                        Map.of()));
+            }
+            FinancialRailHealthPort.ProviderStatus status = healthPort.custodyProvider();
+            if (status == null) {
                 return record(new DependencyHealth(
                         "custodyProvider",
                         UNKNOWN,
@@ -609,15 +615,15 @@ public class OperationalHealthService {
                         "No custody provider bean is available",
                         Map.of()));
             }
-            boolean live = gateway.isLive();
             Map<String, Object> details = new LinkedHashMap<>();
-            details.put("provider", gateway.providerName());
+            details.put("provider", status.providerName());
+            details.put("implementation", status.implementation());
             return record(new DependencyHealth(
                     "custodyProvider",
-                    live ? UP : UNKNOWN,
+                    status.live() ? UP : UNKNOWN,
                     critical,
                     elapsedMs(start),
-                    live ? "Custody provider is configured as live" : "Custody provider is not configured as live",
+                    status.live() ? "Custody provider is configured as live" : "Custody provider is not configured as live",
                     details));
         } catch (Exception exception) {
             return record(down("custodyProvider", critical, start, "Custody provider probe failed", exception));
@@ -627,8 +633,18 @@ public class OperationalHealthService {
     private DependencyHealth checkExternalRailProviders(boolean critical) {
         long start = System.nanoTime();
         try {
-            ExternalRailProviderRegistry registry = externalRailProviderRegistry.getIfAvailable();
-            if (registry == null) {
+            FinancialRailHealthPort healthPort = financialRailHealthPort.getIfAvailable();
+            if (healthPort == null) {
+                return record(new DependencyHealth(
+                        "externalRailProviders",
+                        UNKNOWN,
+                        critical,
+                        elapsedMs(start),
+                        "Financial rail health port is not available",
+                        Map.of()));
+            }
+            Map<String, FinancialRailHealthPort.ProviderStatus> providers = healthPort.activeRailProviders();
+            if (providers.isEmpty()) {
                 return record(new DependencyHealth(
                         "externalRailProviders",
                         UNKNOWN,
@@ -637,11 +653,10 @@ public class OperationalHealthService {
                         "External rail provider registry is not available",
                         Map.of()));
             }
-            Map<String, ExternalRailProviderRegistry.RailProviderStatus> providers = registry.activeProviders();
             Map<String, Object> details = new LinkedHashMap<>();
             boolean allLive = true;
-            for (Map.Entry<String, ExternalRailProviderRegistry.RailProviderStatus> entry : providers.entrySet()) {
-                ExternalRailProviderRegistry.RailProviderStatus status = entry.getValue();
+            for (Map.Entry<String, FinancialRailHealthPort.ProviderStatus> entry : providers.entrySet()) {
+                FinancialRailHealthPort.ProviderStatus status = entry.getValue();
                 Map<String, Object> providerDetails = new LinkedHashMap<>();
                 providerDetails.put("provider", status.providerName());
                 providerDetails.put("implementation", status.implementation());

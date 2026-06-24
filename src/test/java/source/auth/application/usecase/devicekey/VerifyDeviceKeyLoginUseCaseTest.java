@@ -9,7 +9,7 @@ import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.application.service.util.DevBalanceInjector;
+import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import source.auth.model.entity.DeviceKeyCredential;
@@ -179,7 +179,7 @@ class VerifyDeviceKeyLoginUseCaseTest {
         assertThat(result.status()).isEqualTo(VerifyDeviceKeyLoginUseCase.Status.AUTHENTICATED);
         assertThat(result.data()).isEqualTo("jwt-token");
         verify(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
-        verify(balanceInjector).injectTestBalance(user);
+        verify(balanceInjector).injectTestBalance(user.getId());
         verify(jwtServicer).generateToken(42L);
     }
 

@@ -15,8 +15,8 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.common.dto.ApiResponse;
 import source.common.infra.logging.StructuredLogField;
 import source.common.observability.FinancialOperationsMetrics;
-import source.kfe.exception.KfeSelfPaymentException;
-import source.kfe.rail.KfeRailException;
+import source.common.exception.FinancialSelfPaymentException;
+import source.common.exception.FinancialProviderUnavailableException;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -165,8 +165,8 @@ public class GlobalExceptionHandler {
                 Map.of("guidance", "O cofre master não pôde ser ativado para esta conta. Tente novamente em instantes."));
     }
 
-    @ExceptionHandler(KfeRailException.ProviderUnavailable.class)
-    public ResponseEntity<ApiResponse<Object>> handleKfeProviderUnavailable(KfeRailException.ProviderUnavailable ex) {
+    @ExceptionHandler(FinancialProviderUnavailableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleKfeProviderUnavailable(FinancialProviderUnavailableException ex) {
         incrementFinancialMetric("provider_unavailable", "unavailable", "kfe_rail");
         return buildErrorResponse(
                 HttpStatus.SERVICE_UNAVAILABLE,
@@ -176,14 +176,20 @@ public class GlobalExceptionHandler {
     }
 
 
-    @ExceptionHandler(KfeSelfPaymentException.class)
-    public ResponseEntity<ApiResponse<Object>> handleKfeSelfPayment(KfeSelfPaymentException ex) {
+    @ExceptionHandler(FinancialSelfPaymentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleKfeSelfPayment(FinancialSelfPaymentException ex) {
         incrementFinancialMetric("validation_rejected", "rejected", "self_payment");
         return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 ex.getMessage(),
                 ErrorCodes.LEDGER_PAYMENT_SELF_PAY,
                 Map.of("guidance", "Use um link ou destino de outra conta para concluir esta transacao."));
+    }
+
+
+    @ExceptionHandler(StructuredPlatformException.class)
+    public ResponseEntity<ApiResponse<Object>> handleStructuredPlatformException(StructuredPlatformException ex) {
+        return buildErrorResponse(ex.getStatus(), ex.getMessage(), ex.getErrorCode(), ex.getData());
     }
 
     @ExceptionHandler(KeroseneException.class)

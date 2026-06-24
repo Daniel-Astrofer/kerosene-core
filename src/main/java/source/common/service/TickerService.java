@@ -14,6 +14,7 @@ import org.springframework.web.client.RestTemplate;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.model.entity.UserDataBase;
 import source.notification.service.NotificationService;
+import source.common.financial.FinancialTickerPort;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -26,7 +27,7 @@ import java.util.concurrent.TimeUnit;
  * Stores values in Redis for high-performance access by controllers.
  */
 @Service
-public class TickerService {
+public class TickerService implements FinancialTickerPort {
 
     private static final Logger log = LoggerFactory.getLogger(TickerService.class);
     private static final String COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,brl,eur";
@@ -155,6 +156,7 @@ public class TickerService {
         return null;
     }
 
+    @Override
     public BigDecimal getPrice(String currency) {
         try {
             ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();

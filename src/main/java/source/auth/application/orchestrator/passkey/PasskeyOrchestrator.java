@@ -15,7 +15,7 @@ import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.util.DevBalanceInjector;
+import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.PasskeyActionRequiredDTO;
 import source.auth.dto.SignupState;
@@ -27,7 +27,7 @@ import source.common.dto.ApiResponse;
 import source.common.exception.ErrorCodes;
 import source.common.infra.logging.LogDomain;
 import source.common.infra.logging.LogSanitizer;
-import source.kfe.rail.KfeRailException;
+import source.common.exception.FinancialProviderUnavailableException;
 
 import java.time.Duration;
 import java.util.Locale;
@@ -384,7 +384,7 @@ public class PasskeyOrchestrator {
                             .body(ApiResponse.success("Passkey verified. TOTP required.", preAuthToken));
                 }
 
-                balanceInjector.injectTestBalance(user);
+                balanceInjector.injectTestBalance(user.getId());
 
                 String token = jwtServicer.generateToken(user.getId());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));
@@ -489,7 +489,7 @@ public class PasskeyOrchestrator {
         UserDataBase user;
         try {
             user = finalizeSignupAccount.execute(sessionId);
-        } catch (KfeRailException.ProviderUnavailable
+        } catch (FinancialProviderUnavailableException
                  | FinalizeSignupAccount.VaultNotReadyException exception) {
             log.warn("Passkey onboarding finalization is temporarily unavailable for sessionRef={} userRef={}: {}",
                     LogSanitizer.fingerprint(sessionId),

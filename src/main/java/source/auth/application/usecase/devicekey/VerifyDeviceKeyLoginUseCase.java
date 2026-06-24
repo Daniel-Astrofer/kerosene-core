@@ -8,7 +8,7 @@ import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.application.service.util.DevBalanceInjector;
+import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import source.auth.model.entity.DeviceKeyCredential;
@@ -98,7 +98,7 @@ public class VerifyDeviceKeyLoginUseCase {
             return Result.totpRequired(preAuthToken);
         }
 
-        balanceInjector.injectTestBalance(user);
+        balanceInjector.injectTestBalance(user.getId());
 
         String token = jwtServicer.generateToken(user.getId());
         return Result.authenticated(token);
