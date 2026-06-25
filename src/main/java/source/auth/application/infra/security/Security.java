@@ -87,7 +87,7 @@ public class Security {
 
         @Bean
         public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
-                        @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}") String allowedOrigins) {
+                        @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:8081,http://localhost:8082,http://localhost:30080,http://localhost:30082,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8080,http://127.0.0.1:8081,http://127.0.0.1:8082,http://127.0.0.1:30080,http://127.0.0.1:30082}") String allowedOrigins) {
                 org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
                 java.util.List<String> origins = java.util.Arrays.stream(allowedOrigins.split(","))
                                 .map(String::trim)

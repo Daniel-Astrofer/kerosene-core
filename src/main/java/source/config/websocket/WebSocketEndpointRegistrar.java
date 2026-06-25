@@ -18,7 +18,7 @@ public class WebSocketEndpointRegistrar {
 
     public WebSocketEndpointRegistrar(
             StompProtocolHandshakeHandler handshakeHandler,
-            @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}") String allowedOriginsConfig) {
+            @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:3001,http://localhost:8080,http://localhost:8081,http://localhost:8082,http://localhost:30080,http://localhost:30082,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8080,http://127.0.0.1:8081,http://127.0.0.1:8082,http://127.0.0.1:30080,http://127.0.0.1:30082}") String allowedOriginsConfig) {
         this.handshakeHandler = handshakeHandler;
         this.allowedOrigins = Arrays.stream(allowedOriginsConfig.split(","))
                 .map(String::trim)
