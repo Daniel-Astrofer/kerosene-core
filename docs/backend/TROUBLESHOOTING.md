@@ -7,7 +7,7 @@ Scope: fast diagnostics, logs, audit events, KFE-only checks, focused validation
 
 Do not start every container just to see what happens.
 
-For this orchestration, `scripts/start-local.sh` is intentionally disabled until the user explicitly re-enables it. Prefer fast read-only checks, focused logs, startup diagnostics, and targeted tests before touching long-running local services.
+For this orchestration, `infra/scripts/local/control.sh start` is intentionally disabled until the user explicitly re-enables it. Prefer fast read-only checks, focused logs, startup diagnostics, and targeted tests before touching long-running local services.
 
 ## Fast Decision Flow
 
@@ -77,7 +77,7 @@ Look for structured fields and markers from the startup/runtime logging contract
 | LND or rail provider failure | KFE rail | provider config and retry/outbox state |
 | legacy financial route/package hit | KFE-only regression | `scripts/verify-kfe-only.sh` |
 
-4. Restart only the failing dependency when the evidence points to it. Do not run `scripts/start-local.sh` in this orchestration.
+4. Restart only the failing dependency when the evidence points to it. Do not run `infra/scripts/local/control.sh start` in this orchestration.
 
 ## Trace And Correlation IDs
 

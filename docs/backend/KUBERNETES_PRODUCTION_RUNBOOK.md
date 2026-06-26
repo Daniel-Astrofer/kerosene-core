@@ -29,7 +29,7 @@ Este runbook define como transformar a infraestrutura atual do Kerosene em uma i
 ## Estrutura recomendada no repositório
 
 ```text
-backend/kerosene-infrastructure/k8s/
+infra/kubernetes/
 ├── base/
 │   ├── namespace.yaml
 │   ├── policies/
@@ -544,7 +544,7 @@ Usar rolling update com `maxUnavailable: 0` para API.
 Passos:
 
 ```bash
-kubectl -n kerosene-production apply -k backend/kerosene-infrastructure/k8s/overlays/production
+kubectl -n kerosene-production apply -k infra/kubernetes/overlays/production
 kubectl -n kerosene-production rollout status deployment/kerosene-app
 kubectl -n kerosene-production get pods -o wide
 ```

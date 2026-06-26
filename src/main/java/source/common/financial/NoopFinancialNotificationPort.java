@@ -1,12 +1,7 @@
 package source.common.financial;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
-
 import java.util.UUID;
 
-@Component
-@ConditionalOnMissingBean(FinancialNotificationPort.class)
 public class NoopFinancialNotificationPort implements FinancialNotificationPort {
 
     @Override

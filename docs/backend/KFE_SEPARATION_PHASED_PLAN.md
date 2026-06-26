@@ -145,8 +145,8 @@ Após os cortes preparatórios, não há imports diretos de `source.auth.*`, `so
 
 Ações:
 
-- Criar imagem/container `kfe-service` separado de `kerosene-app-*`. **Iniciado com `backend/kerosene-infrastructure/images/kfe/Dockerfile`.**
-- Adicionar `kfe-service-is`, `kfe-service-ch`, `kfe-service-sg` ao compose/k8s. **Iniciado com manifests Kubernetes `kfe-service` e overlay Compose local `docker-compose.kfe.local.yml` usando shards WVO/IW5/LTV.**
+- Criar imagem/container `kfe-service` separado de `kerosene-app-*`. **Caminho canônico: `infra/docker/images/kfe-service/Dockerfile`.**
+- Adicionar `kfe-service-is`, `kfe-service-ch`, `kfe-service-sg` ao compose/k8s. **Iniciado com manifests Kubernetes `kfe-service` e overlay Compose local `infra/docker/compose/local.kfe.compose.yaml` usando shards WVO/IW5/LTV.**
 - Definir variáveis próprias: banco, Redis/outbox, Bitcoin Core, LND, MPC sidecar, Vault e políticas de release. **Iniciado via `kfe-service-config` e variáveis `KEROSENE_RUNTIME_ROLE=kfe-service`/`SPRING_PROFILES_ACTIVE=prod,kfe` ou `docker,kfe`.**
 - Colocar Core → KFE atrás de cliente HTTP interno ou mensageria confiável. **Iniciado: `FinancialWalletProvisioningPort`, `FinancialRailHealthPort` e `FinancialAuditIntegrityPort` usam clientes remotos no Core e chamam endpoints `/internal/kfe/**`.**
 - Garantir autenticação serviço-a-serviço: mTLS, token assinado ou assinatura HMAC rotacionável. **Iniciado com credencial compartilhada em header interno para o primeiro endpoint; ainda deve evoluir para mTLS/HMAC rotacionável.**

@@ -1,0 +1,53 @@
+services:
+  bitcoin-rpc-stub:
+    image: python:3.12-slim
+    working_dir: /srv
+    command: python bitcoin_rpc_stub.py
+    volumes:
+      - ./stubs:/srv:ro
+    ports:
+      - "18443:18443"
+
+  lnd-rest-stub:
+    image: python:3.12-slim
+    working_dir: /srv
+    command: python lnd_rest_stub.py
+    volumes:
+      - ./stubs:/srv:ro
+    ports:
+      - "18080:8080"
+
+  bitcoin-core-flask:
+    image: python:3.12-slim
+    working_dir: /repo/backend/adapters/bitcoin_core_flask
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+             KEROSENE_API_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+             BITCOIN_RPC_URL=http://bitcoin-rpc-stub:18443
+             BITCOIN_RPC_USER=user
+             BITCOIN_RPC_PASSWORD=password
+             BITCOIN_BACKEND_SQLITE=/tmp/bitcoin.sqlite3
+             HOST=0.0.0.0 PORT=8090 python app.py"
+    volumes:
+      - ../../..:/repo:ro
+    depends_on:
+      - bitcoin-rpc-stub
+    ports:
+      - "18090:8090"
+
+  lightning-flask:
+    image: python:3.12-slim
+    working_dir: /repo/backend/adapters/lightning_flask
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+             KEROSENE_API_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+             LIGHTNING_LND_REST_URL=http://lnd-rest-stub:8080
+             LIGHTNING_LND_MACAROON_HEX=0000000000000000000000000000000000000000000000000000000000000000
+             LIGHTNING_BACKEND_SQLITE=/tmp/lightning.sqlite3
+             HOST=0.0.0.0 PORT=8091 python app.py"
+    volumes:
+      - ../../..:/repo:ro
+    depends_on:
+      - lnd-rest-stub
+    ports:
+      - "18091:8091"

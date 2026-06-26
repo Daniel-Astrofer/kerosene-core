@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class LocalComposeFlywayGuardrailsTest {
 
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
-    private static final Path LOCAL_COMPOSE = PROJECT_ROOT.resolve("../kerosene-infrastructure/docker-compose.local.yml").normalize();
+    private static final Path LOCAL_COMPOSE = PROJECT_ROOT.resolve("../../infra/docker/compose/local.compose.yaml").normalize();
 
     @Test
     void localShardAppsEnableFlywayByDefault() throws IOException {

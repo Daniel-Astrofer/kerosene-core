@@ -1,6 +1,6 @@
 # Referência de Infraestrutura do Kerosene
 
-Este documento descreve o backend e o runtime de infraestrutura do Kerosene conforme representado pela documentação atual do repositório, topologia do compose, scripts e referências de configuração da aplicação. É a fonte operacional da verdade para desenvolvimento local, formato de implantação distribuída, dependências do backend, verificações de saúde e responsabilidades de build/runtime.
+Este documento descreve o backend e o runtime de infraestrutura do Kerosene conforme representado pela documentação atual do repositório, topologia do compose, scripts, Kubernetes e referências de configuração da aplicação. A camada `infra/` é a organização canônica para contratos de Docker, Kubernetes, runtime e scripts; caminhos antigos devem existir apenas como wrappers temporários quando indispensáveis.
 
 ## Escopo
 
@@ -8,9 +8,9 @@ Fontes revisadas:
 
 | Fonte | Propósito |
 | --- | --- |
-| `docker-compose.yml` | Ponto de entrada raiz do compose para orquestração local. Inclui `backend/kerosene-infrastructure/docker-compose.local.yml` e carrega `backend/kerosene/.env`. |
-| `backend/kerosene-infrastructure/docker-compose.local.yml` | Topologia local com múltiplos shards incluindo shards da aplicação, Postgres, Redis, sidecars MPC, Tor, Vault, serviços Bitcoin, serviços Lightning, Prometheus e web admin. |
-| `backend/kerosene/deploy/compose/hardened.yml` | Topologia distribuída endurecida com shards regionais, serviços ocultos Tor, Vanguards, Vault, MPC, PostgreSQL, Redis e LND. |
+| `infra/docker/images.yaml` | Contrato canônico de imagens, tags locais, Dockerfiles e contextos de build durante a migração para `infra/`. |
+| `infra/docker/compose/local.compose.yaml` | Topologia local atual com múltiplos shards incluindo shards da aplicação, Postgres, Redis, sidecars MPC, Tor, Vault, serviços Bitcoin, serviços Lightning, Prometheus e web admin. |
+| `infra/docker/compose/hardened.compose.yaml` | Topologia distribuída endurecida com shards regionais, serviços ocultos Tor, Vanguards, Vault, MPC, PostgreSQL, Redis e LND. |
 | `backend/kerosene/src/main/resources/application*.properties` | Configuração de runtime do backend para perfis default, Docker e produção. |
 | `scripts/*.sh` | Scripts de ciclo de vida local, logging, arming do Vault, build do web admin e release. |
 | `backend/mpc-sidecar`, `backend/vault` | Serviços de suporte para assinatura MPC e custódia de material sensível. |
@@ -35,7 +35,7 @@ O Kerosene é implantado como um backend Spring Boot com serviços de suporte pa
 O comando canônico para inicialização local é:
 
 ```bash
-bash scripts/start-local.sh
+bash infra/scripts/local/control.sh start
 ```
 
 O script utiliza o arquivo compose raiz, prepara o build do web admin Flutter para servir no backend, inicia a infraestrutura local, arma o Vault quando configurado, aguarda o provisionamento da chave mestra do shard e exibe os endereços onion quando disponíveis.
@@ -57,7 +57,7 @@ Serviços locais principais:
 
 ### Topologia Distribuída
 
-`backend/kerosene/deploy/compose/hardened.yml` modela a implantação distribuída endurecida:
+`infra/docker/compose/hardened.compose.yaml` modela a implantação distribuída endurecida:
 
 - Um serviço Vault central exposto internamente através do `kerosene-tor-vault`, sem `ports` diretas no host.
 - Três shards regionais: `IS`, `CH` e `SG`.
@@ -199,9 +199,9 @@ Responsabilidades agendadas/background observadas:
 Comandos comuns:
 
 ```bash
-bash scripts/start-local.sh
-bash scripts/logs-local.sh
-bash scripts/stop-local.sh
+bash infra/scripts/local/control.sh start
+bash infra/scripts/local/control.sh logs
+bash infra/scripts/local/control.sh stop
 cd backend/kerosene && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew test
 cd backend/mpc-sidecar && go test ./...
 cd backend/vault && mvn package
@@ -218,7 +218,7 @@ Verificações operacionais:
 | Saúde de compatibilidade | `GET /healthz` |
 | Slice de teste KFE | `JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew test --tests 'source.kfe.*'` |
 | Suite completa de testes do backend | `JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew test` |
-| Logs locais | `bash scripts/logs-local.sh` |
+| Logs locais | `bash infra/scripts/local/control.sh logs` |
 
 ## Segredos e Artefatos
 
@@ -228,7 +228,7 @@ Nunca commitar:
 - Certificados, chaves privadas, keystores, chaves Tor, macaroons LND, contas de serviço, segredos do diretor, chaves mestras ou dumps de banco de dados.
 - Saída de build do frontend gerada em `frontend/build/**`.
 - Volumes compose ou saídas de build copiadas que existem apenas em runtime.
-- Estado local sensível do backend em `backend/kerosene/deploy/local/**`.
+- Estado local sensível de runtime em `infra/runtime/local/**` quando existir no ambiente local.
 
 Nota sobre artefatos do repositório: diretórios `web-admin-build.stale-*` são artefatos gerados históricos. Eles não são fonte da verdade para o comportamento do web admin.
 

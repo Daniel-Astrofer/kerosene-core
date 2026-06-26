@@ -85,7 +85,7 @@ services:
       - LND_EXTERNAL_IP=${LIGHTNING_LND_EXTERNAL_IP:-}
     volumes:
       - lnd_data:/root/.lnd
-      - ../../../kerosene-infrastructure/scripts/lnd-entrypoint.sh:/lnd-entrypoint.sh:ro
+      - ../../../../infra/runtime/lightning/lnd-entrypoint.sh:/lnd-entrypoint.sh:ro
     entrypoint: ["/bin/sh", "/lnd-entrypoint.sh"]
     networks: [net_tor, tor_egress]
 
@@ -102,7 +102,7 @@ services:
       - LND_BOOTSTRAP_TIMEOUT_SECONDS=${LIGHTNING_LND_BOOTSTRAP_TIMEOUT_SECONDS:-180}
     volumes:
       - lnd_data:/lnd
-      - ../../../kerosene-infrastructure/scripts/lnd-bootstrap.sh:/lnd-bootstrap.sh:ro
+      - ../../../../infra/runtime/lightning/lnd-bootstrap.sh:/lnd-bootstrap.sh:ro
     entrypoint: ["sh", "/lnd-bootstrap.sh"]
     networks: [net_tor]
     depends_on:
