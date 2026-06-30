@@ -3,6 +3,8 @@ package source.auth.application.orchestrator.signup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -132,6 +134,31 @@ class FinalizeSignupAccountTest {
         service.ensureUserFinancialsReady(user, null);
 
         verify(financialWalletProvisioningPort, never()).ensurePrimaryWalletReady(any(), any());
+    }
+
+    @Test
+    void ensureUserFinancialsReadyDefersProvisioningUntilAfterCommit() {
+        SignupState state = signupState(false);
+        state.setBtcDepositAddress("bc1qsignup");
+        UserDataBase user = new UserDataBase();
+        setUserId(user, 7L);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.ensureUserFinancialsReady(user, state);
+
+            verify(financialWalletProvisioningPort, never()).ensurePrimaryWalletReady(any(), any());
+
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertEquals(1, synchronizations.size());
+
+            synchronizations.forEach(TransactionSynchronization::afterCommit);
+
+            verify(financialWalletProvisioningPort).ensurePrimaryWalletReady(7L, "bc1qsignup");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     private SignupState signupState(boolean totpVerified) {

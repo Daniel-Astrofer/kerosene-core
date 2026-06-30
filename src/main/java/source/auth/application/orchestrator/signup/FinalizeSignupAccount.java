@@ -190,19 +190,25 @@ public class FinalizeSignupAccount {
         if (optionalState == null) {
             return;
         }
-        financialWalletProvisioningPort.ensurePrimaryWalletReady(user.getId(), optionalState.getBtcDepositAddress());
+        Long userId = user.getId();
+        String initialAddress = optionalState.getBtcDepositAddress();
+        runAfterCommit(() -> financialWalletProvisioningPort.ensurePrimaryWalletReady(userId, initialAddress));
     }
 
     private void schedulePostCommitCleanup(String sessionId, Long userId) {
+        runAfterCommit(() -> runPostCommitCleanup(sessionId, userId));
+    }
+
+    private void runAfterCommit(Runnable task) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            runPostCommitCleanup(sessionId, userId);
+            task.run();
             return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                runPostCommitCleanup(sessionId, userId);
+                task.run();
             }
         });
     }
