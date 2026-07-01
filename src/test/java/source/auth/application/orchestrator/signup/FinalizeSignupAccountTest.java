@@ -101,7 +101,7 @@ class FinalizeSignupAccountTest {
                 ArgumentCaptor.forClass(UserNotificationPayload.class);
         verify(userNotifier).notify(eq(7L), notificationCaptor.capture());
         assertEquals("Conta criada", notificationCaptor.getValue().title());
-        assertEquals("Sua conta foi criada com sucesso.", notificationCaptor.getValue().body());
+        assertEquals("Sua conta Kerosene foi criada com sucesso.", notificationCaptor.getValue().body());
 
         verify(financialWalletProvisioningPort).ensurePrimaryWalletReady(eq(7L), eq(null));
     }

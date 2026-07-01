@@ -22,18 +22,6 @@ public record UserNotificationPayload(
         metadata = sanitizeMetadata(metadata);
     }
 
-    public static UserNotificationPayload legacy(String title, String body) {
-        return create(
-                NotificationKind.SYSTEM_INFO,
-                NotificationSeverity.INFO,
-                title,
-                body,
-                null,
-                null,
-                null,
-                Map.of());
-    }
-
     public static UserNotificationPayload create(
             NotificationKind kind,
             NotificationSeverity severity,

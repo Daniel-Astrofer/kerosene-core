@@ -17,9 +17,10 @@ import source.auth.dto.SignupState;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
 import source.security.VaultKeyProvider;
 import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
@@ -35,9 +36,6 @@ import java.util.Map;
 public class FinalizeSignupAccount {
 
     private static final Logger log = LoggerFactory.getLogger(FinalizeSignupAccount.class);
-    private static final String ACCOUNT_CREATED_TITLE = "Conta criada";
-    private static final String ACCOUNT_CREATED_BODY =
-            "Sua conta foi criada com sucesso.";
 
     private final SignupStateStore stateStore;
     private final UserServiceContract userService;
@@ -224,11 +222,10 @@ public class FinalizeSignupAccount {
         try {
             userNotifier.notify(
                     userId,
-                    UserNotificationPayload.create(
+                    NotificationMessages.payload(
                             NotificationKind.ACCOUNT_CREATED,
                             NotificationSeverity.SUCCESS,
-                            ACCOUNT_CREATED_TITLE,
-                            ACCOUNT_CREATED_BODY,
+                            NotificationMessageKey.ACCOUNT_CREATED,
                             "/home",
                             "user",
                             String.valueOf(userId),

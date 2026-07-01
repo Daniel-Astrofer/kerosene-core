@@ -117,7 +117,29 @@ class NotificationMessagesTest {
                         NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_RECONCILED,
                         "Depósito confirmado",
                         "Depósito Lightning liquidado. Crédito líquido: 0.00099000 BTC.",
-                        "0.00099000"));
+                        "0.00099000"),
+                new ExpectedNotification(
+                        NotificationMessageKey.ACCOUNT_CREATED,
+                        "Conta criada",
+                        "Sua conta Kerosene foi criada com sucesso."),
+                new ExpectedNotification(
+                        NotificationMessageKey.SECURITY_LOGIN_DETECTED,
+                        "Novo acesso detectado",
+                        "Identificamos um novo acesso à sua conta Kerosene. Se não reconhece esta atividade, revise suas sessões ativas imediatamente."),
+                new ExpectedNotification(
+                        NotificationMessageKey.SECURITY_ADMIN_ACCESS_ATTEMPT,
+                        "Tentativa de acesso administrativo",
+                        "Uma solicitação de acesso ao painel administrativo está aguardando sua revisão. Confira navegador, dispositivo e horário antes de aprovar."),
+                new ExpectedNotification(
+                        NotificationMessageKey.SECURITY_RECOVERY_COMPLETED,
+                        "Recuperação de segurança concluída",
+                        "Sua frase de recuperação, TOTP, passkey e códigos de backup foram renovados. Entre novamente usando as novas credenciais."),
+                new ExpectedNotification(
+                        NotificationMessageKey.DEMO_BALANCE_CREDITED,
+                        "Saldo de teste creditado",
+                        "Você recebeu 100.00000000 BTC de saldo de teste na carteira “Principal”.",
+                        "100.00000000",
+                        "Principal"));
 
         for (ExpectedNotification expected : expectedNotifications) {
             LocalizedNotificationMessage message = NotificationMessages.resolve(

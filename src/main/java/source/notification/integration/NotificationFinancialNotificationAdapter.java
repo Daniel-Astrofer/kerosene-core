@@ -82,17 +82,19 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
     public void notifyDemoBalanceCredited(Long userId, UUID walletId, String walletName, String amountBtc) {
         notificationService.notifyUser(
                 userId,
-                NotificationKind.TRANSFER_RECEIVED,
-                NotificationSeverity.SUCCESS,
-                "Saldo de Teste Creditado",
-                "Você recebeu " + amountBtc + " BTC de saldo mockado na carteira \"" + walletName + "\".",
-                "/home",
-                "wallet",
-                walletId.toString(),
-                Map.of(
-                        "walletId", walletId.toString(),
-                        "walletName", walletName,
-                        "amountBtc", amountBtc));
+                NotificationMessages.payload(
+                        NotificationKind.TRANSFER_RECEIVED,
+                        NotificationSeverity.SUCCESS,
+                        NotificationMessageKey.DEMO_BALANCE_CREDITED,
+                        "/home",
+                        "wallet",
+                        walletId.toString(),
+                        Map.of(
+                                "walletId", walletId.toString(),
+                                "walletName", walletName,
+                                "amountBtc", amountBtc),
+                        amountBtc,
+                        walletName));
     }
 
     private NotificationMessageKey depositMessageKey(String rail) {

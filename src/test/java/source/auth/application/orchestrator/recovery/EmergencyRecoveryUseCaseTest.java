@@ -2,6 +2,7 @@ package source.auth.application.orchestrator.recovery;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import source.auth.application.infra.persistence.redis.contracts.RedisContract;
 import source.auth.application.port.out.AuthPasskeyGateway;
@@ -24,6 +25,7 @@ import source.auth.dto.EmergencyRecoveryStartResponse;
 import source.auth.dto.EmergencyRecoveryState;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
+import source.notification.model.UserNotificationPayload;
 import source.notification.service.NotificationService;
 import source.security.VaultKeyProvider;
 
@@ -39,15 +41,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import source.notification.model.NotificationKind;
-import source.notification.model.NotificationSeverity;
 
 class EmergencyRecoveryUseCaseTest {
 
@@ -179,7 +177,6 @@ class EmergencyRecoveryUseCaseTest {
         when(passkeyGateway.findByUserId(7L)).thenReturn(List.of(new PasskeyCredential()));
         when(userGateway.save(any(UserDataBase.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(recoveryCodeService.generateNewBackupCodes()).thenReturn(newCodes);
-        doNothing().when(notificationService).notifyUser(anyLong(), any(), any(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
 
         EmergencyRecoveryFinishResponse response = useCase.finish(request);
 
@@ -191,6 +188,10 @@ class EmergencyRecoveryUseCaseTest {
         assertFalse(user.getBackupCodes().contains("stored-1"));
         verify(passkeyGateway).deleteAll(any());
         verify(passkeyGateway).save(any(PasskeyCredential.class));
-        verify(notificationService).notifyUser(eq(7L), any(), any(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
+        ArgumentCaptor<UserNotificationPayload> payloadCaptor =
+                ArgumentCaptor.forClass(UserNotificationPayload.class);
+        verify(notificationService).notifyUser(eq(7L), payloadCaptor.capture());
+        assertEquals("security_recovery_completed", payloadCaptor.getValue().kind());
+        assertEquals("Recuperação de segurança concluída", payloadCaptor.getValue().title());
     }
 }

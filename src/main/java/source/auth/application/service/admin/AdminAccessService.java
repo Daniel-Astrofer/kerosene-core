@@ -39,6 +39,8 @@ import source.auth.model.enums.AdminAccessEventStatus;
 import source.auth.model.enums.AdminKeyStatus;
 import source.auth.model.enums.UserRole;
 import source.common.infra.logging.LogSanitizer;
+import source.notification.l10n.NotificationMessageKey;
+import source.notification.l10n.NotificationMessages;
 import source.notification.model.NotificationKind;
 import source.notification.model.NotificationSeverity;
 import source.notification.service.NotificationService;
@@ -382,19 +384,19 @@ public class AdminAccessService {
         try {
             notificationService.notifyUser(
                     user.getId(),
-                    NotificationKind.SECURITY_ADMIN_ACCESS_ATTEMPT,
-                    NotificationSeverity.WARNING,
-                    "Houve uma tentativa de acesso ao painel admin.",
-                    "Revise o navegador, dispositivo e horario antes de permitir.",
-                    "/settings",
-                    "admin_access_attempt",
-                    attempt.getId().toString(),
-                    Map.of(
-                            "attemptId", attempt.getId().toString(),
-                            "browser", safe(firstText(attempt.getBrowser(), "Navegador")),
-                            "device", safe(firstText(attempt.getDevice().getDeviceName(), "Sessao admin")),
-                            "requestedAt", attempt.getRequestedAt().toString(),
-                            "status", attempt.getStatus().name()));
+                    NotificationMessages.payload(
+                            NotificationKind.SECURITY_ADMIN_ACCESS_ATTEMPT,
+                            NotificationSeverity.WARNING,
+                            NotificationMessageKey.SECURITY_ADMIN_ACCESS_ATTEMPT,
+                            "/settings",
+                            "admin_access_attempt",
+                            attempt.getId().toString(),
+                            Map.of(
+                                    "attemptId", attempt.getId().toString(),
+                                    "browser", safe(firstText(attempt.getBrowser(), "Navegador")),
+                                    "device", safe(firstText(attempt.getDevice().getDeviceName(), "Sessao admin")),
+                                    "requestedAt", attempt.getRequestedAt().toString(),
+                                    "status", attempt.getStatus().name())));
         } catch (RuntimeException exception) {
             log.warn("Falha ao notificar tentativa admin para userId={}", user.getId(), exception);
         }
