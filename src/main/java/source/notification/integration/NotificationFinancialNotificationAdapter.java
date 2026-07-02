@@ -73,28 +73,8 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                                 "paymentRequestId", paymentRequestId.toString(),
                                 "publicId", publicId,
                                 "walletId", walletId.toString(),
-                                "creditedSats", String.valueOf(creditedSats),
-                                "devInstantCredit", "true"),
+                                "creditedSats", String.valueOf(creditedSats)),
                         satsToBtc(creditedSats)));
-    }
-
-    @Override
-    public void notifyDemoBalanceCredited(Long userId, UUID walletId, String walletName, String amountBtc) {
-        notificationService.notifyUser(
-                userId,
-                NotificationMessages.payload(
-                        NotificationKind.TRANSFER_RECEIVED,
-                        NotificationSeverity.SUCCESS,
-                        NotificationMessageKey.DEMO_BALANCE_CREDITED,
-                        "/home",
-                        "wallet",
-                        walletId.toString(),
-                        Map.of(
-                                "walletId", walletId.toString(),
-                                "walletName", walletName,
-                                "amountBtc", amountBtc),
-                        amountBtc,
-                        walletName));
     }
 
     private NotificationMessageKey depositMessageKey(String rail) {

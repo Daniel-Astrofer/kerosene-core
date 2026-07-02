@@ -5,13 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-public class DevBalanceInjectorFallbackConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean(DevBalanceInjector.class)
-    public DevBalanceInjector noopDevBalanceInjector() {
-        return new NoopDevBalanceInjector();
-    }
+public class FinancialFallbackConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(FinancialNotificationAuditPort.class)

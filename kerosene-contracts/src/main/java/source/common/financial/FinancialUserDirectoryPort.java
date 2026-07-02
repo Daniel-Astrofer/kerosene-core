@@ -14,10 +14,6 @@ public interface FinancialUserDirectoryPort {
 
     Optional<FinancialUserHandle> findById(Long userId);
 
-    boolean hasReceivedDemoCredit(Long userId);
-
-    void markDemoCreditReceived(Long userId);
-
     record FinancialUserHandle(Long id, String username, boolean active) {
     }
 }

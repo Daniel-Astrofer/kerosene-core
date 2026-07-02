@@ -57,7 +57,7 @@ Entregável:
 
 ## Fase 1 — Cortar imports diretos entre Core e KFE
 
-**Status atual desta entrega:** concluído logicamente no monólito. Não há mais imports `source.kfe.*` fora de `source.kfe` em `main`/`test`. O fluxo de signup usa `FinancialWalletProvisioningPort`, notification usa `NotificationAuditPort`, health usa `FinancialRailHealthPort`, production safety usa `FinancialRailProductionSafetyPort`, soberania usa `FinancialAuditIntegrityPort`, admin operações usa `FinancialOperationsAdminPort`, e dev balance usa contrato comum com implementação KFE.
+**Status atual desta entrega:** concluído logicamente no monólito. Não há mais imports `source.kfe.*` fora de `source.kfe` em `main`/`test`. O fluxo de signup usa `FinancialWalletProvisioningPort`, notification usa `NotificationAuditPort`, health usa `FinancialRailHealthPort`, production safety usa `FinancialRailProductionSafetyPort`, soberania usa `FinancialAuditIntegrityPort` e admin operações usa `FinancialOperationsAdminPort`.
 
 **Meta:** manter tudo no mesmo deploy, mas inverter dependências para contratos.
 
@@ -70,10 +70,8 @@ Ações:
   - `FinancialRailProductionSafetyPort` para safety checks de produção dos rails. **Criada.**
   - `FinancialAuditIntegrityPort` para raiz/auditoria usada por telas soberanas. **Criada e migrada para cliente remoto Core → KFE.**
   - `FinancialOperationsAdminPort` para blockchain, lightning, logs e métricas no admin operacional. **Criada.**
-  - `DevBalanceInjector` como contrato comum, com implementação KFE. **Criado.**
   - `FinancialAuthorizationPort` para autenticação transacional.
   - `FinancialReservePort` para overview de reservas.
-- Mover integrações de dev como `DevBalanceInjector` para dentro do KFE ou para perfil de teste do KFE. **Implementação real movida para `source.kfe.integration.KfeDevBalanceInjector`; contrato comum mantido para consumidores.**
 - Substituir imports `source.kfe.*` fora de `source.kfe` por portas/interfaces. **Concluído para `main`/`test` nesta entrega.**
 - Criar testes ArchUnit: fora de `source.kfe`, nenhum pacote pode depender de `source.kfe..`. **Criado em `ArchitectureGuardrailsTest.nonKfeProductionCodeDoesNotDependOnKfeImplementationPackages`.**
 - Reforçar o gate local/CI `scripts/verify-kfe-only.sh` para bloquear imports `source.kfe.*` fora do pacote KFE. **Criado.**
@@ -104,7 +102,7 @@ Resultado esperado:
 
 ## Fase 2 — Separar módulos dentro do repositório
 
-**Status atual desta entrega:** avançada para multi-módulo real. Agora existem `:kerosene-contracts`, `:kerosene-shared` e `:kfe-service`. `source.kfe` não importa mais `source.auth.*` em `main`/`test`. O diretório financeiro de usuários usa `source.common.financial.FinancialUserDirectoryPort`, com implementação `source.auth.integration.AuthFinancialUserDirectoryAdapter`; autorização transacional financeira usa `source.common.financial.FinancialTransactionApprovalPort`, com implementação `source.auth.integration.AuthFinancialTransactionApprovalAdapter`. `KfeTransactionWalletResolver`, `KfeTransactionAuthorizationUseCase`, `KfeWalletNetworkService`, `KfeTransactionController` e `KfeDevBalanceInjector` deixaram de depender diretamente de entidades, repositories, exceções e serviços de auth. Também foram extraídas as portas `FinancialNotificationPort`, `FinancialNotificationAuditPort`, `FinancialMpcKeyPort`, `FinancialQuorumPort` e `StringColumnCryptoPort`, removendo dependências KFE para `source.notification.*`, `source.security.*`, `source.sovereign.mpc.*` e `source.sovereign.quorum.*`. A porta `FinancialWalletProvisioningPort` também foi movida de `source.auth...signup.port` para `source.common.financial`; esses contratos foram movidos fisicamente para o módulo `:kerosene-contracts`. Utilitários comuns usados por Core/KFE foram movidos para `:kerosene-shared`, e o pacote `source.kfe` foi movido fisicamente para `:kfe-service`.
+**Status atual desta entrega:** avançada para multi-módulo real. Agora existem `:kerosene-contracts`, `:kerosene-shared` e `:kfe-service`. `source.kfe` não importa mais `source.auth.*` em `main`/`test`. O diretório financeiro de usuários usa `source.common.financial.FinancialUserDirectoryPort`, com implementação `source.auth.integration.AuthFinancialUserDirectoryAdapter`; autorização transacional financeira usa `source.common.financial.FinancialTransactionApprovalPort`, com implementação `source.auth.integration.AuthFinancialTransactionApprovalAdapter`. `KfeTransactionWalletResolver`, `KfeTransactionAuthorizationUseCase`, `KfeWalletNetworkService` e `KfeTransactionController` deixaram de depender diretamente de entidades, repositories, exceções e serviços de auth. Também foram extraídas as portas `FinancialNotificationPort`, `FinancialNotificationAuditPort`, `FinancialMpcKeyPort`, `FinancialQuorumPort` e `StringColumnCryptoPort`, removendo dependências KFE para `source.notification.*`, `source.security.*`, `source.sovereign.mpc.*` e `source.sovereign.quorum.*`. A porta `FinancialWalletProvisioningPort` também foi movida de `source.auth...signup.port` para `source.common.financial`; esses contratos foram movidos fisicamente para o módulo `:kerosene-contracts`. Utilitários comuns usados por Core/KFE foram movidos para `:kerosene-shared`, e o pacote `source.kfe` foi movido fisicamente para `:kfe-service`.
 
 **Meta:** transformar separação lógica em separação compilável.
 

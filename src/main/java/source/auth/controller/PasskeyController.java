@@ -13,7 +13,6 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
 import source.auth.application.service.passkey.PasskeyService;
-import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.dto.PasskeyInventoryDTO;
@@ -31,7 +30,6 @@ public class PasskeyController {
     private final PasskeyService passkeyService;
     private final JwtServicer jwtServicer;
     private final SignupStateStore signupStateStore;
-    private final DevBalanceInjector balanceInjector;
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final RedisServicer redisService;
     private final PasskeyOrchestrator passkeyOrchestrator;
@@ -41,7 +39,6 @@ public class PasskeyController {
     public PasskeyController(PasskeyService passkeyService,
                                   JwtServicer jwtServicer,
                                   SignupStateStore signupStateStore,
-                                  DevBalanceInjector balanceInjector,
                                   FinalizeSignupAccount finalizeSignupAccount,
                                   RedisServicer redisService,
                                   PasskeyOrchestrator passkeyOrchestrator,
@@ -50,7 +47,6 @@ public class PasskeyController {
         this.passkeyService = passkeyService;
         this.jwtServicer = jwtServicer;
         this.signupStateStore = signupStateStore;
-        this.balanceInjector = balanceInjector;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.redisService = redisService;
         this.passkeyOrchestrator = passkeyOrchestrator;

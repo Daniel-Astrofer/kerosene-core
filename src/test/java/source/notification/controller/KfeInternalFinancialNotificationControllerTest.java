@@ -2,7 +2,6 @@ package source.notification.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
-import source.common.financial.FinancialDemoBalanceCreditedNotificationRequest;
 import source.common.financial.FinancialDepositConfirmedNotificationRequest;
 import source.common.financial.FinancialNotificationPort;
 import source.common.financial.FinancialPaymentRequestDepositConfirmedNotificationRequest;
@@ -62,21 +61,6 @@ class KfeInternalFinancialNotificationControllerTest {
                 walletId,
                 "LIGHTNING",
                 2500L);
-    }
-
-    @Test
-    void forwardsDemoBalanceCreditedNotificationWhenCredentialMatches() {
-        UUID walletId = UUID.randomUUID();
-
-        controller.notifyDemoBalanceCredited(
-                "credential",
-                new FinancialDemoBalanceCreditedNotificationRequest(
-                        42L,
-                        walletId,
-                        "Carteira",
-                        "100.00000000"));
-
-        verify(notificationPort).notifyDemoBalanceCredited(42L, walletId, "Carteira", "100.00000000");
     }
 
     @Test

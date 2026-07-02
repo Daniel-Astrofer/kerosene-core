@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import source.common.dto.ApiResponse;
-import source.common.financial.FinancialDemoBalanceCreditedNotificationRequest;
 import source.common.financial.FinancialDepositConfirmedNotificationRequest;
 import source.common.financial.FinancialNotificationPort;
 import source.common.financial.FinancialPaymentRequestDepositConfirmedNotificationRequest;
@@ -72,23 +71,6 @@ public class KfeInternalFinancialNotificationController {
                 request.rail(),
                 request.creditedSats());
         return ResponseEntity.ok(ApiResponse.success("KFE payment request notification accepted.", null));
-    }
-
-    @PostMapping("/demo-balance-credited")
-    public ResponseEntity<ApiResponse<Void>> notifyDemoBalanceCredited(
-            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
-            @RequestBody FinancialDemoBalanceCreditedNotificationRequest request) {
-        verifyCredential(credential);
-        require(request != null, "request is required");
-        require(request.userId() != null, "userId is required");
-        require(request.walletId() != null, "walletId is required");
-
-        notificationPort.notifyDemoBalanceCredited(
-                request.userId(),
-                request.walletId(),
-                request.walletName(),
-                request.amountBtc());
-        return ResponseEntity.ok(ApiResponse.success("KFE demo balance notification accepted.", null));
     }
 
     private void verifyCredential(String credential) {

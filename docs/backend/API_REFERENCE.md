@@ -1784,7 +1784,6 @@ Response body:
     "username": "alice",
     "role": "USER",
     "isAdmin": false,
-    "testBalanceClaimed": true,
     "passkeyEnabledForTransactions": true,
     "appPinEnabled": true,
     "createdAt": "2026-01-01T00:00:00"

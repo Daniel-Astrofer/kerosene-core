@@ -33,7 +33,6 @@ public class GetCurrentUserProfileUseCase {
         response.put("username", user.getUsername());
         response.put("role", user.getRole().name());
         response.put("isAdmin", user.getRole() == UserRole.ADMIN);
-        response.put("testBalanceClaimed", Boolean.TRUE.equals(user.getTestBalanceClaimed()));
         response.put("passkeyEnabledForTransactions", Boolean.TRUE.equals(user.getPasskeyEnabledForTransactions()));
         response.put("appPinEnabled", appPinService.getStatus(user, deviceHash).enabled());
 

@@ -26,9 +26,4 @@ public class NoopFinancialNotificationPort implements FinancialNotificationPort 
             long creditedSats) {
         // Intentionally empty. Notification service provides the runtime adapter when present.
     }
-
-    @Override
-    public void notifyDemoBalanceCredited(Long userId, UUID walletId, String walletName, String amountBtc) {
-        // Intentionally empty. Notification service provides the runtime adapter when present.
-    }
 }

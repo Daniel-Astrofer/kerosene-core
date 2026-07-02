@@ -8,7 +8,6 @@ import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicekey.DeviceKeyService;
-import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import source.auth.model.entity.DeviceKeyCredential;
@@ -27,7 +26,6 @@ public class VerifyDeviceKeyLoginUseCase {
     private final UserRepository userRepository;
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final JwtServicer jwtServicer;
-    private final DevBalanceInjector balanceInjector;
     private final RedisServicer redisService;
 
     public VerifyDeviceKeyLoginUseCase(
@@ -36,14 +34,12 @@ public class VerifyDeviceKeyLoginUseCase {
             UserRepository userRepository,
             FinalizeSignupAccount finalizeSignupAccount,
             JwtServicer jwtServicer,
-            DevBalanceInjector balanceInjector,
             RedisServicer redisService) {
         this.deviceKeyService = deviceKeyService;
         this.deviceKeyRepository = deviceKeyRepository;
         this.userRepository = userRepository;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.jwtServicer = jwtServicer;
-        this.balanceInjector = balanceInjector;
         this.redisService = redisService;
     }
 
@@ -97,8 +93,6 @@ public class VerifyDeviceKeyLoginUseCase {
             redisService.setValue(StartLogin.preAuthKey(preAuthToken), user.getUsername(), StartLogin.PRE_AUTH_TTL_SECONDS);
             return Result.totpRequired(preAuthToken);
         }
-
-        balanceInjector.injectTestBalance(user.getId());
 
         String token = jwtServicer.generateToken(user.getId());
         return Result.authenticated(token);

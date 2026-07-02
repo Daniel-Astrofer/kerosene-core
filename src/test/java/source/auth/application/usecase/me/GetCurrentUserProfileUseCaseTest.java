@@ -54,7 +54,6 @@ class GetCurrentUserProfileUseCaseTest {
                 "alice",
                 UserRole.ADMIN,
                 true,
-                true,
                 LocalDateTime.of(2026, 1, 2, 3, 4, 5));
 
         when(userServiceContract.buscarPorId(7L)).thenReturn(Optional.of(user));
@@ -69,7 +68,6 @@ class GetCurrentUserProfileUseCaseTest {
         assertEquals("alice", profile.get("username"));
         assertEquals("ADMIN", profile.get("role"));
         assertEquals(true, profile.get("isAdmin"));
-        assertEquals(true, profile.get("testBalanceClaimed"));
         assertEquals(true, profile.get("passkeyEnabledForTransactions"));
         assertEquals(true, profile.get("appPinEnabled"));
         assertEquals("2026-01-02T03:04:05", profile.get("createdAt"));
@@ -78,7 +76,7 @@ class GetCurrentUserProfileUseCaseTest {
 
     @Test
     void executeKeepsFalseDefaultsAndOmitsMissingCreatedAt() {
-        UserDataBase user = user(8L, "bob", UserRole.USER, null, null, null);
+        UserDataBase user = user(8L, "bob", UserRole.USER, null, null);
 
         when(userServiceContract.buscarPorId(8L)).thenReturn(Optional.of(user));
         when(appPinService.getStatus(user, null)).thenReturn(appPin(false));
@@ -88,7 +86,6 @@ class GetCurrentUserProfileUseCaseTest {
         Map<String, Object> profile = result.profile();
         assertEquals("USER", profile.get("role"));
         assertEquals(false, profile.get("isAdmin"));
-        assertEquals(false, profile.get("testBalanceClaimed"));
         assertEquals(false, profile.get("passkeyEnabledForTransactions"));
         assertEquals(false, profile.get("appPinEnabled"));
         assertFalse(profile.containsKey("createdAt"));
@@ -99,14 +96,12 @@ class GetCurrentUserProfileUseCaseTest {
             Long id,
             String username,
             UserRole role,
-            Boolean testBalanceClaimed,
             Boolean passkeyEnabledForTransactions,
             LocalDateTime createdAt) {
         UserDataBase user = new UserDataBase();
         ReflectionTestUtils.setField(user, "id", id);
         user.setUsername(username);
         user.setRole(role);
-        user.setTestBalanceClaimed(testBalanceClaimed);
         user.setPasskeyEnabledForTransactions(passkeyEnabledForTransactions);
         user.setCreatedAt(createdAt);
         return user;

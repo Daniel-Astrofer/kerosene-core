@@ -1,7 +1,6 @@
 package source.auth.integration;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import source.auth.application.infra.persistence.jpa.UserRepository;
 import source.auth.model.entity.UserDataBase;
 import source.common.financial.FinancialUserDirectoryPort;
@@ -32,29 +31,6 @@ public class AuthFinancialUserDirectoryAdapter implements FinancialUserDirectory
             return Optional.empty();
         }
         return userRepository.findById(userId).flatMap(this::toHandle);
-    }
-
-    @Override
-    public boolean hasReceivedDemoCredit(Long userId) {
-        if (userId == null) {
-            return false;
-        }
-        return userRepository.findById(userId)
-                .map(UserDataBase::getTestBalanceClaimed)
-                .map(Boolean.TRUE::equals)
-                .orElse(false);
-    }
-
-    @Override
-    @Transactional
-    public void markDemoCreditReceived(Long userId) {
-        if (userId == null) {
-            return;
-        }
-        userRepository.findById(userId).ifPresent(user -> {
-            user.setTestBalanceClaimed(true);
-            userRepository.save(user);
-        });
     }
 
     private Optional<FinancialUserHandle> toHandle(UserDataBase user) {

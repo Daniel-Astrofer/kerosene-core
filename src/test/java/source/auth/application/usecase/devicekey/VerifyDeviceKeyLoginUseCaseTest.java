@@ -9,7 +9,6 @@ import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicekey.DeviceKeyService;
-import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
 import source.auth.model.entity.DeviceKeyCredential;
@@ -35,7 +34,6 @@ class VerifyDeviceKeyLoginUseCaseTest {
     private UserRepository userRepository;
     private FinalizeSignupAccount finalizeSignupAccount;
     private JwtServicer jwtServicer;
-    private DevBalanceInjector balanceInjector;
     private RedisServicer redisService;
     private VerifyDeviceKeyLoginUseCase useCase;
 
@@ -46,7 +44,6 @@ class VerifyDeviceKeyLoginUseCaseTest {
         userRepository = mock(UserRepository.class);
         finalizeSignupAccount = mock(FinalizeSignupAccount.class);
         jwtServicer = mock(JwtServicer.class);
-        balanceInjector = mock(DevBalanceInjector.class);
         redisService = mock(RedisServicer.class);
         useCase = new VerifyDeviceKeyLoginUseCase(
                 deviceKeyService,
@@ -54,7 +51,6 @@ class VerifyDeviceKeyLoginUseCaseTest {
                 userRepository,
                 finalizeSignupAccount,
                 jwtServicer,
-                balanceInjector,
                 redisService);
     }
 
@@ -136,7 +132,6 @@ class VerifyDeviceKeyLoginUseCaseTest {
 
         assertThat(result.status()).isEqualTo(VerifyDeviceKeyLoginUseCase.Status.INACTIVE_ACCOUNT);
         verify(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
-        verify(balanceInjector, never()).injectTestBalance(any());
         verify(jwtServicer, never()).generateToken(anyLong());
     }
 
@@ -158,12 +153,11 @@ class VerifyDeviceKeyLoginUseCaseTest {
                 startsWith(StartLogin.preAuthKey("")),
                 eq("alice"),
                 eq(StartLogin.PRE_AUTH_TTL_SECONDS));
-        verify(balanceInjector, never()).injectTestBalance(any());
         verify(jwtServicer, never()).generateToken(anyLong());
     }
 
     @Test
-    void injectsDevBalanceAndReturnsJwtWhenTotpIsNotEnabled() {
+    void returnsJwtWhenTotpIsNotEnabled() {
         UserDataBase user = user(42L, "alice", true, null);
         DeviceKeyCredential credential = credential("credential-1", user);
         DeviceKeyVerifyRequest request = request("credential-1", "alice");
@@ -179,7 +173,6 @@ class VerifyDeviceKeyLoginUseCaseTest {
         assertThat(result.status()).isEqualTo(VerifyDeviceKeyLoginUseCase.Status.AUTHENTICATED);
         assertThat(result.data()).isEqualTo("jwt-token");
         verify(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
-        verify(balanceInjector).injectTestBalance(user.getId());
         verify(jwtServicer).generateToken(42L);
     }
 

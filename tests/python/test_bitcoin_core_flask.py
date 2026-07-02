@@ -287,7 +287,7 @@ def test_bitcoin_core_client_maps_rpc_errors(monkeypatch, tmp_path, bitcoin_modu
     BitcoinCoreClient = bitcoin_modules["bitcoin_core"].BitcoinCoreClient
     ApiError = bitcoin_modules["security"].ApiError
 
-    def fake_urlopen(_request, _timeout):
+    def fake_urlopen(_request, timeout=None):
         raise urllib.error.URLError("connection refused")
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
@@ -313,7 +313,7 @@ def test_bitcoin_core_client_surfaces_http_error_body(monkeypatch, tmp_path, bit
     BitcoinCoreClient = bitcoin_modules["bitcoin_core"].BitcoinCoreClient
     ApiError = bitcoin_modules["security"].ApiError
 
-    def fake_urlopen(_request, _timeout):
+    def fake_urlopen(_request, timeout=None):
         body = io.BytesIO(b'{"error":{"message":"insufficient fee"}}')
         raise urllib.error.HTTPError("http://node", 500, "RPC error", {}, body)
 

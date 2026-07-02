@@ -133,13 +133,7 @@ class NotificationMessagesTest {
                 new ExpectedNotification(
                         NotificationMessageKey.SECURITY_RECOVERY_COMPLETED,
                         "Recuperação de segurança concluída",
-                        "Sua frase de recuperação, TOTP, passkey e códigos de backup foram renovados. Entre novamente usando as novas credenciais."),
-                new ExpectedNotification(
-                        NotificationMessageKey.DEMO_BALANCE_CREDITED,
-                        "Saldo de teste creditado",
-                        "Você recebeu 100.00000000 BTC de saldo de teste na carteira “Principal”.",
-                        "100.00000000",
-                        "Principal"));
+                        "Sua frase de recuperação, TOTP, passkey e códigos de backup foram renovados. Entre novamente usando as novas credenciais."));
 
         for (ExpectedNotification expected : expectedNotifications) {
             LocalizedNotificationMessage message = NotificationMessages.resolve(

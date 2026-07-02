@@ -15,7 +15,6 @@ import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
-import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.PasskeyActionRequiredDTO;
 import source.auth.dto.SignupState;
@@ -45,7 +44,6 @@ public class PasskeyOrchestrator {
     private final JwtServicer jwtServicer;
     private final SignupStateStore signupStateStore;
     private final PasskeyInventoryService passkeyInventoryService;
-    private final DevBalanceInjector balanceInjector;
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final RedisServicer redisService;
 
@@ -56,7 +54,6 @@ public class PasskeyOrchestrator {
             JwtServicer jwtServicer,
             SignupStateStore signupStateStore,
             PasskeyInventoryService passkeyInventoryService,
-            DevBalanceInjector balanceInjector,
             FinalizeSignupAccount finalizeSignupAccount,
             RedisServicer redisService) {
         this.passkeyService = passkeyService;
@@ -65,7 +62,6 @@ public class PasskeyOrchestrator {
         this.jwtServicer = jwtServicer;
         this.signupStateStore = signupStateStore;
         this.passkeyInventoryService = passkeyInventoryService;
-        this.balanceInjector = balanceInjector;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.redisService = redisService;
     }
@@ -383,8 +379,6 @@ public class PasskeyOrchestrator {
                     return ResponseEntity.status(HttpStatus.ACCEPTED)
                             .body(ApiResponse.success("Passkey verified. TOTP required.", preAuthToken));
                 }
-
-                balanceInjector.injectTestBalance(user.getId());
 
                 String token = jwtServicer.generateToken(user.getId());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));

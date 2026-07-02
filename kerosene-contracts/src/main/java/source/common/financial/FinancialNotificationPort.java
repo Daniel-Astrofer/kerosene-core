@@ -20,10 +20,4 @@ public interface FinancialNotificationPort {
             UUID walletId,
             String rail,
             long creditedSats);
-
-    void notifyDemoBalanceCredited(
-            Long userId,
-            UUID walletId,
-            String walletName,
-            String amountBtc);
 }

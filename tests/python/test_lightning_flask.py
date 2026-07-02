@@ -15,6 +15,14 @@ SECOND_HASH = "b" * 64
 INVOICE = "lnbcrt1" + "p" * 80
 
 
+def header_value(headers: dict[str, str], name: str) -> str | None:
+    expected = name.lower()
+    for key, value in headers.items():
+        if key.lower() == expected:
+            return value
+    return None
+
+
 @dataclass
 class FakeLnd:
     invoices: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -266,7 +274,7 @@ def test_lnd_client_creates_invoice_from_base64_hash(monkeypatch, tmp_path, ligh
 
     assert invoice["payment_hash"] == PAYMENT_HASH
     assert calls[0][0] == "https://lnd.local:8080/v1/invoices"
-    assert calls[0][1]["Grpc-Metadata-macaroon"] == "ab" * 32
+    assert header_value(calls[0][1], "Grpc-Metadata-macaroon") == "ab" * 32
     assert calls[0][2]["value"] == "1234"
 
 
@@ -319,7 +327,7 @@ def test_lnd_client_maps_http_and_network_errors(monkeypatch, tmp_path, lightnin
         )
     )
 
-    def http_error(_request, _timeout, context=None):
+    def http_error(_request, timeout=None, context=None):
         raise urllib.error.HTTPError("https://lnd", 400, "bad", {}, io.BytesIO(b'{"error":"invoice expired"}'))
 
     monkeypatch.setattr("urllib.request.urlopen", http_error)
@@ -328,7 +336,7 @@ def test_lnd_client_maps_http_and_network_errors(monkeypatch, tmp_path, lightnin
     assert error.value.status_code == 502
     assert error.value.message == "invoice expired"
 
-    def network_error(_request, _timeout, context=None):
+    def network_error(_request, timeout=None, context=None):
         raise urllib.error.URLError("down")
 
     monkeypatch.setattr("urllib.request.urlopen", network_error)

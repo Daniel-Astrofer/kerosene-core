@@ -60,9 +60,8 @@ ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS relying_party_id V
 ALTER TABLE auth.passkey_credentials ADD COLUMN IF NOT EXISTS origin_host VARCHAR(255);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration 005: Dev balance claim guard
--- Prevents the development balance injector from crediting a test balance more
--- than once for the same user.
+-- Migration 005: Legacy onboarding compatibility flag
+-- Retained for compatibility with existing databases.
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE auth.users_credentials
     ADD COLUMN IF NOT EXISTS test_balance_claimed BOOLEAN NOT NULL DEFAULT FALSE;
@@ -211,6 +210,23 @@ BEGIN
             NOT VALID;
     END IF;
 END $$;
+
+ALTER TABLE financial.wallets_core
+    DROP CONSTRAINT IF EXISTS chk_wallets_core_kind;
+
+ALTER TABLE financial.wallets_core
+    ADD CONSTRAINT chk_wallets_core_kind
+        CHECK (kind IN ('INTERNAL', 'CUSTODIAL_ONCHAIN', 'WATCH_ONLY', 'SYSTEM_FUNDS', 'SYSTEM_PROFIT'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_wallets_core_system_funds_active
+ON financial.wallets_core (user_id, kind)
+WHERE kind = 'SYSTEM_FUNDS'
+  AND status IN ('CREATING', 'ACTIVE', 'FROZEN', 'ROTATING_ADDRESS');
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_wallets_core_system_profit_active
+ON financial.wallets_core (user_id, kind)
+WHERE kind = 'SYSTEM_PROFIT'
+  AND status IN ('CREATING', 'ACTIVE', 'FROZEN', 'ROTATING_ADDRESS');
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 026: Payment intent quote/confirm flow

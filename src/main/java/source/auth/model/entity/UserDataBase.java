@@ -65,9 +65,6 @@ public class UserDataBase implements UserDB {
     @Column(name = "passkey_transaction_auth", nullable = false, columnDefinition = "boolean default false")
     private Boolean passkeyEnabledForTransactions = false;
 
-    @Column(name = "test_balance_claimed", nullable = false, columnDefinition = "boolean default false")
-    private Boolean testBalanceClaimed = false;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 32, columnDefinition = "VARCHAR(32) DEFAULT 'USER'")
     private UserRole role = UserRole.USER;
@@ -237,14 +234,6 @@ public class UserDataBase implements UserDB {
 
     public void setPasskeyEnabledForTransactions(Boolean passkeyEnabledForTransactions) {
         this.passkeyEnabledForTransactions = passkeyEnabledForTransactions;
-    }
-
-    public Boolean getTestBalanceClaimed() {
-        return testBalanceClaimed;
-    }
-
-    public void setTestBalanceClaimed(Boolean testBalanceClaimed) {
-        this.testBalanceClaimed = testBalanceClaimed;
     }
 
     public UserRole getRole() {

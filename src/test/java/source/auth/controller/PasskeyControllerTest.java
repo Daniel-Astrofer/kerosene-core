@@ -17,7 +17,6 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
-import source.common.financial.DevBalanceInjector;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.orchestrator.login.StartLogin;
@@ -57,7 +56,6 @@ class PasskeyControllerTest {
     private PasskeyCredentialRepository passkeyCredentialRepository;
     private UserRepository userRepository;
     private PasskeyInventoryService passkeyInventoryService;
-    private DevBalanceInjector balanceInjector;
     private SignupStateStore signupStateStore;
     private FinalizeSignupAccount finalizeSignupAccount;
     private JwtServicer jwtServicer;
@@ -73,7 +71,6 @@ class PasskeyControllerTest {
         passkeyCredentialRepository = mock(PasskeyCredentialRepository.class);
         userRepository = mock(UserRepository.class);
         passkeyInventoryService = mock(PasskeyInventoryService.class);
-        balanceInjector = mock(DevBalanceInjector.class);
         signupStateStore = mock(SignupStateStore.class);
         finalizeSignupAccount = mock(FinalizeSignupAccount.class);
         jwtServicer = mock(JwtServicer.class);
@@ -88,14 +85,12 @@ class PasskeyControllerTest {
                 jwtServicer,
                 signupStateStore,
                 passkeyInventoryService,
-                balanceInjector,
                 finalizeSignupAccount,
                 redisService);
         controller = new PasskeyController(
                 passkeyService,
                 jwtServicer,
                 signupStateStore,
-                balanceInjector,
                 finalizeSignupAccount,
                 redisService,
                 passkeyOrchestrator,

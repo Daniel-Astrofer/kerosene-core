@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 BITCOIN_FLASK = ROOT / "adapters" / "bitcoin_core_flask"
 LIGHTNING_FLASK = ROOT / "adapters" / "lightning_flask"
 
