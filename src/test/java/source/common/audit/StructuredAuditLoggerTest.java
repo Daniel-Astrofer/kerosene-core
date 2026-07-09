@@ -13,6 +13,8 @@ class StructuredAuditLoggerTest {
     void taxonomyContainsQueueMinimumAuditEvents() {
         assertThat(AuditEventType.requireKnown("AUTH_LOGIN_SUCCEEDED")).isEqualTo(AuditEventType.AUTH_LOGIN_SUCCEEDED);
         assertThat(AuditEventType.requireKnown("KFE_SETTLEMENT_COMPLETED")).isEqualTo(AuditEventType.KFE_SETTLEMENT_COMPLETED);
+        assertThat(AuditEventType.requireKnown("KFE_KEROSENE_FEE_SETTLED"))
+                .isEqualTo(AuditEventType.KFE_KEROSENE_FEE_SETTLED);
         assertThat(AuditEventType.requireKnown("MPC_UNSUPPORTED_MODE_REJECTED"))
                 .isEqualTo(AuditEventType.MPC_UNSUPPORTED_MODE_REJECTED);
     }
