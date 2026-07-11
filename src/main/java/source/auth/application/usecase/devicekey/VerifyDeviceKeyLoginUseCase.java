@@ -94,7 +94,7 @@ public class VerifyDeviceKeyLoginUseCase {
             return Result.totpRequired(preAuthToken);
         }
 
-        String token = jwtServicer.generateToken(user.getId());
+        String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
         return Result.authenticated(token);
     }
 

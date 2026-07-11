@@ -156,7 +156,7 @@ class PasskeyControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals("jwt.token.value", response.getBody().getData());
+        assertEquals("42 jwt.token.value", response.getBody().getData());
         verify(userRepository, never()).findByUsername(any());
         verify(passkeyCredentialRepository).findVerificationByCredentialId(any(byte[].class));
         verify(passkeyService).consumeChallengeFromRedis("alice");

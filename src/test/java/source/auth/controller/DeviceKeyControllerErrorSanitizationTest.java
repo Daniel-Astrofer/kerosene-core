@@ -239,14 +239,14 @@ class DeviceKeyControllerErrorSanitizationTest {
     void verifyAndLoginMapsAuthenticatedResult() {
         DeviceKeyVerifyRequest request = new DeviceKeyVerifyRequest();
         when(verifyDeviceKeyLoginUseCase.execute(request))
-                .thenReturn(VerifyDeviceKeyLoginUseCase.Result.authenticated("jwt-token"));
+                .thenReturn(VerifyDeviceKeyLoginUseCase.Result.authenticated("42 jwt-token"));
 
         ResponseEntity<ApiResponse<Object>> response = controller.verifyAndLogin(request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getMessage()).isEqualTo("Device key authentication successful");
-        assertThat(response.getBody().getData()).isEqualTo("jwt-token");
+        assertThat(response.getBody().getData()).isEqualTo("42 jwt-token");
     }
 
     @Test

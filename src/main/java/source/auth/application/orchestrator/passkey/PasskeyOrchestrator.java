@@ -380,7 +380,7 @@ public class PasskeyOrchestrator {
                             .body(ApiResponse.success("Passkey verified. TOTP required.", preAuthToken));
                 }
 
-                String token = jwtServicer.generateToken(user.getId());
+                String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
                 return ResponseEntity.ok(ApiResponse.success("Passkey authentication successful", token));
             } else {
                 logVerifyFailure(

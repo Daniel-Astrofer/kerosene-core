@@ -157,7 +157,7 @@ class VerifyDeviceKeyLoginUseCaseTest {
     }
 
     @Test
-    void returnsJwtWhenTotpIsNotEnabled() {
+    void returnsUserIdWithJwtWhenTotpIsNotEnabled() {
         UserDataBase user = user(42L, "alice", true, null);
         DeviceKeyCredential credential = credential("credential-1", user);
         DeviceKeyVerifyRequest request = request("credential-1", "alice");
@@ -171,7 +171,7 @@ class VerifyDeviceKeyLoginUseCaseTest {
         VerifyDeviceKeyLoginUseCase.Result result = useCase.execute(request);
 
         assertThat(result.status()).isEqualTo(VerifyDeviceKeyLoginUseCase.Status.AUTHENTICATED);
-        assertThat(result.data()).isEqualTo("jwt-token");
+        assertThat(result.data()).isEqualTo("42 jwt-token");
         verify(finalizeSignupAccount).ensureUserFinancialsReady(user, null);
         verify(jwtServicer).generateToken(42L);
     }
