@@ -185,11 +185,8 @@ public class FinalizeSignupAccount {
     }
 
     public void ensureUserFinancialsReady(UserDataBase user, SignupState optionalState) {
-        if (optionalState == null) {
-            return;
-        }
         Long userId = user.getId();
-        String initialAddress = optionalState.getBtcDepositAddress();
+        String initialAddress = optionalState != null ? optionalState.getBtcDepositAddress() : null;
         runAfterCommit(() -> financialWalletProvisioningPort.ensurePrimaryWalletReady(userId, initialAddress));
     }
 

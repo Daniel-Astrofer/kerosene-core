@@ -127,17 +127,17 @@ class FinalizeSignupAccountTest {
     }
 
     @Test
-    void ensureUserFinancialsReadyDoesNotProvisionWithoutSignupState() {
+    void ensureUserFinancialsReadyRepairsPrimaryWalletOnLoginWithoutSignupState() {
         UserDataBase user = new UserDataBase();
         setUserId(user, 7L);
 
         service.ensureUserFinancialsReady(user, null);
 
-        verify(financialWalletProvisioningPort, never()).ensurePrimaryWalletReady(any(), any());
+        verify(financialWalletProvisioningPort).ensurePrimaryWalletReady(7L, null);
     }
 
     @Test
-    void ensureUserFinancialsReadyDefersProvisioningUntilAfterCommit() {
+    void ensureUserFinancialsReadyUsesSignupAddressOnlyAfterCommit() {
         SignupState state = signupState(false);
         state.setBtcDepositAddress("bc1qsignup");
         UserDataBase user = new UserDataBase();

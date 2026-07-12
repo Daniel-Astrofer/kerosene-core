@@ -38,6 +38,26 @@ class KfeRemoteFinancialWalletProvisioningClientTest {
     }
 
     @Test
+    void postsPrimaryWalletRepairRequestWithoutInitialAddress() throws Exception {
+        KfeRemoteFinancialWalletProvisioningClient client = new KfeRemoteFinancialWalletProvisioningClient(
+                new RestTemplateBuilder(),
+                "http://kfe.test",
+                "credential",
+                100,
+                100);
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate(client));
+        server.expect(requestTo("http://kfe.test/internal/kfe/wallet-provisioning/primary"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(content().json("{\"userId\":42,\"initialAddress\":null}"))
+                .andRespond(withSuccess());
+
+        client.ensurePrimaryWalletReady(42L, null);
+
+        server.verify();
+    }
+
+    @Test
     void rejectsMissingInternalCredentialBeforeCallingKfe() {
         KfeRemoteFinancialWalletProvisioningClient client = new KfeRemoteFinancialWalletProvisioningClient(
                 new RestTemplateBuilder(),
