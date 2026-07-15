@@ -47,6 +47,10 @@ public class LoginCredentialRules {
     public String registerRateLimitAttempt(String normalizedUsername) {
         String rateLimitKey = "rl:login:" + normalizedUsername;
         Long attempts = redisService.increment(rateLimitKey);
+        // null = Redis degraded; allow login path to continue (fail-open).
+        if (attempts == null) {
+            return rateLimitKey;
+        }
         if (attempts == 1L) {
             redisService.expire(rateLimitKey, 60);
         }

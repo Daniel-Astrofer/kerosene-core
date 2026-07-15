@@ -40,6 +40,8 @@ public class EndpointPolicyRegistry {
             "/kfe/**",
             "/notifications",
             "/notifications/**",
+            "/content",
+            "/content/**",
             "/quorum/**",
             "/sovereignty/reattest",
             "/sovereignty/telemetry",

@@ -80,7 +80,7 @@ public class PasskeyController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<String>> registerPasskey(@RequestBody PasskeyRegistrationRequest request) {
+    public ResponseEntity<ApiResponse<?>> registerPasskey(@RequestBody PasskeyRegistrationRequest request) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth.getName().equals("anonymousUser")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -117,7 +117,7 @@ public class PasskeyController {
     }
 
     @PostMapping("/onboarding/finish")
-    public ResponseEntity<ApiResponse<String>> finishOnboardingRegistration(@RequestParam String sessionId,
+    public ResponseEntity<ApiResponse<?>> finishOnboardingRegistration(@RequestParam String sessionId,
                                                                            @RequestBody PasskeyRegistrationRequest request) {
         return passkeyOrchestrator.finishOnboardingRegistration(sessionId, request);
     }

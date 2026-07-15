@@ -144,7 +144,44 @@ public class PasskeyInventoryService {
             return CompatibilityStatus.COMPATIBLE;
         }
 
+        // Application-scoped mobile RP (e.g. kerosene-device) with legacy null/blank originHost
+        // was historically stored when android: origins failed URI host parsing.
+        // If RP ids match the configured application RP, treat as compatible.
+        if (hasRpIdMetadata
+                && matches(relyingPartyId, currentRpId)
+                && isApplicationScopedRp(currentRpId)) {
+            return CompatibilityStatus.COMPATIBLE;
+        }
+        if (hasRpIdMetadata
+                && isApplicationScopedRp(relyingPartyId)
+                && isApplicationScopedRp(currentRpId)
+                && matches(relyingPartyId, currentRpId)) {
+            return CompatibilityStatus.COMPATIBLE;
+        }
+        // Android origin tokens (apk-key-hash:...) vs HTTP request host should not mark incompatible
+        // when relying party already matched application scope above; remaining mismatch stays INCOMPATIBLE.
+        if (isAndroidOriginToken(originHost) && isApplicationScopedRp(relyingPartyId)
+                && isApplicationScopedRp(currentRpId)) {
+            return CompatibilityStatus.COMPATIBLE;
+        }
+
         return CompatibilityStatus.INCOMPATIBLE;
+    }
+
+    private boolean isApplicationScopedRp(String rpId) {
+        if (!hasText(rpId)) {
+            return false;
+        }
+        String normalized = rpId.trim().toLowerCase(java.util.Locale.ROOT);
+        return !normalized.contains(".") && !normalized.contains(":");
+    }
+
+    private boolean isAndroidOriginToken(String originHost) {
+        if (!hasText(originHost)) {
+            return false;
+        }
+        String normalized = originHost.trim().toLowerCase(java.util.Locale.ROOT);
+        return normalized.startsWith("apk-key-hash:") || normalized.startsWith("android:");
     }
 
     private boolean shouldLinkNewPasskey(UserDataBase user, PasskeyInventoryDTO inventory) {

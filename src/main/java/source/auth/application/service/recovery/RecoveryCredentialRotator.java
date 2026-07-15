@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import source.auth.AuthExceptions;
 import source.auth.application.port.out.AuthPasskeyGateway;
 import source.auth.application.port.out.AuthUserGateway;
+import source.auth.application.service.devicebinding.DeviceBindingPolicy;
+import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import source.auth.dto.EmergencyRecoveryFinishRequest;
@@ -32,19 +34,22 @@ public class RecoveryCredentialRotator {
     private final AuthPasskeyGateway passkeyGateway;
     private final RecoveryCodeService recoveryCodeService;
     private final NotificationService notificationService;
+    private final DeviceBindingPolicy deviceBindingPolicy;
 
     public RecoveryCredentialRotator(TOTPVerifier totpVerifier,
             PasskeyService passkeyService,
             AuthUserGateway userGateway,
             AuthPasskeyGateway passkeyGateway,
             RecoveryCodeService recoveryCodeService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            DeviceBindingPolicy deviceBindingPolicy) {
         this.totpVerifier = totpVerifier;
         this.passkeyService = passkeyService;
         this.userGateway = userGateway;
         this.passkeyGateway = passkeyGateway;
         this.recoveryCodeService = recoveryCodeService;
         this.notificationService = notificationService;
+        this.deviceBindingPolicy = deviceBindingPolicy;
     }
 
     public void validateFinishRequest(EmergencyRecoveryFinishRequest request) {
@@ -108,6 +113,19 @@ public class RecoveryCredentialRotator {
         if (existingCredentials != null && !existingCredentials.isEmpty()) {
             passkeyGateway.deleteAll(existingCredentials);
         }
+
+        // One device → one account: claim this install for the recovering user (may DELETE other accounts' keys on it).
+        DeviceAlreadyBoundDTO bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(
+                request.getDeviceInstallId(),
+                user.getId(),
+                request.isConfirmUnlinkDevice());
+        if (bindingConflict != null) {
+            throw new AuthExceptions.RecoveryRejectedException(
+                    bindingConflict.message() != null
+                            ? bindingConflict.message()
+                            : "This device is bound to another account. Confirm unlink to continue recovery.");
+        }
+
         passkeyGateway.save(buildPasskeyCredential(user, request, publicKeyBytes));
 
         notificationService.notifyUser(
@@ -133,6 +151,13 @@ public class RecoveryCredentialRotator {
         credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
         credential.setRelyingPartyId(resolveRelyingPartyIdFromProof(request));
         credential.setOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
+        credential.setDeviceInstallId(request.getDeviceInstallId());
+        credential.setBrand(request.getBrand());
+        credential.setModel(request.getModel());
+        credential.setSerialNumber(request.getSerialNumber());
+        credential.setPlatform(request.getPlatform());
+        credential.setBrowser(request.getBrowser());
+        credential.setStatus("ACTIVE");
 
         Base64.Decoder decoder = Base64.getDecoder();
         try {

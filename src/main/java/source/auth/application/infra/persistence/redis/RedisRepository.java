@@ -163,12 +163,28 @@ public class RedisRepository implements RedisContract {
 
     @Override
     public Long increment(String key) {
-        return redis.opsForValue().increment(key);
+        try {
+            Long value = redis.opsForValue().increment(key);
+            return value == null ? 1L : value;
+        } catch (RuntimeException exception) {
+            // Rate-limit and counters must not 500 the whole request when Redis is degraded
+            // (e.g. MISCONF / stop-writes after disk-full bgsave). Callers may treat null as fail-open.
+            log.warn("[Redis] increment failed for keyRef={}: {}",
+                    key == null ? "null" : Integer.toHexString(key.hashCode()),
+                    exception.getMessage());
+            return null;
+        }
     }
 
     @Override
     public void expire(String key, long timeoutSeconds) {
-        redis.expire(key, timeoutSeconds, TimeUnit.SECONDS);
+        try {
+            redis.expire(key, timeoutSeconds, TimeUnit.SECONDS);
+        } catch (RuntimeException exception) {
+            log.warn("[Redis] expire failed for keyRef={}: {}",
+                    key == null ? "null" : Integer.toHexString(key.hashCode()),
+                    exception.getMessage());
+        }
     }
 
     @Override

@@ -217,28 +217,32 @@ Campos retornados: `activated`, `canReceiveInbound`, `requiresActivationDeposit`
 
 Todos os endpoints abaixo usam WebAuthn/passkey e retornam `ApiResponse`. Bodies de registro usam `PasskeyRegistrationRequest`; bodies de verificação usam `PasskeyVerifyRequest`.
 
+**Regra de binding (passkey ≡ device-key):** um `deviceInstallId` só pode estar ligado a **uma conta**. Uma conta pode ter **vários dispositivos**. Se o install já pertence a outra conta, o registro/onboarding responde `409` com `AUTH_024` e payload `CONFIRM_UNLINK_DEVICE`; o client deve reenviar com `confirmUnlinkDevice=true`, o que **apaga no banco** as credenciais da conta anterior nesse device (login da conta antiga fica só senha + TOTP se houver).
+
 | Endpoint | Auth | Para que serve | Params/body | Response |
 |---|---|---|---|---|
 | `GET /auth/passkey/challenge?username={username}` | PUBLIC | Gerar challenge de login. | query `username` | `String` challenge |
 | `GET /auth/passkey/devices` | AUTHENTICATED | Listar inventário. | nenhum | `PasskeyInventoryDTO` |
-| `POST /auth/passkey/register` | AUTHENTICATED | Registrar passkey logado. | `PasskeyRegistrationRequest` | `String` status |
+| `POST /auth/passkey/register` | AUTHENTICATED | Registrar passkey logado. | `PasskeyRegistrationRequest` (+ `confirmUnlinkDevice`) | `String` status ou `AUTH_024` |
 | `POST /auth/passkey/devices/{deviceInstallId}/block` | AUTHENTICATED | Bloquear device. | path `deviceInstallId` | `PasskeyInventoryDTO` |
 | `POST /auth/passkey/devices/{deviceInstallId}/revoke` | AUTHENTICATED | Revogar device. | path `deviceInstallId` | `PasskeyInventoryDTO` |
-| `POST /auth/passkey/verify` | PUBLIC | Login passkey. | `PasskeyVerifyRequest` | `Object`: JWT ou ação requerida |
+| `POST /auth/passkey/verify` | PUBLIC | Login passkey. | `PasskeyVerifyRequest` (+ `deviceInstallId` opcional) | `Object`: JWT ou ação requerida |
 | `POST /auth/passkey/onboarding/start?sessionId={sessionId}` | PUBLIC | Challenge passkey no signup. | query `sessionId` | `String` challenge |
-| `POST /auth/passkey/onboarding/finish?sessionId={sessionId}` | PUBLIC | Finaliza passkey no signup. | query `sessionId` + `PasskeyRegistrationRequest` | `String` status |
+| `POST /auth/passkey/onboarding/finish?sessionId={sessionId}` | PUBLIC | Finaliza passkey no signup. | query `sessionId` + `PasskeyRegistrationRequest` | `String` JWT/status ou `AUTH_024` |
 
-Status codes: `200` sucesso; `400` assertion/body inválido; `401` assinatura/credencial inválida; `404` sessão/device não encontrado; `412` pré-condição criptográfica falhou.
+Status codes: `200` sucesso; `400` assertion/body inválido; `401` assinatura/credencial inválida; `404` sessão/device não encontrado; `409` `AUTH_024` device já vinculado a outra conta; `412` pré-condição criptográfica falhou.
 
 ### Device key
+
+Mesma **regra de binding** que passkey (`DeviceBindingPolicy`): 1 device → 1 conta; N devices por conta. `DeviceKeyRegistrationRequest` aceita `confirmUnlinkDevice`; onboarding/register finish pode retornar `409 AUTH_024`.
 
 | Endpoint | Auth | Para que serve | Params/body | Response |
 |---|---|---|---|---|
 | `POST /auth/device-key/onboarding/start?sessionId={id}` | PUBLIC | Gera challenge de device-key no onboarding. | query `sessionId`; `username` opcional | `DeviceKeyChallengeResponse` |
-| `POST /auth/device-key/onboarding/finish?sessionId={id}` | PUBLIC | Finaliza device-key no onboarding. | query `sessionId` + `DeviceKeyRegistrationRequest` | `String` status |
+| `POST /auth/device-key/onboarding/finish?sessionId={id}` | PUBLIC | Finaliza device-key no onboarding. | query `sessionId` + `DeviceKeyRegistrationRequest` | `String` status ou `AUTH_024` |
 | `GET /auth/device-key/challenge?username={username}` | PUBLIC | Challenge login device-key. | query `username` | `DeviceKeyChallengeResponse` |
 | `POST /auth/device-key/register/start` | AUTHENTICATED | Challenge para registrar logado. | nenhum | `DeviceKeyChallengeResponse` |
-| `POST /auth/device-key/register/finish` | AUTHENTICATED | Finaliza registro logado. | `DeviceKeyRegistrationRequest` | `String` status |
+| `POST /auth/device-key/register/finish` | AUTHENTICATED | Finaliza registro logado. | `DeviceKeyRegistrationRequest` | `String` status ou `AUTH_024` |
 | `POST /auth/device-key/verify` | PUBLIC | Login via device-key. | `DeviceKeyVerifyRequest` | `Object`: JWT ou ação requerida |
 | `GET /auth/device-key/devices` | AUTHENTICATED | Lista device keys. | nenhum | `List<DeviceKeyDeviceDTO>` |
 | `POST /auth/device-key/devices/{credentialId}/revoke` | AUTHENTICATED | Revoga device key. | path `credentialId` | `List<DeviceKeyDeviceDTO>` |
@@ -608,6 +612,7 @@ Campos observados no DTO:
 - `platform: String`
 - `browser: String`
 - `status: String`
+- `confirmUnlinkDevice: boolean` — se `true`, remove credenciais de outra conta neste `deviceInstallId` antes de gravar
 
 ### `PasskeyVerifyRequest`
 
@@ -620,6 +625,17 @@ Campos observados no DTO:
 - `authData: String`
 - `clientDataJSON: String`
 - `credentialId: String`
+- `deviceInstallId: String` (opcional; metadata do install no login)
+
+### `DeviceAlreadyBoundDTO` (`AUTH_024`)
+
+Fonte: [DeviceAlreadyBoundDTO.java](../../../backend/kerosene/src/main/java/source/auth/dto/devicebinding/DeviceAlreadyBoundDTO.java)
+
+- `action: String` — sempre `CONFIRM_UNLINK_DEVICE`
+- `deviceInstallId: String`
+- `previousUsernameMasked: String`
+- `message: String`
+- `guidance: String`
 
 ### `SignupResponseDTO`
 

@@ -41,6 +41,10 @@ public class RecoveryRateLimitService {
         }
 
         Long clientAttempts = redisContract.increment(clientKey);
+        // null = Redis degraded; fail-open rather than 500 the recovery start.
+        if (clientAttempts == null) {
+            return;
+        }
         if (clientAttempts == 1L) {
             redisContract.expire(clientKey, clientWindowSeconds);
         }
@@ -54,6 +58,9 @@ public class RecoveryRateLimitService {
     public void registerFailure(String normalizedUsername, String clientFingerprint) {
         String userAttemptsKey = "auth:recovery:attempts:user:" + normalizedUsername;
         Long userAttempts = redisContract.increment(userAttemptsKey);
+        if (userAttempts == null) {
+            return;
+        }
         if (userAttempts == 1L) {
             redisContract.expire(userAttemptsKey, usernameWindowSeconds);
         }

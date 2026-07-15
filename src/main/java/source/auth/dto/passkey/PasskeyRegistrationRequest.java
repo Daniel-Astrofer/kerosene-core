@@ -16,6 +16,8 @@ public class PasskeyRegistrationRequest {
     private String platform;
     private String browser;
     private String status;
+    /** When true, unlink (DELETE) previous account credentials on this deviceInstallId. */
+    private boolean confirmUnlinkDevice;
 
     public String getPublicKey() { return publicKey; }
     public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
@@ -47,4 +49,8 @@ public class PasskeyRegistrationRequest {
     public void setBrowser(String browser) { this.browser = browser; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public boolean isConfirmUnlinkDevice() { return confirmUnlinkDevice; }
+    public void setConfirmUnlinkDevice(boolean confirmUnlinkDevice) {
+        this.confirmUnlinkDevice = confirmUnlinkDevice;
+    }
 }

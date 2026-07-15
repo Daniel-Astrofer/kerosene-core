@@ -36,4 +36,26 @@ public interface DeviceKeyCredentialRepository extends JpaRepository<DeviceKeyCr
             @Param("userId") Long userId,
             @Param("newCounter") long newCounter,
             @Param("lastUsedAt") LocalDateTime lastUsedAt);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "user")
+    @Query("""
+            select d from DeviceKeyCredential d
+             where d.deviceInstallId = :deviceInstallId
+               and upper(coalesce(d.status, 'ACTIVE')) = 'ACTIVE'
+            """)
+    List<DeviceKeyCredential> findActiveByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from DeviceKeyCredential d where d.deviceInstallId = :deviceInstallId")
+    int deleteByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            delete from DeviceKeyCredential d
+             where d.user.id = :userId
+               and d.deviceInstallId = :deviceInstallId
+            """)
+    int deleteByUserIdAndDeviceInstallId(
+            @Param("userId") Long userId,
+            @Param("deviceInstallId") String deviceInstallId);
 }

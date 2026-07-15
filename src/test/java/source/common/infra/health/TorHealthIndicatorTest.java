@@ -20,7 +20,7 @@ class TorHealthIndicatorTest {
         Path state = Files.createFile(tempDir.resolve("vanguards.state"));
         Files.writeString(state, "layer2=abc\nlayer3=def\n");
 
-        TorHealthIndicator indicator = new TorHealthIndicator(socks.toString(), state.toString());
+        TorHealthIndicator indicator = new TorHealthIndicator(socks.toString(), state.toString(), true);
 
         assertEquals(Status.UP, indicator.health().getStatus());
     }
@@ -31,8 +31,19 @@ class TorHealthIndicatorTest {
 
         TorHealthIndicator indicator = new TorHealthIndicator(
                 socks.toString(),
-                tempDir.resolve("missing.state").toString());
+                tempDir.resolve("missing.state").toString(),
+                true);
 
         assertEquals(Status.DOWN, indicator.health().getStatus());
+    }
+
+    @Test
+    void shouldReportUpWhenTorNotRequiredEvenWithoutSocket() {
+        TorHealthIndicator indicator = new TorHealthIndicator(
+                tempDir.resolve("missing.sock").toString(),
+                "",
+                false);
+
+        assertEquals(Status.UP, indicator.health().getStatus());
     }
 }

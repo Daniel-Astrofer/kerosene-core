@@ -4,7 +4,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.service.devicebinding.DeviceBindingPolicy;
 import source.auth.application.service.devicekey.DeviceKeyService;
+import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.model.entity.DeviceKeyCredential;
 import source.auth.model.entity.UserDataBase;
@@ -15,14 +17,17 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
     private final UserRepository userRepository;
     private final DeviceKeyCredentialRepository deviceKeyRepository;
     private final DeviceKeyService deviceKeyService;
+    private final DeviceBindingPolicy deviceBindingPolicy;
 
     public FinishAuthenticatedDeviceKeyRegistrationUseCase(
             UserRepository userRepository,
             DeviceKeyCredentialRepository deviceKeyRepository,
-            DeviceKeyService deviceKeyService) {
+            DeviceKeyService deviceKeyService,
+            DeviceBindingPolicy deviceBindingPolicy) {
         this.userRepository = userRepository;
         this.deviceKeyRepository = deviceKeyRepository;
         this.deviceKeyService = deviceKeyService;
+        this.deviceBindingPolicy = deviceBindingPolicy;
     }
 
     @Transactional
@@ -34,6 +39,13 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
 
         DeviceKeyService.VerifiedDeviceKeyRegistration verified =
                 deviceKeyService.verifyRegistration(request, "", user.getUsername());
+        var bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(
+                verified.deviceInstallId(),
+                user.getId(),
+                request.isConfirmUnlinkDevice());
+        if (bindingConflict != null) {
+            return Result.deviceAlreadyBound(bindingConflict);
+        }
         persistDeviceKey(user, verified);
         return Result.registered();
     }
@@ -66,19 +78,24 @@ public class FinishAuthenticatedDeviceKeyRegistrationUseCase {
         deviceKeyRepository.save(credential);
     }
 
-    public record Result(Status status) {
+    public record Result(Status status, DeviceAlreadyBoundDTO deviceAlreadyBound) {
 
         public static Result registered() {
-            return new Result(Status.REGISTERED);
+            return new Result(Status.REGISTERED, null);
         }
 
         public static Result userNotFound() {
-            return new Result(Status.USER_NOT_FOUND);
+            return new Result(Status.USER_NOT_FOUND, null);
+        }
+
+        public static Result deviceAlreadyBound(DeviceAlreadyBoundDTO payload) {
+            return new Result(Status.DEVICE_ALREADY_BOUND, payload);
         }
     }
 
     public enum Status {
         REGISTERED,
-        USER_NOT_FOUND
+        USER_NOT_FOUND,
+        DEVICE_ALREADY_BOUND
     }
 }

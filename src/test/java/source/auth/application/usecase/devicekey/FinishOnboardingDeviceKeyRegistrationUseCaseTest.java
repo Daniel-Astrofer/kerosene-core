@@ -7,6 +7,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
+import source.auth.application.service.devicebinding.DeviceBindingPolicy;
 import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.SignupState;
@@ -45,7 +46,8 @@ class FinishOnboardingDeviceKeyRegistrationUseCaseTest {
                 deviceKeyService,
                 finalizeSignupAccount,
                 deviceKeyRepository,
-                jwtServicer);
+                jwtServicer,
+                mock(DeviceBindingPolicy.class));
     }
 
     @Test

@@ -5,6 +5,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -244,6 +247,20 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 INVALID_ARGUMENTS_MESSAGE,
                 ErrorCodes.SYS_INVALID_ARGUMENTS);
+    }
+
+    @ExceptionHandler({
+            RedisSystemException.class,
+            RedisConnectionFailureException.class,
+            DataAccessException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleDataAccess(DataAccessException ex) {
+        log.error("[GlobalExceptionHandler] Data store unavailable: {} - {}",
+                ex.getClass().getSimpleName(), ex.getMessage());
+        return buildErrorResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Service temporarily unavailable. Please try again in a moment.",
+                ErrorCodes.SYS_INTERNAL_ERROR);
     }
 
     @ExceptionHandler(Exception.class)

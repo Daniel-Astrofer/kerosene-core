@@ -15,6 +15,8 @@ public class DeviceKeyRegistrationRequest {
     private String serialNumber;
     private String signedPayload;
     private String signature;
+    /** When true, unlink (DELETE) previous account credentials on this deviceInstallId. */
+    private boolean confirmUnlinkDevice;
 
     public String getPublicKey() { return publicKey; }
     public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
@@ -44,4 +46,8 @@ public class DeviceKeyRegistrationRequest {
     public void setSignedPayload(String signedPayload) { this.signedPayload = signedPayload; }
     public String getSignature() { return signature; }
     public void setSignature(String signature) { this.signature = signature; }
+    public boolean isConfirmUnlinkDevice() { return confirmUnlinkDevice; }
+    public void setConfirmUnlinkDevice(boolean confirmUnlinkDevice) {
+        this.confirmUnlinkDevice = confirmUnlinkDevice;
+    }
 }

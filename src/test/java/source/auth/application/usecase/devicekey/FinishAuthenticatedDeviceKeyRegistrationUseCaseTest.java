@@ -6,6 +6,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.UserRepository;
+import source.auth.application.service.devicebinding.DeviceBindingPolicy;
 import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.model.entity.DeviceKeyCredential;
@@ -36,7 +37,8 @@ class FinishAuthenticatedDeviceKeyRegistrationUseCaseTest {
         useCase = new FinishAuthenticatedDeviceKeyRegistrationUseCase(
                 userRepository,
                 deviceKeyRepository,
-                deviceKeyService);
+                deviceKeyService,
+                mock(DeviceBindingPolicy.class));
     }
 
     @Test

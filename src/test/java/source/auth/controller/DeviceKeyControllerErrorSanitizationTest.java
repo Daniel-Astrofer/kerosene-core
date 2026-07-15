@@ -107,7 +107,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenReturn(FinishOnboardingDeviceKeyRegistrationUseCase.Result.sessionExpired());
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 new DeviceKeyRegistrationRequest());
 
@@ -122,7 +122,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenReturn(FinishOnboardingDeviceKeyRegistrationUseCase.Result.created("42 jwt-token"));
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 new DeviceKeyRegistrationRequest());
 
@@ -137,7 +137,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new RuntimeException(SECRET_RUNTIME_MESSAGE));
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 new DeviceKeyRegistrationRequest());
 
@@ -167,7 +167,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new DeviceKeyChallengeException(SECRET_RUNTIME_MESSAGE));
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 new DeviceKeyRegistrationRequest());
 
@@ -182,7 +182,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishOnboardingDeviceKeyRegistrationUseCase.execute(eq("session-1"), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new DeviceKeyProtocolException(SECRET_RUNTIME_MESSAGE));
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 new DeviceKeyRegistrationRequest());
 
@@ -342,7 +342,7 @@ class DeviceKeyControllerErrorSanitizationTest {
 
     @Test
     void finishAuthenticatedRegistrationRequiresAuthenticatedUser() {
-        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishAuthenticatedRegistration(
                 new DeviceKeyRegistrationRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -357,10 +357,9 @@ class DeviceKeyControllerErrorSanitizationTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
         when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
-                .thenReturn(new FinishAuthenticatedDeviceKeyRegistrationUseCase.Result(
-                        FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.USER_NOT_FOUND));
+                .thenReturn(FinishAuthenticatedDeviceKeyRegistrationUseCase.Result.userNotFound());
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishAuthenticatedRegistration(
                 new DeviceKeyRegistrationRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -376,7 +375,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new DeviceKeyChallengeException(SECRET_RUNTIME_MESSAGE));
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishAuthenticatedRegistration(
                 new DeviceKeyRegistrationRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
@@ -393,7 +392,7 @@ class DeviceKeyControllerErrorSanitizationTest {
         when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
                 .thenThrow(new DeviceKeyProtocolException(SECRET_RUNTIME_MESSAGE));
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishAuthenticatedRegistration(
                 new DeviceKeyRegistrationRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -408,10 +407,9 @@ class DeviceKeyControllerErrorSanitizationTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("42", "credentials", List.of()));
         when(finishAuthenticatedDeviceKeyRegistrationUseCase.execute(eq(42L), any(DeviceKeyRegistrationRequest.class)))
-                .thenReturn(new FinishAuthenticatedDeviceKeyRegistrationUseCase.Result(
-                        FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.REGISTERED));
+                .thenReturn(FinishAuthenticatedDeviceKeyRegistrationUseCase.Result.registered());
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishAuthenticatedRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishAuthenticatedRegistration(
                 new DeviceKeyRegistrationRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);

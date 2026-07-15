@@ -164,6 +164,14 @@ public class FinalizeSignupAccount {
             return;
         }
 
+        // Device-key onboarding finalizes signup with passkeyRegistered=true but without
+        // WebAuthn passkey material. Skip empty inserts that violate passkey_credentials NN.
+        String publicKey = publicKeyMaterial(state);
+        if (state.getPasskeyCredentialId() == null || state.getPasskeyCredentialId().isBlank()
+                || publicKey == null || publicKey.isBlank()) {
+            return;
+        }
+
         PasskeyCredential credential = new PasskeyCredential();
         credential.setUser(user);
         credential.setDeviceName(state.getPasskeyDeviceName());

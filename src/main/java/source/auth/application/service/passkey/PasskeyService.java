@@ -580,10 +580,23 @@ public class PasskeyService {
     }
 
     private String extractOriginHost(String originInClientData) {
-        try {
-            return normalizeHost(URI.create(originInClientData).getHost());
-        } catch (Exception ignored) {
+        if (originInClientData == null || originInClientData.isBlank()) {
             return null;
+        }
+        String origin = originInClientData.trim();
+        // Android sovereign passkey origin is not an HTTP URL (e.g. android:apk-key-hash:kerosene).
+        // Persist a stable host token instead of URI.getHost() which returns null for this scheme.
+        if (origin.regionMatches(true, 0, "android:", 0, "android:".length())) {
+            String withoutScheme = origin.substring("android:".length()).trim();
+            if (withoutScheme.isEmpty()) {
+                return "android";
+            }
+            return withoutScheme.toLowerCase(Locale.ROOT);
+        }
+        try {
+            return normalizeHost(URI.create(origin).getHost());
+        } catch (Exception ignored) {
+            return origin.toLowerCase(Locale.ROOT);
         }
     }
 

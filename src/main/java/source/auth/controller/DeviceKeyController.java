@@ -78,7 +78,7 @@ public class DeviceKeyController {
     }
 
     @PostMapping("/onboarding/finish")
-    public ResponseEntity<ApiResponse<String>> finishOnboardingRegistration(
+    public ResponseEntity<ApiResponse<?>> finishOnboardingRegistration(
             @RequestParam String sessionId,
             @RequestBody DeviceKeyRegistrationRequest request) {
         try {
@@ -87,6 +87,15 @@ public class DeviceKeyController {
             if (result.status() == FinishOnboardingDeviceKeyRegistrationUseCase.Status.SESSION_EXPIRED) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiResponse.error("Session expired", ErrorCodes.AUTH_SESSION_EXPIRED));
+            }
+            if (result.status() == FinishOnboardingDeviceKeyRegistrationUseCase.Status.DEVICE_ALREADY_BOUND) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiResponse.error(
+                                result.deviceAlreadyBound() == null
+                                        ? "Device already bound to another account"
+                                        : result.deviceAlreadyBound().message(),
+                                ErrorCodes.AUTH_DEVICE_ALREADY_BOUND,
+                                result.deviceAlreadyBound()));
             }
             return ResponseEntity.ok(ApiResponse.success(
                     "Device key linked and account created.",
@@ -141,7 +150,7 @@ public class DeviceKeyController {
     }
 
     @PostMapping("/register/finish")
-    public ResponseEntity<ApiResponse<String>> finishAuthenticatedRegistration(
+    public ResponseEntity<ApiResponse<?>> finishAuthenticatedRegistration(
             @RequestBody DeviceKeyRegistrationRequest request) {
         Long userId = authenticatedUserId();
         if (userId == null) {
@@ -154,6 +163,15 @@ public class DeviceKeyController {
             if (result.status() == FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.USER_NOT_FOUND) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Must be logged in to register a device key", ErrorCodes.AUTH_SESSION_EXPIRED));
+            }
+            if (result.status() == FinishAuthenticatedDeviceKeyRegistrationUseCase.Status.DEVICE_ALREADY_BOUND) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiResponse.error(
+                                result.deviceAlreadyBound() == null
+                                        ? "Device already bound to another account"
+                                        : result.deviceAlreadyBound().message(),
+                                ErrorCodes.AUTH_DEVICE_ALREADY_BOUND,
+                                result.deviceAlreadyBound()));
             }
             return ResponseEntity.ok(ApiResponse.success("Device key registered successfully", "OK"));
         } catch (DeviceKeyChallengeException exception) {

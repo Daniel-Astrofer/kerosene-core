@@ -6,6 +6,7 @@ public class PasskeyVerifyRequest {
     private String authData;
     private String clientDataJSON;
     private String credentialId;
+    private String deviceInstallId;
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
@@ -17,4 +18,6 @@ public class PasskeyVerifyRequest {
     public void setClientDataJSON(String clientDataJSON) { this.clientDataJSON = clientDataJSON; }
     public String getCredentialId() { return credentialId; }
     public void setCredentialId(String credentialId) { this.credentialId = credentialId; }
+    public String getDeviceInstallId() { return deviceInstallId; }
+    public void setDeviceInstallId(String deviceInstallId) { this.deviceInstallId = deviceInstallId; }
 }

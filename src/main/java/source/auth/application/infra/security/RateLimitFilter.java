@@ -6,6 +6,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -24,6 +26,8 @@ import java.util.Optional;
 
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
 
     private static final List<String> BODY_BUCKET_FIELDS = List.of(
             "username",
@@ -104,9 +108,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String key = "ratelimit:" + routeLimit.bucket() + ":" + requesterBucket + ":" + currentMinute;
         int limit = routeLimit.requestsPerMinute();
 
-        Long requests = redisService.increment(key);
+        Long requests;
+        try {
+            requests = redisService.increment(key);
+        } catch (RuntimeException exception) {
+            // Fail-open: never block legitimate traffic when Redis is unavailable/degraded.
+            log.warn("Rate limit skipped because Redis increment failed: {}", exception.getMessage());
+            filterChain.doFilter(effectiveRequest, response);
+            return;
+        }
+
+        // null = Redis layer swallowed a degraded write; fail-open.
+        if (requests == null) {
+            log.warn("Rate limit skipped because Redis increment returned null for bucket={}", routeLimit.bucket());
+            filterChain.doFilter(effectiveRequest, response);
+            return;
+        }
+
         if (requests == 1) {
-            redisService.expire(key, 60);
+            try {
+                redisService.expire(key, 60);
+            } catch (RuntimeException exception) {
+                log.warn("Rate limit expire failed (non-fatal): {}", exception.getMessage());
+            }
         }
 
         if (requests > limit) {

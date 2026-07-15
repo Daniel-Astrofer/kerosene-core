@@ -77,6 +77,59 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         satsToBtc(creditedSats)));
     }
 
+    @Override
+    public void notifyDepositDetected(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long creditedSats,
+            int confirmations) {
+        notificationService.notifyUser(
+                userId,
+                NotificationMessages.payload(
+                        NotificationKind.DEPOSIT_DETECTED,
+                        NotificationSeverity.WARNING,
+                        NotificationMessageKey.PENDING_DEPOSIT_DETECTED,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        Map.of(
+                                "transactionId", transactionId.toString(),
+                                "walletId", walletId.toString(),
+                                "rail", rail,
+                                "creditedSats", String.valueOf(creditedSats),
+                                "confirmations", String.valueOf(confirmations)),
+                        satsToBtc(creditedSats)));
+    }
+
+    @Override
+    public void notifyDepositConfirmationProgress(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long creditedSats,
+            int confirmations) {
+        notificationService.notifyUser(
+                userId,
+                NotificationMessages.payload(
+                        NotificationKind.DEPOSIT_DETECTED,
+                        NotificationSeverity.WARNING,
+                        NotificationMessageKey.PENDING_DEPOSIT_PROGRESS,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        Map.of(
+                                "transactionId", transactionId.toString(),
+                                "walletId", walletId.toString(),
+                                "rail", rail,
+                                "creditedSats", String.valueOf(creditedSats),
+                                "confirmations", String.valueOf(confirmations)),
+                        satsToBtc(creditedSats),
+                        String.valueOf(confirmations)));
+    }
+
     private NotificationMessageKey depositMessageKey(String rail) {
         return "LIGHTNING".equalsIgnoreCase(rail)
                 ? NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_CONFIRMED

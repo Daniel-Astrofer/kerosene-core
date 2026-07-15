@@ -51,6 +51,46 @@ public class KfeInternalFinancialNotificationController {
         return ResponseEntity.ok(ApiResponse.success("KFE deposit notification accepted.", null));
     }
 
+    @PostMapping("/deposit-detected")
+    public ResponseEntity<ApiResponse<Void>> notifyDepositDetected(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialDepositConfirmedNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyDepositDetected(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.creditedSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE deposit detected notification accepted.", null));
+    }
+
+    @PostMapping("/deposit-progress")
+    public ResponseEntity<ApiResponse<Void>> notifyDepositConfirmationProgress(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialDepositConfirmedNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyDepositConfirmationProgress(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.creditedSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE deposit progress notification accepted.", null));
+    }
+
     @PostMapping("/payment-request-deposit-confirmed")
     public ResponseEntity<ApiResponse<Void>> notifyPaymentRequestDepositConfirmed(
             @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,

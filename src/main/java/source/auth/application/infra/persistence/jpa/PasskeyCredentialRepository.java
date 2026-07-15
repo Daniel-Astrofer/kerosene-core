@@ -102,4 +102,28 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
     List<PasskeyCredential> findByUserHandle(byte[] userHandle);
 
     Optional<PasskeyCredential> findFirstByUserIdAndDeviceInstallId(Long userId, String deviceInstallId);
+
+    @EntityGraph(attributePaths = "user")
+    @Query("""
+            select p from PasskeyCredential p
+             where p.deviceInstallId = :deviceInstallId
+               and upper(coalesce(p.status, 'ACTIVE')) = 'ACTIVE'
+            """)
+    List<PasskeyCredential> findActiveByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
+
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from PasskeyCredential p where p.deviceInstallId = :deviceInstallId")
+    int deleteByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
+
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            delete from PasskeyCredential p
+             where p.user.id = :userId
+               and p.deviceInstallId = :deviceInstallId
+            """)
+    int deleteByUserIdAndDeviceInstallId(
+            @Param("userId") Long userId,
+            @Param("deviceInstallId") String deviceInstallId);
 }

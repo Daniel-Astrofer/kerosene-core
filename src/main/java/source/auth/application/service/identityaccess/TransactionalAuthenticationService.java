@@ -7,20 +7,26 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import source.auth.AuthExceptions;
+import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import source.auth.application.service.cripto.contracts.Hasher;
+import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.user.contract.UserServiceContract;
 import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
+import source.auth.model.entity.DeviceKeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 import source.common.exception.ErrorCodes;
 import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @Service
@@ -31,6 +37,8 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
     private final PasskeyService passkeyService;
     private final PasskeyInventoryService passkeyInventoryService;
     private final PasskeyCredentialRepository passkeyCredentialRepository;
+    private final DeviceKeyCredentialRepository deviceKeyCredentialRepository;
+    private final DeviceKeyService deviceKeyService;
     private final TOTPVerifier totpVerifier;
     private final Hasher hasher;
     private final UserServiceContract userService;
@@ -41,6 +49,8 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             PasskeyService passkeyService,
             PasskeyInventoryService passkeyInventoryService,
             PasskeyCredentialRepository passkeyCredentialRepository,
+            DeviceKeyCredentialRepository deviceKeyCredentialRepository,
+            DeviceKeyService deviceKeyService,
             TOTPVerifier totpVerifier,
             @Qualifier("Argon2Hasher") Hasher hasher,
             UserServiceContract userService,
@@ -49,6 +59,8 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         this.passkeyService = passkeyService;
         this.passkeyInventoryService = passkeyInventoryService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
+        this.deviceKeyCredentialRepository = deviceKeyCredentialRepository;
+        this.deviceKeyService = deviceKeyService;
         this.totpVerifier = totpVerifier;
         this.hasher = hasher;
         this.userService = userService;
@@ -57,6 +69,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
     }
 
     @Override
+    @Transactional
     public TransactionalAuthenticationResult authorize(TransactionalAuthenticationRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Transactional authentication request is required.");
@@ -73,8 +86,17 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                 request.scope());
 
         if (request.scope() == TransactionalAuthenticationScope.KFE_CUSTODIAL_TRANSFER) {
-            boolean passkeyValid = verifyPasskeyIfPresented(user, request.passkeyAssertionJson());
-            requirePasskey(user, passkeyValid);
+            // Mobile/beta accounts enroll device-key (Ed25519) instead of WebAuthn passkeys.
+            // Detect assertion kind first so WebAuthn parsers do not reject device-key JSON.
+            boolean authorized;
+            if (looksLikeDeviceKeyAssertion(request.passkeyAssertionJson())) {
+                authorized = verifyDeviceKeyIfPresented(user, request.passkeyAssertionJson());
+            } else {
+                authorized = verifyPasskeyIfPresented(user, request.passkeyAssertionJson());
+            }
+            if (!authorized) {
+                requirePasskey(user, false);
+            }
             return new TransactionalAuthenticationResult(user, "");
         }
         if (request.scope() == TransactionalAuthenticationScope.KFE_COLD_WALLET_PSBT) {
@@ -398,6 +420,94 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                         user,
                         challenge,
                         "Uma passkey compativel com este login e obrigatoria para concluir a operacao."));
+    }
+
+    private boolean looksLikeDeviceKeyAssertion(String assertionJson) {
+        if (!hasText(assertionJson)) {
+            return false;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(assertionJson);
+            String type = node.path("type").asText("");
+            return "DEVICE_KEY".equalsIgnoreCase(type) || "AUTH_DEVICE_KEY".equalsIgnoreCase(type);
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Accepts device-key AUTH assertions embedded in the passkeyAssertionJson field for
+     * KFE custodial transfers (mobile onboarding path without WebAuthn passkeys).
+     *
+     * Expected JSON shape:
+     * {
+     *   "type": "DEVICE_KEY",
+     *   "credentialId": "...",
+     *   "deviceInstallId": "...",
+     *   "signedPayload": "{...canonical AUTH_DEVICE_KEY...}",
+     *   "signature": "..."
+     * }
+     */
+    private boolean verifyDeviceKeyIfPresented(UserDataBase user, String assertionJson) {
+        if (!hasText(assertionJson)) {
+            return false;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(assertionJson);
+            String type = node.path("type").asText("");
+            if (!"DEVICE_KEY".equalsIgnoreCase(type) && !"AUTH_DEVICE_KEY".equalsIgnoreCase(type)) {
+                return false;
+            }
+
+            String credentialId = requiredText(node, "credentialId");
+            String deviceInstallId = requiredText(node, "deviceInstallId");
+            String signedPayload = requiredText(node, "signedPayload");
+            String signature = requiredText(node, "signature");
+
+            DeviceKeyCredential credential = deviceKeyCredentialRepository
+                    .findByCredentialIdAndUserId(credentialId, user.getId())
+                    .orElseThrow(() -> new AuthExceptions.StructuredAuthException(
+                            "Device key not linked to this account.",
+                            HttpStatus.CONFLICT,
+                            ErrorCodes.AUTH_PASSKEY_CREDENTIAL_NOT_FOUND,
+                            Map.of("required", "deviceKey")));
+
+            DeviceKeyVerifyRequest verifyRequest = new DeviceKeyVerifyRequest();
+            verifyRequest.setUsername(user.getUsername());
+            verifyRequest.setCredentialId(credentialId);
+            verifyRequest.setDeviceInstallId(deviceInstallId);
+            verifyRequest.setSignedPayload(signedPayload);
+            verifyRequest.setSignature(signature);
+
+            long newCounter = deviceKeyService.verifyAuthentication(verifyRequest, user, credential);
+            int updated = deviceKeyCredentialRepository.advanceCounter(
+                    credentialId,
+                    user.getId(),
+                    newCounter,
+                    LocalDateTime.now());
+            if (updated != 1) {
+                throw new AuthExceptions.StructuredAuthException(
+                        "Device key counter did not advance.",
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.AUTH_PASSKEY_REPLAY,
+                        Map.of("required", "deviceKey"));
+            }
+            log.info("Transaction device-key factor verified for userId={}", user.getId());
+            return true;
+        } catch (AuthExceptions.StructuredAuthException exception) {
+            throw exception;
+        } catch (AuthExceptions.AuthValidationException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            log.error("Device key verification failed during transactional authorization: {}",
+                    exception.getMessage(), exception);
+            throw new AuthExceptions.StructuredAuthException(
+                    "Falha ao validar a device key desta operacao: " + exception.getMessage(),
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_PASSKEY_ASSERTION_FAILED,
+                    Map.of("required", "deviceKey",
+                            "detail", exception.getMessage() == null ? "" : exception.getMessage()));
+        }
     }
 
     private String requiredText(JsonNode node, String fieldName) {

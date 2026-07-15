@@ -34,10 +34,21 @@ public class StringCryptoConverter implements AttributeConverter<String, String>
             throw new IllegalStateException("String column crypto port is not initialized for JPA Converter");
         }
 
+        // Pad to a fixed block only for short secrets (length-hiding). Never truncate:
+        // cold-wallet descriptors with origin+tpub routinely exceed 128 bytes
+        // (e.g. wpkh([fp/0h]tpub…/0/*) ≈ 133+), and clipping them drops "/0/*)" so
+        // Bitcoin Core rejects the descriptor and observed balance stays 0.
         byte[] originalBytes = plainText.getBytes(StandardCharsets.UTF_8);
-        byte[] paddedBytes = new byte[128];
+        final int minPad = 128;
+        final int maxPad = 1024;
+        int padLen = Math.max(minPad, originalBytes.length);
+        if (padLen > maxPad) {
+            throw new IllegalArgumentException(
+                    "Encrypted string column value exceeds " + maxPad + " bytes.");
+        }
+        byte[] paddedBytes = new byte[padLen];
         java.util.Arrays.fill(paddedBytes, (byte) 32);
-        System.arraycopy(originalBytes, 0, paddedBytes, 0, Math.min(originalBytes.length, paddedBytes.length));
+        System.arraycopy(originalBytes, 0, paddedBytes, 0, originalBytes.length);
 
         try {
             String encrypted = cryptoPort.encrypt(paddedBytes);

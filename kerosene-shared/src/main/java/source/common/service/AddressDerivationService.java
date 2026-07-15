@@ -144,27 +144,55 @@ public class AddressDerivationService {
         }
     }
 
+    /**
+     * Rewrites xpub/ypub/zpub ↔ tpub/upub/vpub so the key version matches the
+     * configured Bitcoin network. Required for Bitcoin Core descriptors on
+     * testnet/testnet4 (Core rejects mainnet {@code xpub} as invalid).
+     */
+    public String toNetworkExtendedPublicKey(String rawXpub) {
+        return normalizeExtendedPublicKey(rawXpub);
+    }
+
     private String normalizeExtendedPublicKey(String rawXpub) {
         if (rawXpub == null || rawXpub.isBlank()) {
             throw new IllegalArgumentException("XPUB is required.");
         }
 
         String xpub = rawXpub.trim();
-        if (xpub.startsWith("xpub") || xpub.startsWith("tpub")) {
-            return xpub;
+        byte[] decoded;
+        try {
+            decoded = Base58.decodeChecked(xpub);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("XPUB is not a valid Base58Check payload.", exception);
         }
-
-        byte[] decoded = Base58.decodeChecked(xpub);
         if (decoded.length < 4) {
             return xpub;
         }
 
+        // Target version must match the configured Bitcoin network so bitcoinj can
+        // deserialize client-supplied mainnet xpubs on testnet/regtest (and vice-versa).
+        // Key material is identical; only the version prefix differs.
+        int targetVersion = isMainnet() ? 0x0488B21E : 0x043587CF;
+
         int replacementVersion;
-        if (startsWith(decoded, 0x04, 0xb2, 0x47, 0x46) || startsWith(decoded, 0x04, 0x9d, 0x7c, 0xb2)) {
-            replacementVersion = 0x0488B21E;
-        } else if (startsWith(decoded, 0x04, 0x5f, 0x1c, 0xf6) || startsWith(decoded, 0x04, 0x4a, 0x52, 0x62)) {
-            replacementVersion = 0x043587CF;
+        if (startsWith(decoded, 0x04, 0x88, 0xB2, 0x1E) // xpub
+                || startsWith(decoded, 0x04, 0xb2, 0x47, 0x46) // zpub
+                || startsWith(decoded, 0x04, 0x9d, 0x7c, 0xb2)) { // ypub
+            replacementVersion = targetVersion;
+        } else if (startsWith(decoded, 0x04, 0x35, 0x87, 0xCF) // tpub
+                || startsWith(decoded, 0x04, 0x5f, 0x1c, 0xf6) // vpub
+                || startsWith(decoded, 0x04, 0x4a, 0x52, 0x62)) { // upub
+            replacementVersion = targetVersion;
         } else {
+            // Unknown version — leave as-is and let bitcoinj reject if incompatible.
+            return xpub;
+        }
+
+        int currentVersion = ((decoded[0] & 0xff) << 24)
+                | ((decoded[1] & 0xff) << 16)
+                | ((decoded[2] & 0xff) << 8)
+                | (decoded[3] & 0xff);
+        if (currentVersion == replacementVersion) {
             return xpub;
         }
 

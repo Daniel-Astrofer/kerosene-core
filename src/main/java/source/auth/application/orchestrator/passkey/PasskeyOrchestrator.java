@@ -5,7 +5,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import source.auth.application.infra.persistence.jpa.UserRepository;
@@ -13,6 +15,7 @@ import source.auth.application.orchestrator.login.StartLogin;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.cache.contracts.RedisServicer;
+import source.auth.application.service.devicebinding.DeviceBindingPolicy;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
@@ -46,6 +49,8 @@ public class PasskeyOrchestrator {
     private final PasskeyInventoryService passkeyInventoryService;
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final RedisServicer redisService;
+    private final DeviceBindingPolicy deviceBindingPolicy;
+    private final TransactionTemplate transactionTemplate;
 
     public PasskeyOrchestrator(
             PasskeyService passkeyService,
@@ -55,7 +60,9 @@ public class PasskeyOrchestrator {
             SignupStateStore signupStateStore,
             PasskeyInventoryService passkeyInventoryService,
             FinalizeSignupAccount finalizeSignupAccount,
-            RedisServicer redisService) {
+            RedisServicer redisService,
+            DeviceBindingPolicy deviceBindingPolicy,
+            PlatformTransactionManager transactionManager) {
         this.passkeyService = passkeyService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.userRepository = userRepository;
@@ -64,10 +71,15 @@ public class PasskeyOrchestrator {
         this.passkeyInventoryService = passkeyInventoryService;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.redisService = redisService;
+        this.deviceBindingPolicy = deviceBindingPolicy;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
-    public ResponseEntity<ApiResponse<String>> registerPasskey(Long userId, PasskeyRegistrationRequest request) {
+    /**
+     * Not fully transactional: binding conflict is resolved in REQUIRES_NEW TXs so AUTH_024
+     * never poisons the caller's transaction (UnexpectedRollbackException → HTTP 500).
+     */
+    public ResponseEntity<ApiResponse<?>> registerPasskey(Long userId, PasskeyRegistrationRequest request) {
         try {
             UserDataBase user = userRepository.findById(userId).orElse(null);
             if (user == null) {
@@ -75,10 +87,23 @@ public class PasskeyOrchestrator {
                         .body(ApiResponse.error("User not found", ErrorCodes.AUTH_USER_NOT_FOUND));
             }
 
-            ResponseEntity<ApiResponse<String>> invalidOrigin = rejectInvalidPasskeyOrigin(
+            ResponseEntity<ApiResponse<?>> invalidOrigin = rejectInvalidPasskeyOrigin(
                     user.getUsername(), request.getClientDataJSON());
             if (invalidOrigin != null) {
                 return invalidOrigin;
+            }
+
+            // Binding probe before consuming the challenge so clients can retry after confirm.
+            if (!request.isConfirmUnlinkDevice()) {
+                var probe = deviceBindingPolicy.findBindingConflict(
+                        request.getDeviceInstallId(), user.getId());
+                if (probe != null) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                            .body(ApiResponse.error(
+                                    probe.message(),
+                                    ErrorCodes.AUTH_DEVICE_ALREADY_BOUND,
+                                    probe));
+                }
             }
 
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(user.getUsername());
@@ -108,43 +133,65 @@ public class PasskeyOrchestrator {
                                 "INVALID_SIGNATURE"));
             }
 
-            PasskeyCredential credential = new PasskeyCredential();
-            credential.setPublicKeyCose(pkToVerify);
-
-            try {
-                if (request.getCredentialId() != null) {
-                    credential.setCredentialId(decoder.decode(request.getCredentialId()));
-                }
-                if (request.getUserHandle() != null) {
-                    credential.setUserHandle(decoder.decode(request.getUserHandle()));
-                }
-            } catch (IllegalArgumentException e) {
-                decoder = java.util.Base64.getUrlDecoder();
-                if (request.getCredentialId() != null) {
-                    credential.setCredentialId(decoder.decode(request.getCredentialId()));
-                }
-                if (request.getUserHandle() != null) {
-                    credential.setUserHandle(decoder.decode(request.getUserHandle()));
-                }
-            }
-            if (credential.getUserHandle() == null && credential.getCredentialId() != null) {
-                credential.setUserHandle(credential.getCredentialId());
+            var bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(
+                    request.getDeviceInstallId(),
+                    user.getId(),
+                    request.isConfirmUnlinkDevice());
+            if (bindingConflict != null) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiResponse.error(
+                                bindingConflict.message(),
+                                ErrorCodes.AUTH_DEVICE_ALREADY_BOUND,
+                                bindingConflict));
             }
 
-            credential.setDeviceName(request.getDeviceName());
-            applyPasskeyContextMetadata(credential, request);
-            applyPasskeyDeviceMetadata(credential, request);
-            credential.setUser(user);
-            credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
-
-            passkeyCredentialRepository.save(credential);
-            return ResponseEntity.ok(ApiResponse.success("Passkey registered successfully", "OK"));
-
+            final java.util.Base64.Decoder decoderForSave = decoder;
+            final byte[] publicKeyForSave = pkToVerify;
+            return transactionTemplate.execute(status ->
+                    persistRegisteredPasskey(user, request, publicKeyForSave, decoderForSave));
         } catch (Exception e) {
             log.error("Failed to register passkey", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Passkey registration failed.", ErrorCodes.AUTH_GENERIC));
         }
+    }
+
+    private ResponseEntity<ApiResponse<?>> persistRegisteredPasskey(
+            UserDataBase user,
+            PasskeyRegistrationRequest request,
+            byte[] pkToVerify,
+            java.util.Base64.Decoder decoder) {
+        PasskeyCredential credential = new PasskeyCredential();
+        credential.setPublicKeyCose(pkToVerify);
+
+        try {
+            if (request.getCredentialId() != null) {
+                credential.setCredentialId(decoder.decode(request.getCredentialId()));
+            }
+            if (request.getUserHandle() != null) {
+                credential.setUserHandle(decoder.decode(request.getUserHandle()));
+            }
+        } catch (IllegalArgumentException e) {
+            decoder = java.util.Base64.getUrlDecoder();
+            if (request.getCredentialId() != null) {
+                credential.setCredentialId(decoder.decode(request.getCredentialId()));
+            }
+            if (request.getUserHandle() != null) {
+                credential.setUserHandle(decoder.decode(request.getUserHandle()));
+            }
+        }
+        if (credential.getUserHandle() == null && credential.getCredentialId() != null) {
+            credential.setUserHandle(credential.getCredentialId());
+        }
+
+        credential.setDeviceName(request.getDeviceName());
+        applyPasskeyContextMetadata(credential, request);
+        applyPasskeyDeviceMetadata(credential, request);
+        credential.setUser(user);
+        credential.setSignatureCount(passkeyService.extractSignatureCount(request.getAuthData()));
+
+        passkeyCredentialRepository.save(credential);
+        return ResponseEntity.ok(ApiResponse.success("Passkey registered successfully", "OK"));
     }
 
     @Transactional
@@ -280,7 +327,7 @@ public class PasskeyOrchestrator {
                         "Entre com senha + TOTP e vincule uma nova passkey compativel com este dispositivo.");
             }
 
-            ResponseEntity<ApiResponse<Object>> invalidOrigin = rejectInvalidPasskeyOrigin(
+            ResponseEntity<ApiResponse<?>> invalidOrigin = rejectInvalidPasskeyOrigin(
                     normalizedUsername, request.getClientDataJSON());
             if (invalidOrigin != null) {
                 logVerifyFailure(
@@ -292,7 +339,9 @@ public class PasskeyOrchestrator {
                         cred,
                         null,
                         null);
-                return invalidOrigin;
+                @SuppressWarnings("unchecked")
+                ResponseEntity<ApiResponse<Object>> cast = (ResponseEntity<ApiResponse<Object>>) (ResponseEntity<?>) invalidOrigin;
+                return cast;
             }
 
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(normalizedUsername);
@@ -416,18 +465,33 @@ public class PasskeyOrchestrator {
         }
     }
 
-    @Transactional
-    public ResponseEntity<ApiResponse<String>> finishOnboardingRegistration(String sessionId, PasskeyRegistrationRequest request) {
+    /**
+     * Binding conflict / challenge verification happen outside a single write TX so AUTH_024
+     * cannot surface as UnexpectedRollbackException (HTTP 500) to the mobile client.
+     */
+    public ResponseEntity<ApiResponse<?>> finishOnboardingRegistration(String sessionId, PasskeyRegistrationRequest request) {
         SignupState state = signupStateStore.findSignupState(sessionId);
         if (state == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error("Session expired", ErrorCodes.AUTH_SESSION_EXPIRED));
         }
 
-        ResponseEntity<ApiResponse<String>> invalidOrigin = rejectInvalidPasskeyOrigin(
+        ResponseEntity<ApiResponse<?>> invalidOrigin = rejectInvalidPasskeyOrigin(
                 state.getUsername(), request.getClientDataJSON());
         if (invalidOrigin != null) {
             return invalidOrigin;
+        }
+
+        // Probe before consuming challenge: client can re-sign after user confirms unlink.
+        if (!request.isConfirmUnlinkDevice()) {
+            var probe = deviceBindingPolicy.findBindingConflict(request.getDeviceInstallId(), null);
+            if (probe != null) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiResponse.error(
+                                probe.message(),
+                                ErrorCodes.AUTH_DEVICE_ALREADY_BOUND,
+                                probe));
+            }
         }
 
         String challenge = passkeyService.consumeChallengeFromRedis(state.getUsername());
@@ -461,6 +525,19 @@ public class PasskeyOrchestrator {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Proof of possession failed: Invalid signature or challenge",
                             "INVALID_SIGNATURE"));
+        }
+
+        // REQUIRES_NEW: unlink/write for binding stays isolated from finalizeSignupAccount TX.
+        var bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(
+                request.getDeviceInstallId(),
+                null,
+                request.isConfirmUnlinkDevice());
+        if (bindingConflict != null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error(
+                            bindingConflict.message(),
+                            ErrorCodes.AUTH_DEVICE_ALREADY_BOUND,
+                            bindingConflict));
         }
 
         state.setPasskeyPublicKey(request.getPublicKey());
@@ -503,7 +580,7 @@ public class PasskeyOrchestrator {
                 token));
     }
 
-    private <T> ResponseEntity<ApiResponse<T>> rejectInvalidPasskeyOrigin(String username, String clientDataJSON) {
+    private ResponseEntity<ApiResponse<?>> rejectInvalidPasskeyOrigin(String username, String clientDataJSON) {
         if (passkeyService.isClientDataOriginAllowed(clientDataJSON)) {
             return null;
         }
@@ -512,7 +589,7 @@ public class PasskeyOrchestrator {
                 LogSanitizer.fingerprint(username),
                 LogSanitizer.fingerprint(passkeyService.extractOriginFromClientData(clientDataJSON)));
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.<T>error(
+                .body(ApiResponse.error(
                         "Passkey origin is not allowed for this app build.",
                 ErrorCodes.AUTH_PASSKEY_INVALID_ORIGIN));
     }

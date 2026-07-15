@@ -15,6 +15,7 @@ public enum NotificationMessageKey {
     WALLET_ENTRY_AMOUNT_DETECTED("notification.transaction.wallet_entry.amount_detected"),
     WALLET_ENTRY_AMOUNT_MESSAGE_DETECTED("notification.transaction.wallet_entry.amount_message_detected"),
     PENDING_DEPOSIT_DETECTED("notification.transaction.deposit.pending"),
+    PENDING_DEPOSIT_PROGRESS("notification.transaction.deposit.progress"),
     NETWORK_TRANSFER_CONFIRMED("notification.transaction.network_transfer.confirmed"),
     NETWORK_DEPOSIT_CONFIRMED("notification.transaction.network_deposit.confirmed"),
     EXTERNAL_ONCHAIN_PAYMENT_SENT("notification.transaction.external.onchain.payment_sent"),

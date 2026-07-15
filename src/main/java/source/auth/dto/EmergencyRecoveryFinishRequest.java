@@ -18,6 +18,14 @@ public class EmergencyRecoveryFinishRequest {
     private String clientDataJSON;
     private String credentialId;
     private String userHandle;
+    private String deviceInstallId;
+    private String brand;
+    private String model;
+    private String serialNumber;
+    private String platform;
+    private String browser;
+    /** When true (default for recovery), unlinks another account bound to this device. */
+    private boolean confirmUnlinkDevice = true;
 
     public String getRecoverySessionId() {
         return recoverySessionId;
@@ -97,5 +105,61 @@ public class EmergencyRecoveryFinishRequest {
 
     public void setUserHandle(String userHandle) {
         this.userHandle = userHandle;
+    }
+
+    public String getDeviceInstallId() {
+        return deviceInstallId;
+    }
+
+    public void setDeviceInstallId(String deviceInstallId) {
+        this.deviceInstallId = deviceInstallId;
+    }
+
+    public String getBrand() {
+        return brand;
+    }
+
+    public void setBrand(String brand) {
+        this.brand = brand;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    public String getSerialNumber() {
+        return serialNumber;
+    }
+
+    public void setSerialNumber(String serialNumber) {
+        this.serialNumber = serialNumber;
+    }
+
+    public String getPlatform() {
+        return platform;
+    }
+
+    public void setPlatform(String platform) {
+        this.platform = platform;
+    }
+
+    public String getBrowser() {
+        return browser;
+    }
+
+    public void setBrowser(String browser) {
+        this.browser = browser;
+    }
+
+    public boolean isConfirmUnlinkDevice() {
+        return confirmUnlinkDevice;
+    }
+
+    public void setConfirmUnlinkDevice(boolean confirmUnlinkDevice) {
+        this.confirmUnlinkDevice = confirmUnlinkDevice;
     }
 }

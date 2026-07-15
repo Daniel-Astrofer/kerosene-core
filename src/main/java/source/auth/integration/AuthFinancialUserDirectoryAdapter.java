@@ -22,7 +22,14 @@ public class AuthFinancialUserDirectoryAdapter implements FinancialUserDirectory
         if (username == null || username.isBlank()) {
             return Optional.empty();
         }
-        return toHandle(userRepository.findByUsername(username.trim().toLowerCase(Locale.ROOT)));
+        String normalized = username.trim();
+        while (normalized.startsWith("@")) {
+            normalized = normalized.substring(1).trim();
+        }
+        if (normalized.isBlank()) {
+            return Optional.empty();
+        }
+        return toHandle(userRepository.findByUsername(normalized.toLowerCase(Locale.ROOT)));
     }
 
     @Override

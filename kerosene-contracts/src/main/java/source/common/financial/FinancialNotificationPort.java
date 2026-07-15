@@ -20,4 +20,20 @@ public interface FinancialNotificationPort {
             UUID walletId,
             String rail,
             long creditedSats);
+
+    void notifyDepositDetected(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long creditedSats,
+            int confirmations);
+
+    void notifyDepositConfirmationProgress(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long creditedSats,
+            int confirmations);
 }

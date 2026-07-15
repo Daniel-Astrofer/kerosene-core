@@ -96,7 +96,8 @@ class EmergencyRecoveryUseCaseTest {
                 userGateway,
                 passkeyGateway,
                 recoveryCodeService,
-                notificationService);
+                notificationService,
+                mock(source.auth.application.service.devicebinding.DeviceBindingPolicy.class));
 
         useCase = new EmergencyRecoveryUseCase(
                 recoveryStartChain,

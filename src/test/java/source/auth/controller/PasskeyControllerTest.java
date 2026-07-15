@@ -86,7 +86,9 @@ class PasskeyControllerTest {
                 signupStateStore,
                 passkeyInventoryService,
                 finalizeSignupAccount,
-                redisService);
+                redisService,
+                mock(source.auth.application.service.devicebinding.DeviceBindingPolicy.class),
+                mock(org.springframework.transaction.PlatformTransactionManager.class));
         controller = new PasskeyController(
                 passkeyService,
                 jwtServicer,
@@ -378,7 +380,7 @@ class PasskeyControllerTest {
         when(passkeyService.extractOriginFromClientData("client-data"))
                 .thenReturn("android:apk-key-hash:kerosene");
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 registrationRequest("client-data"));
 
@@ -414,7 +416,7 @@ class PasskeyControllerTest {
         when(finalizeSignupAccount.execute("session-1")).thenReturn(user);
         when(jwtServicer.generateToken(42L)).thenReturn("jwt-token");
 
-        ResponseEntity<ApiResponse<String>> response = controller.finishOnboardingRegistration(
+        ResponseEntity<ApiResponse<?>> response = controller.finishOnboardingRegistration(
                 "session-1",
                 registrationRequest("android-client-data"));
 

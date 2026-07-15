@@ -118,9 +118,11 @@ public class AppPinService {
         }
 
         repository.save(settings);
+        // BAD_REQUEST (not 401): wrong PIN is a local factor failure.
+        // 401 is reserved for invalid/expired JWT sessions and would log the app out.
         throw new AuthExceptions.StructuredAuthException(
                 "PIN numerico incorreto.",
-                HttpStatus.UNAUTHORIZED,
+                HttpStatus.BAD_REQUEST,
                 ErrorCodes.AUTH_APP_PIN_INVALID,
                 toStatus(user, settings));
     }
@@ -166,7 +168,7 @@ public class AppPinService {
             if (!matchesPin(normalizedCurrentPin, settings.getPinHash())) {
                 throw new AuthExceptions.StructuredAuthException(
                         "PIN atual incorreto.",
-                        HttpStatus.UNAUTHORIZED,
+                        HttpStatus.BAD_REQUEST,
                         ErrorCodes.AUTH_APP_PIN_INVALID,
                         toStatus(user, settings));
             }

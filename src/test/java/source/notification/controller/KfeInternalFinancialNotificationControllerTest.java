@@ -37,6 +37,53 @@ class KfeInternalFinancialNotificationControllerTest {
     }
 
     @Test
+    void forwardsDepositDetectedNotificationWhenCredentialMatches() {
+        UUID transactionId = UUID.randomUUID();
+        UUID walletId = UUID.randomUUID();
+
+        controller.notifyDepositDetected(
+                "credential",
+                new FinancialDepositConfirmedNotificationRequest(
+                        42L,
+                        transactionId,
+                        walletId,
+                        "ONCHAIN",
+                        1500L,
+                        1));
+
+        verify(notificationPort).notifyDepositDetected(42L, transactionId, walletId, "ONCHAIN", 1500L, 1);
+    }
+
+    @Test
+    void forwardsDepositConfirmationProgressNotificationWhenCredentialMatches() {
+        UUID transactionId = UUID.randomUUID();
+        UUID walletId = UUID.randomUUID();
+
+        controller.notifyPaymentRequestDepositConfirmed(
+                "credential",
+                new FinancialPaymentRequestDepositConfirmedNotificationRequest(
+                        42L,
+                        transactionId,
+                        UUID.randomUUID(),
+                        "public-id",
+                        walletId,
+                        "ONCHAIN",
+                        1500L));
+
+        controller.notifyDepositConfirmationProgress(
+                "credential",
+                new FinancialDepositConfirmedNotificationRequest(
+                        42L,
+                        transactionId,
+                        walletId,
+                        "ONCHAIN",
+                        1500L,
+                        2));
+
+        verify(notificationPort).notifyDepositConfirmationProgress(42L, transactionId, walletId, "ONCHAIN", 1500L, 2);
+    }
+
+    @Test
     void forwardsPaymentRequestDepositConfirmedNotificationWhenCredentialMatches() {
         UUID transactionId = UUID.randomUUID();
         UUID paymentRequestId = UUID.randomUUID();

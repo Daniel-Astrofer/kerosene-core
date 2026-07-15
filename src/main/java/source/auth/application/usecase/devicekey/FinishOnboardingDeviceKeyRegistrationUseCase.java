@@ -5,9 +5,11 @@ import org.springframework.transaction.annotation.Transactional;
 import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
+import source.auth.application.service.devicebinding.DeviceBindingPolicy;
 import source.auth.application.service.devicekey.DeviceKeyService;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
 import source.auth.dto.SignupState;
+import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
 import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
 import source.auth.model.entity.DeviceKeyCredential;
 import source.auth.model.entity.UserDataBase;
@@ -24,18 +26,21 @@ public class FinishOnboardingDeviceKeyRegistrationUseCase {
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final DeviceKeyCredentialRepository deviceKeyRepository;
     private final JwtServicer jwtServicer;
+    private final DeviceBindingPolicy deviceBindingPolicy;
 
     public FinishOnboardingDeviceKeyRegistrationUseCase(
             SignupStateStore signupStateStore,
             DeviceKeyService deviceKeyService,
             FinalizeSignupAccount finalizeSignupAccount,
             DeviceKeyCredentialRepository deviceKeyRepository,
-            JwtServicer jwtServicer) {
+            JwtServicer jwtServicer,
+            DeviceBindingPolicy deviceBindingPolicy) {
         this.signupStateStore = signupStateStore;
         this.deviceKeyService = deviceKeyService;
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.deviceKeyRepository = deviceKeyRepository;
         this.jwtServicer = jwtServicer;
+        this.deviceBindingPolicy = deviceBindingPolicy;
     }
 
     @Transactional
@@ -47,6 +52,14 @@ public class FinishOnboardingDeviceKeyRegistrationUseCase {
 
         DeviceKeyService.VerifiedDeviceKeyRegistration verified =
                 deviceKeyService.verifyRegistration(request, sessionId, state.getUsername());
+
+        var bindingConflict = deviceBindingPolicy.ensureDeviceAvailableForBind(
+                verified.deviceInstallId(),
+                null,
+                request.isConfirmUnlinkDevice());
+        if (bindingConflict != null) {
+            return Result.deviceAlreadyBound(bindingConflict);
+        }
 
         state.setDeviceKeyRegistered(true);
         state.setPasskeyRegistered(true);
@@ -87,19 +100,24 @@ public class FinishOnboardingDeviceKeyRegistrationUseCase {
         deviceKeyRepository.save(credential);
     }
 
-    public record Result(Status status, String token) {
+    public record Result(Status status, String token, DeviceAlreadyBoundDTO deviceAlreadyBound) {
 
         public static Result created(String token) {
-            return new Result(Status.CREATED, token);
+            return new Result(Status.CREATED, token, null);
         }
 
         public static Result sessionExpired() {
-            return new Result(Status.SESSION_EXPIRED, null);
+            return new Result(Status.SESSION_EXPIRED, null, null);
+        }
+
+        public static Result deviceAlreadyBound(DeviceAlreadyBoundDTO payload) {
+            return new Result(Status.DEVICE_ALREADY_BOUND, null, payload);
         }
     }
 
     public enum Status {
         CREATED,
-        SESSION_EXPIRED
+        SESSION_EXPIRED,
+        DEVICE_ALREADY_BOUND
     }
 }
