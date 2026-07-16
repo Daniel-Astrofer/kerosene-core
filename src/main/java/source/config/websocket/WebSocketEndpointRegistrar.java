@@ -36,11 +36,19 @@ public class WebSocketEndpointRegistrar {
 
     private void registerEndpoint(StompEndpointRegistry registry, String path, boolean sockJsEnabled) {
         var endpointRegistration = registry.addEndpoint(path)
-                .setAllowedOrigins(allowedOrigins)
+                // Patterns (not fixed origins): native Flutter / mobile clients often
+                // omit Origin or send non-browser values. Auth remains JWT on CONNECT.
+                .setAllowedOriginPatterns("*")
                 .setHandshakeHandler(handshakeHandler);
 
         if (sockJsEnabled) {
             endpointRegistration.withSockJS();
+        }
+
+        // Keep configured browser origins logged for ops visibility.
+        if (allowedOrigins.length > 0) {
+            log.debug("[WEBSOCKET] endpoint {} sockJs={} browserOrigins={}", path, sockJsEnabled,
+                    Arrays.toString(allowedOrigins));
         }
     }
 }
