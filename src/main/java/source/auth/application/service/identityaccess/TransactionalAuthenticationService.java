@@ -25,6 +25,7 @@ import source.auth.model.entity.DeviceKeyCredential;
 import source.auth.model.entity.UserDataBase;
 import source.auth.model.enums.AccountSecurityType;
 import source.common.exception.ErrorCodes;
+import source.common.infra.logging.LogDomain;
 import source.common.infra.logging.LogSanitizer;
 import source.common.util.CryptoUtils;
 
@@ -341,7 +342,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             }
 
             deviceCredentialReplayGuard.clearFailures(user.getId(), credentialRef);
-            log.info("Transaction passkey factor verified for userId={}", user.getId());
+            log.info(
+                    LogDomain.AUTH,
+                    "event=DEVICE_CREDENTIAL_STEP_UP_OK factor=PASSKEY assertionKind=WEBAUTHN_SHAPED userId={}",
+                    user.getId());
             return true;
         } catch (AuthExceptions.StructuredAuthException exception) {
             throw exception;
@@ -495,7 +499,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                 throwReplayOrLock(user, credentialRef, "DEVICE_KEY");
             }
             deviceCredentialReplayGuard.clearFailures(user.getId(), credentialRef);
-            log.info("Transaction device-key factor verified for userId={}", user.getId());
+            log.info(
+                    LogDomain.AUTH,
+                    "event=DEVICE_CREDENTIAL_STEP_UP_OK factor=DEVICE_KEY assertionKind=DEVICE_KEY userId={}",
+                    user.getId());
             return true;
         } catch (AuthExceptions.StructuredAuthException exception) {
             throw exception;
