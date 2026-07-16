@@ -13,9 +13,13 @@ public class NotificationDispatchAfterCommitListener {
     private static final Logger logger = LoggerFactory.getLogger(NotificationDispatchAfterCommitListener.class);
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final PushNotificationPort pushNotificationPort;
 
-    public NotificationDispatchAfterCommitListener(SimpMessagingTemplate messagingTemplate) {
+    public NotificationDispatchAfterCommitListener(
+            SimpMessagingTemplate messagingTemplate,
+            PushNotificationPort pushNotificationPort) {
         this.messagingTemplate = messagingTemplate;
+        this.pushNotificationPort = pushNotificationPort;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -34,6 +38,16 @@ public class NotificationDispatchAfterCommitListener {
         } catch (Exception exception) {
             logger.error(
                     "Failed to push WebSocket notification to user {}: {}",
+                    event.userId(),
+                    exception.getMessage());
+        }
+
+        // Best-effort remote/local push fan-out (never fails the transaction path).
+        try {
+            pushNotificationPort.dispatch(event.userId(), event.payload());
+        } catch (Exception exception) {
+            logger.warn(
+                    "PushNotificationPort failed for user {}: {}",
                     event.userId(),
                     exception.getMessage());
         }

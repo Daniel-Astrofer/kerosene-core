@@ -1,12 +1,17 @@
 package source.notification.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Column;
+
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Map;
 
 @Entity
 @Table(schema = "public", name = "notifications")
@@ -32,6 +37,12 @@ public class NotificationEntity {
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    /** Structured fields for clients (rail, amountBtc, confirmations, …). */
+    @Convert(converter = StringStringMapJsonConverter.class)
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private Map<String, String> metadata = Collections.emptyMap();
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
@@ -54,4 +65,12 @@ public class NotificationEntity {
     public void setRead(boolean read) { this.read = read; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Map<String, String> getMetadata() {
+        return metadata == null ? Collections.emptyMap() : metadata;
+    }
+    public void setMetadata(Map<String, String> metadata) {
+        this.metadata = metadata == null || metadata.isEmpty()
+                ? Collections.emptyMap()
+                : Map.copyOf(metadata);
+    }
 }

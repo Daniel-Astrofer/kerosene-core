@@ -1,6 +1,8 @@
 package source.notification.service;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import source.auth.application.service.security.CosignerSecretService;
 import source.common.financial.FinancialNotificationAuditPort;
 import source.notification.dto.DeviceTokenRegisterRequest;
 import source.notification.model.entity.NotificationDeviceTokenEntity;
@@ -24,10 +26,14 @@ class NotificationDeviceTokenServiceTest {
 
     private final NotificationDeviceTokenRepository repository = mock(NotificationDeviceTokenRepository.class);
     private final FinancialNotificationAuditPort auditPort = mock(FinancialNotificationAuditPort.class);
-    private final NotificationDeviceTokenService service = new NotificationDeviceTokenService(repository, auditPort);
+    @SuppressWarnings("unchecked")
+    private final ObjectProvider<CosignerSecretService> cryptoProvider = mock(ObjectProvider.class);
+    private final NotificationDeviceTokenService service =
+            new NotificationDeviceTokenService(repository, auditPort, cryptoProvider);
 
     @Test
     void registersTokenWithoutPersistingRawToken() {
+        when(cryptoProvider.getIfAvailable()).thenReturn(null);
         when(repository.findByTokenHash(any())).thenReturn(Optional.empty());
         when(repository.save(any(NotificationDeviceTokenEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -44,9 +50,28 @@ class NotificationDeviceTokenServiceTest {
         assertTrue(entity.getTokenRef().startsWith("sha256:"));
         assertTrue(entity.getDeviceRef().startsWith("sha256:"));
         assertNull(entity.getRevokedAt());
+        assertNull(entity.getTokenCiphertext());
         verify(auditPort).recordDeviceTokenEvent(
                 eq("NOTIFICATION_DEVICE_TOKEN_REGISTERED"),
                 anyMap());
+    }
+
+    @Test
+    void registersTokenWithCiphertextWhenCryptoAvailable() {
+        CosignerSecretService crypto = mock(CosignerSecretService.class);
+        when(cryptoProvider.getIfAvailable()).thenReturn(crypto);
+        when(crypto.encrypt(any())).thenReturn("cipher-blob");
+        when(repository.findByTokenHash(any())).thenReturn(Optional.empty());
+        when(repository.save(any(NotificationDeviceTokenEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        NotificationDeviceTokenEntity entity = service.register(42L, new DeviceTokenRegisterRequest(
+                "android",
+                "token-value-that-is-long-enough",
+                "device-1",
+                "1.2.3"));
+
+        assertEquals("cipher-blob", entity.getTokenCiphertext());
+        verify(crypto).encrypt(any());
     }
 
     @Test

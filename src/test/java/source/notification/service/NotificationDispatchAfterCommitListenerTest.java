@@ -16,11 +16,14 @@ class NotificationDispatchAfterCommitListenerTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
+    @Mock
+    private PushNotificationPort pushNotificationPort;
+
     @InjectMocks
     private NotificationDispatchAfterCommitListener listener;
 
     @Test
-    void shouldDispatchPersistedNotificationToUserQueue() {
+    void shouldDispatchPersistedNotificationToUserQueueAndPushPort() {
         Map<String, Object> payload = Map.of(
                 "id", 55L,
                 "kind", "system.info",
@@ -29,5 +32,6 @@ class NotificationDispatchAfterCommitListenerTest {
         listener.handle(new NotificationPersistedEvent(11L, payload));
 
         verify(messagingTemplate).convertAndSendToUser("11", "/queue/notifications", payload);
+        verify(pushNotificationPort).dispatch(11L, payload);
     }
 }

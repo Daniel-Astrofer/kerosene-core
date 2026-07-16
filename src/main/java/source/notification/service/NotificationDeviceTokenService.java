@@ -1,9 +1,11 @@
 package source.notification.service;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.common.infra.logging.LogSanitizer;
+import source.auth.application.service.security.CosignerSecretService;
 import source.common.financial.FinancialNotificationAuditPort;
+import source.common.infra.logging.LogSanitizer;
 import source.notification.dto.DeviceTokenRegisterRequest;
 import source.notification.model.entity.NotificationDeviceTokenEntity;
 import source.notification.repository.NotificationDeviceTokenRepository;
@@ -20,12 +22,15 @@ public class NotificationDeviceTokenService {
 
     private final NotificationDeviceTokenRepository repository;
     private final FinancialNotificationAuditPort auditPort;
+    private final ObjectProvider<CosignerSecretService> cryptoService;
 
     public NotificationDeviceTokenService(
             NotificationDeviceTokenRepository repository,
-            FinancialNotificationAuditPort auditPort) {
+            FinancialNotificationAuditPort auditPort,
+            ObjectProvider<CosignerSecretService> cryptoService) {
         this.repository = repository;
         this.auditPort = auditPort;
+        this.cryptoService = cryptoService;
     }
 
     @Transactional
@@ -43,6 +48,7 @@ public class NotificationDeviceTokenService {
         entity.setPlatform(platform);
         entity.setTokenHash(tokenHash);
         entity.setTokenRef(LogSanitizer.fingerprint(token));
+        entity.setTokenCiphertext(encryptTokenBestEffort(token));
         entity.setDeviceRef(LogSanitizer.fingerprint(trim(request != null ? request.deviceId() : null, 128)));
         entity.setAppVersion(trim(request != null ? request.appVersion() : null, 64));
         entity.setLastSeenAt(now);
@@ -57,7 +63,8 @@ public class NotificationDeviceTokenService {
                         "userId", String.valueOf(userId),
                         "platform", platform,
                         "tokenRef", saved.getTokenRef(),
-                        "deviceRef", saved.getDeviceRef() != null ? saved.getDeviceRef() : ""));
+                        "deviceRef", saved.getDeviceRef() != null ? saved.getDeviceRef() : "",
+                        "ciphertext", saved.getTokenCiphertext() != null ? "present" : "absent"));
         return saved;
     }
 
@@ -65,6 +72,29 @@ public class NotificationDeviceTokenService {
     public List<NotificationDeviceTokenEntity> activeTokens(Long userId) {
         requireUser(userId);
         return repository.findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId);
+    }
+
+    /**
+     * Decrypt token for push adapters only. Never log the return value.
+     */
+    public String decryptTokenBestEffort(NotificationDeviceTokenEntity entity) {
+        if (entity == null || entity.getTokenCiphertext() == null || entity.getTokenCiphertext().isBlank()) {
+            return null;
+        }
+        CosignerSecretService crypto = cryptoService.getIfAvailable();
+        if (crypto == null) {
+            return null;
+        }
+        try {
+            byte[] plain = crypto.decrypt(entity.getTokenCiphertext());
+            if (plain == null) {
+                return null;
+            }
+            // Cosigner pad may space-pad — trim.
+            return new String(plain, StandardCharsets.UTF_8).trim();
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     @Transactional
@@ -75,6 +105,7 @@ public class NotificationDeviceTokenService {
         }
         repository.findByIdAndUserId(tokenId, userId).ifPresent(entity -> {
             entity.setRevokedAt(LocalDateTime.now());
+            entity.setTokenCiphertext(null);
             repository.save(entity);
             auditPort.recordDeviceTokenEvent(
                     "NOTIFICATION_DEVICE_TOKEN_REVOKED",
@@ -85,6 +116,18 @@ public class NotificationDeviceTokenService {
                             "platform", entity.getPlatform(),
                             "tokenRef", entity.getTokenRef()));
         });
+    }
+
+    private String encryptTokenBestEffort(String token) {
+        CosignerSecretService crypto = cryptoService.getIfAvailable();
+        if (crypto == null) {
+            return null;
+        }
+        try {
+            return crypto.encrypt(token.getBytes(StandardCharsets.UTF_8));
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     private void requireUser(Long userId) {

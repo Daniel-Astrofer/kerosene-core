@@ -56,14 +56,18 @@ class NotificationPersistenceServiceTest {
         assertEquals(42L, saved.getId());
         assertEquals(7L, saved.getUserId());
         assertEquals(payload.kind(), saved.getKind());
+        assertEquals("ledger", saved.getMetadata().get("channel"));
         verify(eventPublisher).publishEvent(argThat((Object event) -> {
             if (!(event instanceof NotificationPersistedEvent persistedEvent)) {
                 return false;
             }
+            Object meta = persistedEvent.payload().get("metadata");
             return persistedEvent.userId().equals(7L)
                     && persistedEvent.payload().get("id").equals(42L)
                     && persistedEvent.payload().get("title").equals("Saldo atualizado")
-                    && persistedEvent.payload().get("entityId").equals("pay_123");
+                    && persistedEvent.payload().get("entityId").equals("pay_123")
+                    && meta instanceof Map<?, ?> map
+                    && "ledger".equals(map.get("channel"));
         }));
     }
 }

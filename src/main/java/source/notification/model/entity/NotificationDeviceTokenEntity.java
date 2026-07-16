@@ -34,6 +34,13 @@ public class NotificationDeviceTokenEntity {
     @Column(name = "token_ref", nullable = false, length = 32)
     private String tokenRef;
 
+    /**
+     * AES-GCM ciphertext of the registration token (never returned by API).
+     * Enables future remote push without keeping raw tokens in app memory dumps of responses.
+     */
+    @Column(name = "token_ciphertext", columnDefinition = "TEXT")
+    private String tokenCiphertext;
+
     @Column(name = "device_ref", length = 32)
     private String deviceRef;
 
@@ -83,6 +90,14 @@ public class NotificationDeviceTokenEntity {
 
     public void setTokenRef(String tokenRef) {
         this.tokenRef = tokenRef;
+    }
+
+    public String getTokenCiphertext() {
+        return tokenCiphertext;
+    }
+
+    public void setTokenCiphertext(String tokenCiphertext) {
+        this.tokenCiphertext = tokenCiphertext;
     }
 
     public String getDeviceRef() {

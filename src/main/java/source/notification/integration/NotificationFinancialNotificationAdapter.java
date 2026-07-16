@@ -11,6 +11,7 @@ import source.notification.service.NotificationService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,12 +42,7 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         "/home",
                         "transaction",
                         transactionId.toString(),
-                        Map.of(
-                                "transactionId", transactionId.toString(),
-                                "walletId", walletId.toString(),
-                                "rail", rail,
-                                "creditedSats", String.valueOf(creditedSats),
-                                "confirmations", String.valueOf(confirmations)),
+                        creditMeta(transactionId, walletId, rail, creditedSats, confirmations, "INBOUND"),
                         satsToBtc(creditedSats)));
     }
 
@@ -59,6 +55,11 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
             UUID walletId,
             String rail,
             long creditedSats) {
+        Map<String, String> meta = creditMeta(transactionId, walletId, rail, creditedSats, null, "INBOUND");
+        meta.put("paymentRequestId", paymentRequestId.toString());
+        if (publicId != null) {
+            meta.put("publicId", publicId);
+        }
         notificationService.notifyUser(
                 userId,
                 NotificationMessages.payload(
@@ -68,12 +69,7 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         "/home",
                         "transaction",
                         transactionId.toString(),
-                        Map.of(
-                                "transactionId", transactionId.toString(),
-                                "paymentRequestId", paymentRequestId.toString(),
-                                "publicId", publicId,
-                                "walletId", walletId.toString(),
-                                "creditedSats", String.valueOf(creditedSats)),
+                        meta,
                         satsToBtc(creditedSats)));
     }
 
@@ -94,13 +90,13 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         "/home",
                         "transaction",
                         transactionId.toString(),
-                        Map.of(
-                                "transactionId", transactionId.toString(),
-                                "walletId", walletId.toString(),
-                                "rail", rail == null ? "ONCHAIN" : rail,
-                                "creditedSats", String.valueOf(creditedSats),
-                                "confirmations", String.valueOf(confirmations),
-                                "direction", "INBOUND"),
+                        creditMeta(
+                                transactionId,
+                                walletId,
+                                rail == null ? "ONCHAIN" : rail,
+                                creditedSats,
+                                confirmations,
+                                "INBOUND"),
                         satsToBtc(creditedSats)));
     }
 
@@ -121,12 +117,7 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         "/home",
                         "transaction",
                         transactionId.toString(),
-                        Map.of(
-                                "transactionId", transactionId.toString(),
-                                "walletId", walletId.toString(),
-                                "rail", rail,
-                                "creditedSats", String.valueOf(creditedSats),
-                                "confirmations", String.valueOf(confirmations)),
+                        creditMeta(transactionId, walletId, rail, creditedSats, confirmations, "INBOUND"),
                         satsToBtc(creditedSats),
                         String.valueOf(confirmations)));
     }
@@ -140,6 +131,15 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
             long amountSats,
             int confirmations,
             String destinationHint) {
+        Map<String, String> meta = debitMeta(
+                transactionId,
+                walletId,
+                rail == null ? "ONCHAIN" : rail,
+                amountSats,
+                confirmations);
+        if (destinationHint != null && !destinationHint.isBlank()) {
+            meta.put("destination", destinationHint);
+        }
         notificationService.notifyUser(
                 userId,
                 NotificationMessages.payload(
@@ -149,14 +149,7 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         "/home",
                         "transaction",
                         transactionId.toString(),
-                        Map.of(
-                                "transactionId", transactionId.toString(),
-                                "walletId", walletId.toString(),
-                                "rail", rail == null ? "ONCHAIN" : rail,
-                                "amountSats", String.valueOf(amountSats),
-                                "confirmations", String.valueOf(confirmations),
-                                "destination", destinationHint == null ? "" : destinationHint,
-                                "direction", "OUTBOUND"),
+                        meta,
                         satsToBtc(amountSats)));
     }
 
@@ -177,13 +170,12 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         "/home",
                         "transaction",
                         transactionId.toString(),
-                        Map.of(
-                                "transactionId", transactionId.toString(),
-                                "walletId", walletId.toString(),
-                                "rail", rail == null ? "ONCHAIN" : rail,
-                                "amountSats", String.valueOf(amountSats),
-                                "confirmations", String.valueOf(confirmations),
-                                "direction", "OUTBOUND"),
+                        debitMeta(
+                                transactionId,
+                                walletId,
+                                rail == null ? "ONCHAIN" : rail,
+                                amountSats,
+                                confirmations),
                         satsToBtc(amountSats)));
     }
 
@@ -193,9 +185,50 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                 : NotificationMessageKey.EXTERNAL_ONCHAIN_DEPOSIT_CONFIRMED;
     }
 
+    private Map<String, String> creditMeta(
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long creditedSats,
+            Integer confirmations,
+            String direction) {
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put("transactionId", transactionId.toString());
+        meta.put("walletId", walletId.toString());
+        meta.put("rail", rail == null ? "ONCHAIN" : rail);
+        meta.put("creditedSats", String.valueOf(creditedSats));
+        meta.put("amountSats", String.valueOf(creditedSats));
+        meta.put("amountBtc", satsToBtc(creditedSats));
+        if (confirmations != null) {
+            meta.put("confirmations", String.valueOf(confirmations));
+        }
+        if (direction != null) {
+            meta.put("direction", direction);
+        }
+        return meta;
+    }
+
+    private Map<String, String> debitMeta(
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations) {
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put("transactionId", transactionId.toString());
+        meta.put("walletId", walletId.toString());
+        meta.put("rail", rail);
+        meta.put("amountSats", String.valueOf(amountSats));
+        meta.put("amountBtc", satsToBtc(amountSats));
+        meta.put("confirmations", String.valueOf(confirmations));
+        meta.put("direction", "OUTBOUND");
+        return meta;
+    }
+
     private String satsToBtc(long sats) {
         return BigDecimal.valueOf(sats)
                 .divide(BigDecimal.valueOf(100_000_000L), 8, RoundingMode.UNNECESSARY)
+                .stripTrailingZeros()
                 .toPlainString();
     }
 }

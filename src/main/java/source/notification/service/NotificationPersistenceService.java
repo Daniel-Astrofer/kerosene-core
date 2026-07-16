@@ -33,6 +33,7 @@ public class NotificationPersistenceService {
         entity.setDeeplink(payload.deeplink());
         entity.setEntityType(payload.entityType());
         entity.setEntityId(payload.entityId());
+        entity.setMetadata(payload.metadata());
         entity.setRead(false);
 
         NotificationEntity saved = repository.save(entity);
