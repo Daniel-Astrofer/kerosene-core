@@ -1,28 +1,55 @@
 package source.auth.application.service.passkey;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.auth.application.infra.persistence.jpa.PasskeyInventoryProjection;
+import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import source.auth.application.infra.persistence.jpa.PasskeyInventoryProjection;
+import source.auth.application.service.devicekey.DeviceKeyService;
+import source.auth.dto.DeviceCredentialChallengeDTO;
 import source.auth.dto.PasskeyActionRequiredDTO;
 import source.auth.dto.PasskeyDeviceDTO;
 import source.auth.dto.PasskeyInventoryDTO;
+import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
 import source.auth.model.entity.PasskeyCredential;
 import source.auth.model.entity.UserDataBase;
-
-import java.util.List;
 import source.common.infra.logging.LogSanitizer;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class PasskeyInventoryService {
 
+    private static final Logger log = LoggerFactory.getLogger(PasskeyInventoryService.class);
+
+    public static final String FACTOR_DEVICE_KEY = "DEVICE_KEY";
+    public static final String FACTOR_PASSKEY = "PASSKEY";
+
     private final PasskeyCredentialRepository passkeyCredentialRepository;
+    private final DeviceKeyCredentialRepository deviceKeyCredentialRepository;
     private final PasskeyService passkeyService;
+    private final DeviceKeyService deviceKeyService;
+    private final long passkeyChallengeTtlSeconds;
+    private final boolean preferDeviceKey;
 
     public PasskeyInventoryService(
             PasskeyCredentialRepository passkeyCredentialRepository,
-            PasskeyService passkeyService) {
+            DeviceKeyCredentialRepository deviceKeyCredentialRepository,
+            PasskeyService passkeyService,
+            DeviceKeyService deviceKeyService,
+            @Value("${webauthn.challenge-ttl-seconds:90}") long passkeyChallengeTtlSeconds,
+            @Value("${kerosene.auth.prefer-device-key:true}") boolean preferDeviceKey) {
         this.passkeyCredentialRepository = passkeyCredentialRepository;
+        this.deviceKeyCredentialRepository = deviceKeyCredentialRepository;
         this.passkeyService = passkeyService;
+        this.deviceKeyService = deviceKeyService;
+        this.passkeyChallengeTtlSeconds = passkeyChallengeTtlSeconds > 0 ? passkeyChallengeTtlSeconds : 90L;
+        this.preferDeviceKey = preferDeviceKey;
     }
 
     public PasskeyInventoryDTO inventoryFor(UserDataBase user) {
@@ -52,6 +79,13 @@ public class PasskeyInventoryService {
         return inventory.compatibleForCurrentLogin() || inventory.legacyCredentialsPresent();
     }
 
+    public boolean hasActiveDeviceKey(UserDataBase user) {
+        if (user == null || user.getId() == null) {
+            return false;
+        }
+        return deviceKeyCredentialRepository.existsActiveByUserId(user.getId());
+    }
+
     public boolean isKnownIncompatibleForCurrentLogin(PasskeyCredential credential) {
         return compatibilityOf(
                 credential.getRelyingPartyId(),
@@ -68,17 +102,75 @@ public class PasskeyInventoryService {
                 passkeyService.resolveCurrentRequestHost()) == CompatibilityStatus.INCOMPATIBLE;
     }
 
-    public PasskeyActionRequiredDTO buildChallengeRequired(UserDataBase user, String challenge, String reason) {
+    /**
+     * Builds a 428-style payload with typed challenges.
+     *
+     * @param passkeyChallengeHex optional pre-issued passkey challenge (may be null)
+     */
+    public PasskeyActionRequiredDTO buildChallengeRequired(UserDataBase user, String passkeyChallengeHex, String reason) {
         PasskeyInventoryDTO inventory = inventoryFor(user);
+        List<String> acceptedFactors = new ArrayList<>(2);
+        Map<String, DeviceCredentialChallengeDTO> challenges = new LinkedHashMap<>();
+
+        boolean hasDeviceKey = hasActiveDeviceKey(user);
+        boolean hasPasskeyMaterial = inventory.passkeyRegistered()
+                || inventory.compatibleForCurrentLogin()
+                || inventory.legacyCredentialsPresent();
+
+        if (hasDeviceKey) {
+            try {
+                DeviceKeyChallengeResponse deviceChallenge = deviceKeyService.startAuthenticationChallenge(user);
+                acceptedFactors.add(FACTOR_DEVICE_KEY);
+                challenges.put(
+                        FACTOR_DEVICE_KEY,
+                        DeviceCredentialChallengeDTO.deviceKey(
+                                deviceChallenge.challengeId(),
+                                deviceChallenge.challenge(),
+                                deviceChallenge.expiresInSeconds(),
+                                deviceChallenge.onionServiceId(),
+                                deviceChallenge.algorithm(),
+                                deviceChallenge.canonicalization()));
+            } catch (Exception exception) {
+                log.warn(
+                        "Unable to issue DEVICE_KEY challenge for userId={}: {}",
+                        user.getId(),
+                        exception.getMessage());
+            }
+        }
+
+        String passkeyChallenge = passkeyChallengeHex;
+        if ((passkeyChallenge == null || passkeyChallenge.isBlank())
+                && (hasPasskeyMaterial || !challenges.containsKey(FACTOR_DEVICE_KEY))) {
+            passkeyChallenge = passkeyService.generateChallenge(user.getUsername());
+        }
+        if (passkeyChallenge != null && !passkeyChallenge.isBlank()) {
+            acceptedFactors.add(FACTOR_PASSKEY);
+            challenges.put(
+                    FACTOR_PASSKEY,
+                    DeviceCredentialChallengeDTO.passkey(passkeyChallenge, passkeyChallengeTtlSeconds));
+        }
+
+        String preferredFactor = resolvePreferredFactor(acceptedFactors, hasDeviceKey);
+        // Legacy single challenge: keep PASSKEY hex when present so old clients keep working;
+        // they still fetch DEVICE_KEY challenge separately when enrolled locally.
+        String legacyChallenge = challenges.containsKey(FACTOR_PASSKEY)
+                ? challenges.get(FACTOR_PASSKEY).challenge()
+                : challenges.containsKey(FACTOR_DEVICE_KEY)
+                        ? challenges.get(FACTOR_DEVICE_KEY).challenge()
+                        : passkeyChallengeHex;
+
         return new PasskeyActionRequiredDTO(
                 "ASSERT_PASSKEY",
                 reason,
-                challenge,
+                legacyChallenge,
                 user.hasTotpEnabled(),
                 shouldLinkNewPasskey(user, inventory),
                 "/settings/security/passkeys",
                 guidanceFor(user, inventory, true),
-                inventory);
+                inventory,
+                List.copyOf(acceptedFactors),
+                Map.copyOf(challenges),
+                preferredFactor);
     }
 
     public PasskeyActionRequiredDTO buildLinkNewPasskeyGuidance(UserDataBase user, String reason) {
@@ -91,7 +183,23 @@ public class PasskeyInventoryService {
                 shouldLinkNewPasskey(user, inventory),
                 "/settings/security/passkeys",
                 guidanceFor(user, inventory, false),
-                inventory);
+                inventory,
+                List.of(),
+                Map.of(),
+                null);
+    }
+
+    private String resolvePreferredFactor(List<String> acceptedFactors, boolean hasDeviceKey) {
+        if (preferDeviceKey && hasDeviceKey && acceptedFactors.contains(FACTOR_DEVICE_KEY)) {
+            return FACTOR_DEVICE_KEY;
+        }
+        if (acceptedFactors.contains(FACTOR_PASSKEY)) {
+            return FACTOR_PASSKEY;
+        }
+        if (acceptedFactors.contains(FACTOR_DEVICE_KEY)) {
+            return FACTOR_DEVICE_KEY;
+        }
+        return null;
     }
 
     private PasskeyDeviceDTO toDevice(PasskeyInventoryProjection credential, String currentRpId, String currentHost) {

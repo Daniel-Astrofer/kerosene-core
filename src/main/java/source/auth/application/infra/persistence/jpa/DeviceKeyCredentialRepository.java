@@ -21,6 +21,13 @@ public interface DeviceKeyCredentialRepository extends JpaRepository<DeviceKeyCr
 
     List<DeviceKeyCredential> findByUserId(Long userId);
 
+    @Query("""
+            select count(d) > 0 from DeviceKeyCredential d
+             where d.user.id = :userId
+               and upper(coalesce(d.status, 'ACTIVE')) = 'ACTIVE'
+            """)
+    boolean existsActiveByUserId(@Param("userId") Long userId);
+
     @Modifying
     @Query("""
             update DeviceKeyCredential d
