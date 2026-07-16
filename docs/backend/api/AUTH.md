@@ -213,9 +213,20 @@ Campos retornados: `activated`, `canReceiveInbound`, `requiresActivationDeposit`
 | `PUT /auth/security/app-pin` | Configura PIN. | `enabled`, `pin`, `currentPin`, `totpCode` | `AppPinStatusDTO` | `200`, `400`, `401`, `423` lógico via DTO `locked` |
 | `POST /auth/security/app-pin/verify` | Verifica PIN. | `pin` | `AppPinStatusDTO` | `200`, `400`, `401` |
 
-### Passkey
+### Passkey / Device credential
 
 Todos os endpoints abaixo usam WebAuthn/passkey e retornam `ApiResponse`. Bodies de registro usam `PasskeyRegistrationRequest`; bodies de verificação usam `PasskeyVerifyRequest`.
+
+**Step-up 428 (`PasskeyActionRequiredDTO`)** — release N:
+
+| Campo | Papel |
+|-------|--------|
+| `challenge` | **Legado**: hex PASSKEY quando presente (clients antigos) |
+| `acceptedFactors` | ex. `["DEVICE_KEY","PASSKEY"]` |
+| `challenges` | map por kind → `DeviceCredentialChallengeDTO` (`challengeId`, `challenge`, TTL, `onionServiceId`, `algorithm`, `canonicalization` para DEVICE_KEY) |
+| `preferredFactor` | `DEVICE_KEY` se houver device-key ACTIVE e `kerosene.auth.prefer-device-key=true` (default); senão `PASSKEY` |
+
+Money-movement (`KFE_CUSTODIAL_TRANSFER`) sempre exige assertion fresca (session ≠ autorização de gasto). Ver `docs/beta/DEVICE_CREDENTIAL_DECISIONS.md`.
 
 **Regra de binding (passkey ≡ device-key):** um `deviceInstallId` só pode estar ligado a **uma conta**. Uma conta pode ter **vários dispositivos**. Se o install já pertence a outra conta, o registro/onboarding responde `409` com `AUTH_024` e payload `CONFIRM_UNLINK_DEVICE`; o client deve reenviar com `confirmUnlinkDevice=true`, o que **apaga no banco** as credenciais da conta anterior nesse device (login da conta antiga fica só senha + TOTP se houver).
 
