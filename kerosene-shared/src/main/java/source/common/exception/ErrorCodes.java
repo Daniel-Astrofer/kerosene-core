@@ -34,6 +34,19 @@ public final class ErrorCodes {
     public static final String AUTH_TRANSACTIONAL_AUTH_REQUIRED = "AUTH_023";
     /** Device already bound to another account; client must confirm unlink. */
     public static final String AUTH_DEVICE_ALREADY_BOUND = "AUTH_024";
+    /**
+     * Soft-lock after repeated signature-counter replay failures on the same credential.
+     * Not the same as AUTH_016 (single replay rejection).
+     */
+    public static final String AUTH_DEVICE_CRED_REPLAY_LOCKED = "AUTH_025";
+
+    // Semantic aliases (device credential naming — same wire values where applicable)
+    public static final String AUTH_DEVICE_CRED_CHALLENGE = AUTH_PASSKEY_CHALLENGE;
+    public static final String AUTH_DEVICE_CRED_ASSERTION = AUTH_PASSKEY_ASSERTION_FAILED;
+    public static final String AUTH_DEVICE_CRED_REPLAY = AUTH_PASSKEY_REPLAY;
+    public static final String AUTH_DEVICE_CRED_NOT_FOUND = AUTH_PASSKEY_CREDENTIAL_NOT_FOUND;
+    public static final String AUTH_DEVICE_CRED_REQUIRED = AUTH_TRANSACTIONAL_AUTH_REQUIRED;
+
     public static final String AUTH_GENERIC = "AUTH_099";
 
     // Ledger Errors

@@ -13,7 +13,9 @@ import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialReposito
 import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import source.auth.application.service.cripto.contracts.Hasher;
+import source.auth.application.service.devicebinding.DeviceCredentialReplayGuard;
 import source.auth.application.service.devicekey.DeviceKeyService;
+import source.auth.application.service.devicekey.DeviceKeyReplayException;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.user.contract.UserServiceContract;
@@ -39,6 +41,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
     private final PasskeyCredentialRepository passkeyCredentialRepository;
     private final DeviceKeyCredentialRepository deviceKeyCredentialRepository;
     private final DeviceKeyService deviceKeyService;
+    private final DeviceCredentialReplayGuard deviceCredentialReplayGuard;
     private final TOTPVerifier totpVerifier;
     private final Hasher hasher;
     private final UserServiceContract userService;
@@ -51,6 +54,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             PasskeyCredentialRepository passkeyCredentialRepository,
             DeviceKeyCredentialRepository deviceKeyCredentialRepository,
             DeviceKeyService deviceKeyService,
+            DeviceCredentialReplayGuard deviceCredentialReplayGuard,
             TOTPVerifier totpVerifier,
             @Qualifier("Argon2Hasher") Hasher hasher,
             UserServiceContract userService,
@@ -61,6 +65,7 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         this.passkeyCredentialRepository = passkeyCredentialRepository;
         this.deviceKeyCredentialRepository = deviceKeyCredentialRepository;
         this.deviceKeyService = deviceKeyService;
+        this.deviceCredentialReplayGuard = deviceCredentialReplayGuard;
         this.totpVerifier = totpVerifier;
         this.hasher = hasher;
         this.userService = userService;
@@ -244,15 +249,18 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             String credentialId = requiredText(node, "credentialId");
 
             byte[] credentialIdBytes = CryptoUtils.decodeBase64(credentialId);
+            String credentialRef = DeviceCredentialReplayGuard.credentialRefFromBytes(credentialIdBytes);
 
             log.info("Searching for passkey: userId={} credentialRef={}",
-                    user.getId(), LogSanitizer.fingerprint(credentialIdBytes));
+                    user.getId(), credentialRef);
+
+            rejectIfReplayLocked(user, credentialRef);
 
             PasskeyVerificationProjection credential = passkeyCredentialRepository
                     .findVerificationByCredentialIdAndUserId(credentialIdBytes, user.getId())
                     .orElseThrow(() -> {
                         log.error("Passkey not found for userId={} credentialRef={}",
-                                user.getId(), LogSanitizer.fingerprint(credentialIdBytes));
+                                user.getId(), credentialRef);
                         return new AuthExceptions.StructuredAuthException(
                                 "A passkey informada nao esta vinculada a este usuario.",
                                 HttpStatus.CONFLICT,
@@ -312,20 +320,14 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                         passkeyInventoryService.buildChallengeRequired(
                                 user,
                                 renewedChallenge,
-                                "A assertiva da passkey foi rejeitada. Gere uma nova assinatura ou vincule outra passkey."));
+                                "A assertiva da passkey foi rejeitada. Gere uma nova assinatura e tente novamente."));
             }
 
             long newSignatureCount = verification.signatureCount();
             if (newSignatureCount <= credential.signatureCount()) {
                 log.error("Passkey signature counter replay detected for userId={}. stored={} received={}",
                         user.getId(), credential.signatureCount(), newSignatureCount);
-                throw new AuthExceptions.StructuredAuthException(
-                        "O contador do autenticador nao avancou; a passkey foi rejeitada por seguranca.",
-                        HttpStatus.CONFLICT,
-                        ErrorCodes.AUTH_PASSKEY_REPLAY,
-                        passkeyInventoryService.buildLinkNewPasskeyGuidance(
-                                user,
-                                "Esta passkey retornou um contador invalido. Vincule outra passkey ou refaca o login."));
+                throwReplayOrLock(user, credentialRef, "PASSKEY");
             }
 
             int updated = passkeyCredentialRepository.advanceSignatureCount(
@@ -335,15 +337,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             if (updated != 1) {
                 log.error("Passkey signature counter atomic advance rejected for userId={} received={}",
                         user.getId(), newSignatureCount);
-                throw new AuthExceptions.StructuredAuthException(
-                        "O contador do autenticador nao avancou; a passkey foi rejeitada por seguranca.",
-                        HttpStatus.CONFLICT,
-                        ErrorCodes.AUTH_PASSKEY_REPLAY,
-                        passkeyInventoryService.buildLinkNewPasskeyGuidance(
-                                user,
-                                "Esta passkey retornou um contador invalido. Vincule outra passkey ou refaca o login."));
+                throwReplayOrLock(user, credentialRef, "PASSKEY");
             }
 
+            deviceCredentialReplayGuard.clearFailures(user.getId(), credentialRef);
             log.info("Transaction passkey factor verified for userId={}", user.getId());
             return true;
         } catch (AuthExceptions.StructuredAuthException exception) {
@@ -463,6 +460,9 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             String deviceInstallId = requiredText(node, "deviceInstallId");
             String signedPayload = requiredText(node, "signedPayload");
             String signature = requiredText(node, "signature");
+            String credentialRef = DeviceCredentialReplayGuard.credentialRefFromString(credentialId);
+
+            rejectIfReplayLocked(user, credentialRef);
 
             DeviceKeyCredential credential = deviceKeyCredentialRepository
                     .findByCredentialIdAndUserId(credentialId, user.getId())
@@ -479,19 +479,22 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
             verifyRequest.setSignedPayload(signedPayload);
             verifyRequest.setSignature(signature);
 
-            long newCounter = deviceKeyService.verifyAuthentication(verifyRequest, user, credential);
+            long newCounter;
+            try {
+                newCounter = deviceKeyService.verifyAuthentication(verifyRequest, user, credential);
+            } catch (DeviceKeyReplayException replayException) {
+                throwReplayOrLock(user, credentialRef, "DEVICE_KEY");
+                throw replayException; // unreachable; keep compiler happy
+            }
             int updated = deviceKeyCredentialRepository.advanceCounter(
                     credentialId,
                     user.getId(),
                     newCounter,
                     LocalDateTime.now());
             if (updated != 1) {
-                throw new AuthExceptions.StructuredAuthException(
-                        "Device key counter did not advance.",
-                        HttpStatus.CONFLICT,
-                        ErrorCodes.AUTH_PASSKEY_REPLAY,
-                        Map.of("required", "deviceKey"));
+                throwReplayOrLock(user, credentialRef, "DEVICE_KEY");
             }
+            deviceCredentialReplayGuard.clearFailures(user.getId(), credentialRef);
             log.info("Transaction device-key factor verified for userId={}", user.getId());
             return true;
         } catch (AuthExceptions.StructuredAuthException exception) {
@@ -508,6 +511,43 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                     Map.of("required", "deviceKey",
                             "detail", exception.getMessage() == null ? "" : exception.getMessage()));
         }
+    }
+
+    private void rejectIfReplayLocked(UserDataBase user, String credentialRef) {
+        if (!deviceCredentialReplayGuard.isLocked(user.getId(), credentialRef)) {
+            return;
+        }
+        throw new AuthExceptions.StructuredAuthException(
+                "Chave do dispositivo temporariamente bloqueada por conflito de contador.",
+                HttpStatus.LOCKED,
+                ErrorCodes.AUTH_DEVICE_CRED_REPLAY_LOCKED,
+                passkeyInventoryService.buildReplayLockedGuidance(
+                        user,
+                        deviceCredentialReplayGuard.lockSeconds()));
+    }
+
+    private void throwReplayOrLock(UserDataBase user, String credentialRef, String factorKind) {
+        boolean locked = deviceCredentialReplayGuard.recordReplayFailure(
+                user.getId(),
+                credentialRef,
+                factorKind);
+        if (locked) {
+            throw new AuthExceptions.StructuredAuthException(
+                    "Chave do dispositivo temporariamente bloqueada por possivel conflito de seguranca.",
+                    HttpStatus.LOCKED,
+                    ErrorCodes.AUTH_DEVICE_CRED_REPLAY_LOCKED,
+                    passkeyInventoryService.buildReplayLockedGuidance(
+                            user,
+                            deviceCredentialReplayGuard.lockSeconds()));
+        }
+        throw new AuthExceptions.StructuredAuthException(
+                "O contador do autenticador nao avancou; a chave foi rejeitada por seguranca.",
+                HttpStatus.CONFLICT,
+                ErrorCodes.AUTH_PASSKEY_REPLAY,
+                passkeyInventoryService.buildReplayConflictGuidance(
+                        user,
+                        "Possivel conflito de seguranca no contador da chave. Tente novamente; "
+                                + "nao e necessario vincular outra chave neste passo."));
     }
 
     private String requiredText(JsonNode node, String fieldName) {

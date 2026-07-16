@@ -189,6 +189,51 @@ public class PasskeyInventoryService {
                 null);
     }
 
+    /**
+     * Counter replay / desync — not "credential missing". Never first-prompt re-link.
+     */
+    public PasskeyActionRequiredDTO buildReplayConflictGuidance(UserDataBase user, String reason) {
+        PasskeyInventoryDTO inventory = inventoryFor(user);
+        String guidance = reason != null && !reason.isBlank()
+                ? reason
+                : "Possivel conflito de seguranca no contador da chave deste dispositivo. "
+                        + "Tente novamente. Se o problema continuar, entre com senha + TOTP e revise os dispositivos.";
+        return new PasskeyActionRequiredDTO(
+                "SECURITY_CONFLICT",
+                "DEVICE_CREDENTIAL_REPLAY",
+                null,
+                user.hasTotpEnabled(),
+                false,
+                "",
+                guidance,
+                inventory,
+                List.of(),
+                Map.of(),
+                null);
+    }
+
+    /**
+     * Soft-lock after repeated replay failures on the same credential.
+     */
+    public PasskeyActionRequiredDTO buildReplayLockedGuidance(UserDataBase user, long lockSeconds) {
+        PasskeyInventoryDTO inventory = inventoryFor(user);
+        long minutes = Math.max(1L, (lockSeconds + 59L) / 60L);
+        String guidance = "Chave do dispositivo temporariamente bloqueada por possivel conflito de seguranca. "
+                + "Aguarde cerca de " + minutes + " minuto(s) ou entre com senha + TOTP e revise os dispositivos.";
+        return new PasskeyActionRequiredDTO(
+                "DEVICE_CREDENTIAL_LOCKED",
+                "DEVICE_CREDENTIAL_REPLAY_LOCKED",
+                null,
+                user.hasTotpEnabled(),
+                false,
+                "",
+                guidance,
+                inventory,
+                List.of(),
+                Map.of(),
+                null);
+    }
+
     private String resolvePreferredFactor(List<String> acceptedFactors, boolean hasDeviceKey) {
         if (preferDeviceKey && hasDeviceKey && acceptedFactors.contains(FACTOR_DEVICE_KEY)) {
             return FACTOR_DEVICE_KEY;
