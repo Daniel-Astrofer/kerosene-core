@@ -64,6 +64,7 @@ class TransactionalAuthenticationServiceTest {
                 passkeyCredentialRepository,
                 mock(source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository.class),
                 mock(source.auth.application.service.devicekey.DeviceKeyService.class),
+                mock(source.auth.application.service.devicebinding.DeviceCredentialReplayGuard.class),
                 totpVerifier,
                 hasher,
                 userService,

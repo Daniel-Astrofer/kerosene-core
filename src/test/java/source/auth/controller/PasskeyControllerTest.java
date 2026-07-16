@@ -88,6 +88,7 @@ class PasskeyControllerTest {
                 finalizeSignupAccount,
                 redisService,
                 mock(source.auth.application.service.devicebinding.DeviceBindingPolicy.class),
+                mock(source.auth.application.service.devicebinding.DeviceCredentialReplayGuard.class),
                 mock(org.springframework.transaction.PlatformTransactionManager.class));
         controller = new PasskeyController(
                 passkeyService,

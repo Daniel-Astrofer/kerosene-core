@@ -228,6 +228,15 @@ Todos os endpoints abaixo usam WebAuthn/passkey e retornam `ApiResponse`. Bodies
 
 Money-movement (`KFE_CUSTODIAL_TRANSFER`) sempre exige assertion fresca (session ≠ autorização de gasto). Ver `docs/beta/DEVICE_CREDENTIAL_DECISIONS.md`.
 
+**Counter / REPLAY**
+
+| Código | Significado | UX |
+|--------|-------------|-----|
+| `AUTH_016` | Contador não avançou (1ª–2ª falha) | Conflito de segurança; retry; **não** “vincule outra chave” |
+| `AUTH_025` | Soft-lock após 3 REPLAYs no mesmo credential | Bloqueio ~15–30 min (default 20); senha+TOTP / aguardar |
+
+Payload `PasskeyActionRequiredDTO.action`: `SECURITY_CONFLICT` ou `DEVICE_CREDENTIAL_LOCKED` (`linkNewPasskeyAllowed=false`).
+
 **Regra de binding (passkey ≡ device-key):** um `deviceInstallId` só pode estar ligado a **uma conta**. Uma conta pode ter **vários dispositivos**. Se o install já pertence a outra conta, o registro/onboarding responde `409` com `AUTH_024` e payload `CONFIRM_UNLINK_DEVICE`; o client deve reenviar com `confirmUnlinkDevice=true`, o que **apaga no banco** as credenciais da conta anterior nesse device (login da conta antiga fica só senha + TOTP se houver).
 
 | Endpoint | Auth | Para que serve | Params/body | Response |

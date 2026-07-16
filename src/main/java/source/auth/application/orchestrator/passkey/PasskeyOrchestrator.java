@@ -16,6 +16,7 @@ import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
 import source.auth.application.orchestrator.signup.port.SignupStateStore;
 import source.auth.application.service.cache.contracts.RedisServicer;
 import source.auth.application.service.devicebinding.DeviceBindingPolicy;
+import source.auth.application.service.devicebinding.DeviceCredentialReplayGuard;
 import source.auth.application.service.passkey.PasskeyInventoryService;
 import source.auth.application.service.passkey.PasskeyService;
 import source.auth.application.service.validation.jwt.contracts.JwtServicer;
@@ -50,6 +51,7 @@ public class PasskeyOrchestrator {
     private final FinalizeSignupAccount finalizeSignupAccount;
     private final RedisServicer redisService;
     private final DeviceBindingPolicy deviceBindingPolicy;
+    private final DeviceCredentialReplayGuard deviceCredentialReplayGuard;
     private final TransactionTemplate transactionTemplate;
 
     public PasskeyOrchestrator(
@@ -62,6 +64,7 @@ public class PasskeyOrchestrator {
             FinalizeSignupAccount finalizeSignupAccount,
             RedisServicer redisService,
             DeviceBindingPolicy deviceBindingPolicy,
+            DeviceCredentialReplayGuard deviceCredentialReplayGuard,
             PlatformTransactionManager transactionManager) {
         this.passkeyService = passkeyService;
         this.passkeyCredentialRepository = passkeyCredentialRepository;
@@ -72,6 +75,7 @@ public class PasskeyOrchestrator {
         this.finalizeSignupAccount = finalizeSignupAccount;
         this.redisService = redisService;
         this.deviceBindingPolicy = deviceBindingPolicy;
+        this.deviceCredentialReplayGuard = deviceCredentialReplayGuard;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -344,6 +348,20 @@ public class PasskeyOrchestrator {
                 return cast;
             }
 
+            String credentialRefEarly = DeviceCredentialReplayGuard.credentialRefFromBytes(credentialIdBytes);
+            if (deviceCredentialReplayGuard.isLocked(user.getId(), credentialRefEarly)) {
+                logVerifyFailure(
+                        "replay_soft_lock_active",
+                        ErrorCodes.AUTH_DEVICE_CRED_REPLAY_LOCKED,
+                        request,
+                        normalizedUsername,
+                        credentialIdBytes,
+                        cred,
+                        null,
+                        null);
+                return passkeyReplayLocked(user);
+            }
+
             String consumedChallenge = passkeyService.consumeChallengeFromRedis(normalizedUsername);
             if (consumedChallenge == null) {
                 String renewedChallenge = passkeyService.generateChallenge(normalizedUsername);
@@ -375,6 +393,7 @@ public class PasskeyOrchestrator {
                     request.getClientDataJSON());
 
             if (verification.verified()) {
+                String credentialRef = DeviceCredentialReplayGuard.credentialRefFromBytes(credentialIdBytes);
                 long newSignatureCount = verification.signatureCount();
                 if (newSignatureCount <= cred.signatureCount()) {
                     logVerifyFailure(
@@ -386,12 +405,7 @@ public class PasskeyOrchestrator {
                             cred,
                             cred.signatureCount(),
                             newSignatureCount);
-                    return passkeyLinkRequired(
-                            user,
-                            HttpStatus.UNAUTHORIZED,
-                            ErrorCodes.AUTH_PASSKEY_REPLAY,
-                            "O contador do autenticador nao avancou; esta passkey foi rejeitada.",
-                            "Vincule outra passkey ou repita o login com TOTP.");
+                    return passkeyReplayConflict(user, credentialRef);
                 }
                 int updated = passkeyCredentialRepository.advanceSignatureCount(
                         cred.credentialId(),
@@ -407,13 +421,9 @@ public class PasskeyOrchestrator {
                             cred,
                             cred.signatureCount(),
                             newSignatureCount);
-                    return passkeyLinkRequired(
-                            user,
-                            HttpStatus.UNAUTHORIZED,
-                            ErrorCodes.AUTH_PASSKEY_REPLAY,
-                            "O contador do autenticador nao avancou; esta passkey foi rejeitada.",
-                            "Vincule outra passkey ou repita o login com TOTP.");
+                    return passkeyReplayConflict(user, credentialRef);
                 }
+                deviceCredentialReplayGuard.clearFailures(user.getId(), credentialRef);
 
                 finalizeSignupAccount.ensureUserFinancialsReady(user, null);
 
@@ -606,6 +616,36 @@ public class PasskeyOrchestrator {
             String reason) {
         PasskeyActionRequiredDTO data = passkeyInventoryService.buildLinkNewPasskeyGuidance(user, reason);
         return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
+    }
+
+    private ResponseEntity<ApiResponse<Object>> passkeyReplayConflict(UserDataBase user, String credentialRef) {
+        boolean locked = deviceCredentialReplayGuard.recordReplayFailure(
+                user.getId(),
+                credentialRef,
+                "PASSKEY");
+        if (locked) {
+            return passkeyReplayLocked(user);
+        }
+        PasskeyActionRequiredDTO data = passkeyInventoryService.buildReplayConflictGuidance(
+                user,
+                "Possivel conflito de seguranca no contador da chave. Tente novamente; "
+                        + "nao e necessario vincular outra chave neste passo.");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(
+                        "O contador do autenticador nao avancou; esta chave foi rejeitada.",
+                        ErrorCodes.AUTH_PASSKEY_REPLAY,
+                        data));
+    }
+
+    private ResponseEntity<ApiResponse<Object>> passkeyReplayLocked(UserDataBase user) {
+        PasskeyActionRequiredDTO data = passkeyInventoryService.buildReplayLockedGuidance(
+                user,
+                deviceCredentialReplayGuard.lockSeconds());
+        return ResponseEntity.status(HttpStatus.LOCKED)
+                .body(ApiResponse.error(
+                        "Chave do dispositivo temporariamente bloqueada por possivel conflito de seguranca.",
+                        ErrorCodes.AUTH_DEVICE_CRED_REPLAY_LOCKED,
+                        data));
     }
 
     private void logVerifyFailure(
