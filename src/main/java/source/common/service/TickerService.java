@@ -30,8 +30,11 @@ import java.util.concurrent.TimeUnit;
 public class TickerService implements FinancialTickerPort {
 
     private static final Logger log = LoggerFactory.getLogger(TickerService.class);
-    private static final String COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,brl,eur";
+    private static final String COINGECKO_URL =
+            "https://api.coingecko.com/api/v3/simple/price"
+                    + "?ids=bitcoin&vs_currencies=usd,brl,eur&include_24hr_change=true";
     private static final String REDIS_PRICE_KEY_PREFIX = "btc_price:";
+    private static final String REDIS_CHANGE_24H_KEY_PREFIX = "btc_change_24h:";
 
     // Fallback prices in case the API is unreachable
     private static final BigDecimal FALLBACK_USD = new BigDecimal("65000");
@@ -97,12 +100,20 @@ public class TickerService implements FinancialTickerPort {
                     BigDecimal usd = toBigDecimal(prices.get("usd"));
                     BigDecimal brl = toBigDecimal(prices.get("brl"));
                     BigDecimal eur = toBigDecimal(prices.get("eur"));
+                    BigDecimal usdChange = toBigDecimal(prices.get("usd_24h_change"));
+                    BigDecimal brlChange = toBigDecimal(prices.get("brl_24h_change"));
+                    BigDecimal eurChange = toBigDecimal(prices.get("eur_24h_change"));
 
                     if (usd != null) savePrice("usd", usd);
                     if (brl != null) savePrice("brl", brl);
                     if (eur != null) savePrice("eur", eur);
+                    if (usdChange != null) saveChange24h("usd", usdChange);
+                    if (brlChange != null) saveChange24h("brl", brlChange);
+                    if (eurChange != null) saveChange24h("eur", eurChange);
 
-                    log.info("[Ticker] Prices updated: USD={}, BRL={}, EUR={}", usd, brl, eur);
+                    log.info(
+                            "[Ticker] Prices updated: USD={} ({}%), BRL={} ({}%), EUR={} ({}%)",
+                            usd, usdChange, brl, brlChange, eur, eurChange);
                 } else {
                     log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
                 }
@@ -135,6 +146,31 @@ public class TickerService implements FinancialTickerPort {
                 value.toPlainString(),
                 15,
                 TimeUnit.MINUTES);
+    }
+
+    private void saveChange24h(String currency, BigDecimal percent) {
+        ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+        valueOperations.set(
+                REDIS_CHANGE_24H_KEY_PREFIX + currency.toLowerCase(),
+                percent.toPlainString(),
+                15,
+                TimeUnit.MINUTES);
+    }
+
+    /**
+     * 24h percent change for BTC vs fiat (e.g. +2.45 or -1.10). Null if unknown.
+     */
+    public BigDecimal getChange24hPercent(String currency) {
+        try {
+            ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
+            String val = valueOperations.get(REDIS_CHANGE_24H_KEY_PREFIX + currency.toLowerCase());
+            if (val != null && !val.isBlank()) {
+                return new BigDecimal(val);
+            }
+        } catch (Exception e) {
+            log.warn("[Ticker] Redis 24h change read failed for {}: {}", currency, e.getMessage());
+        }
+        return null;
     }
 
     private void ensurePricePresent(String currency, BigDecimal fallbackValue) {

@@ -90,6 +90,7 @@ public class EndpointPolicyRegistry {
             "/health/ready",
             "/api/public/**",
             "/internal/kfe/**",
+            "/internal/content/**",
             "/system/release",
             "/auth/signup",
             "/auth/signup/totp/verify",

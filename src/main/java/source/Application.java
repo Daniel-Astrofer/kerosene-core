@@ -17,11 +17,13 @@ import source.config.KfeProfileCoreControllerExclusionFilter;
         })
 @EntityScan(basePackages = {
         "source.auth.model.entity",
-        "source.notification.model.entity"
+        "source.notification.model.entity",
+        "source.content.model.entity"
 })
 @EnableJpaRepositories(basePackages = {
         "source.auth.application.infra.persistence.jpa",
-        "source.notification.repository"
+        "source.notification.repository",
+        "source.content.repository"
 })
 public class Application {
 

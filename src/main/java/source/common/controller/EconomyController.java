@@ -54,11 +54,16 @@ public class EconomyController {
             usdBrl = btcBrl.divide(btcUsd, 8, java.math.RoundingMode.HALF_UP);
         }
 
+        BigDecimal change24h = tickerService.getChange24hPercent("usd");
+
         Map<String, Object> data = new HashMap<>();
         data.put("btcUsd", btcUsd);
         data.put("btcBrl", btcBrl);
         data.put("btcEur", btcEur);
         data.put("usdBrl", usdBrl);
+        if (change24h != null) {
+            data.put("btcUsdChange24hPercent", change24h);
+        }
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Current BTC market prices retrieved.",
