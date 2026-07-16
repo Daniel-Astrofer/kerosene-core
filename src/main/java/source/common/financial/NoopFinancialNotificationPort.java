@@ -48,4 +48,27 @@ public class NoopFinancialNotificationPort implements FinancialNotificationPort 
             int confirmations) {
         // Intentionally empty. Notification service provides the runtime adapter when present.
     }
+
+    @Override
+    public void notifyOutboundDetected(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations,
+            String destinationHint) {
+        // Intentionally empty.
+    }
+
+    @Override
+    public void notifyOutboundConfirmed(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations) {
+        // Intentionally empty.
+    }
 }

@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import source.common.dto.ApiResponse;
 import source.common.financial.FinancialDepositConfirmedNotificationRequest;
 import source.common.financial.FinancialNotificationPort;
+import source.common.financial.FinancialOutboundNotificationRequest;
 import source.common.financial.FinancialPaymentRequestDepositConfirmedNotificationRequest;
 
 import java.nio.charset.StandardCharsets;
@@ -111,6 +112,47 @@ public class KfeInternalFinancialNotificationController {
                 request.rail(),
                 request.creditedSats());
         return ResponseEntity.ok(ApiResponse.success("KFE payment request notification accepted.", null));
+    }
+
+    @PostMapping("/outbound-detected")
+    public ResponseEntity<ApiResponse<Void>> notifyOutboundDetected(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialOutboundNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyOutboundDetected(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.amountSats(),
+                request.confirmations(),
+                request.destinationHint());
+        return ResponseEntity.ok(ApiResponse.success("KFE outbound detected notification accepted.", null));
+    }
+
+    @PostMapping("/outbound-confirmed")
+    public ResponseEntity<ApiResponse<Void>> notifyOutboundConfirmed(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialOutboundNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyOutboundConfirmed(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.amountSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE outbound confirmed notification accepted.", null));
     }
 
     private void verifyCredential(String credential) {

@@ -36,4 +36,31 @@ public interface FinancialNotificationPort {
             String rail,
             long creditedSats,
             int confirmations);
+
+    /**
+     * Outbound on-chain movement detected (PSBT broadcast or Electrum external spend).
+     */
+    default void notifyOutboundDetected(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations,
+            String destinationHint) {
+        // Optional for older adapters.
+    }
+
+    /**
+     * Outbound reached settlement confirmations.
+     */
+    default void notifyOutboundConfirmed(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations) {
+        // Optional for older adapters.
+    }
 }

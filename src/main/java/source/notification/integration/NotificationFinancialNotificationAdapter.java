@@ -97,9 +97,10 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         Map.of(
                                 "transactionId", transactionId.toString(),
                                 "walletId", walletId.toString(),
-                                "rail", rail,
+                                "rail", rail == null ? "ONCHAIN" : rail,
                                 "creditedSats", String.valueOf(creditedSats),
-                                "confirmations", String.valueOf(confirmations)),
+                                "confirmations", String.valueOf(confirmations),
+                                "direction", "INBOUND"),
                         satsToBtc(creditedSats)));
     }
 
@@ -128,6 +129,62 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                                 "confirmations", String.valueOf(confirmations)),
                         satsToBtc(creditedSats),
                         String.valueOf(confirmations)));
+    }
+
+    @Override
+    public void notifyOutboundDetected(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations,
+            String destinationHint) {
+        notificationService.notifyUser(
+                userId,
+                NotificationMessages.payload(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.WARNING,
+                        NotificationMessageKey.COLD_OUTBOUND_DETECTED,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        Map.of(
+                                "transactionId", transactionId.toString(),
+                                "walletId", walletId.toString(),
+                                "rail", rail == null ? "ONCHAIN" : rail,
+                                "amountSats", String.valueOf(amountSats),
+                                "confirmations", String.valueOf(confirmations),
+                                "destination", destinationHint == null ? "" : destinationHint,
+                                "direction", "OUTBOUND"),
+                        satsToBtc(amountSats)));
+    }
+
+    @Override
+    public void notifyOutboundConfirmed(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats,
+            int confirmations) {
+        notificationService.notifyUser(
+                userId,
+                NotificationMessages.payload(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.SUCCESS,
+                        NotificationMessageKey.COLD_OUTBOUND_CONFIRMED,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        Map.of(
+                                "transactionId", transactionId.toString(),
+                                "walletId", walletId.toString(),
+                                "rail", rail == null ? "ONCHAIN" : rail,
+                                "amountSats", String.valueOf(amountSats),
+                                "confirmations", String.valueOf(confirmations),
+                                "direction", "OUTBOUND"),
+                        satsToBtc(amountSats)));
     }
 
     private NotificationMessageKey depositMessageKey(String rail) {
