@@ -32,7 +32,8 @@ class TickerServiceTest {
         ReflectionTestUtils.setField(tickerService, "coingeckoEnabled", true);
 
         when(restTemplate.getForObject(
-                "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,brl",
+                "https://api.coingecko.com/api/v3/simple/price"
+                        + "?ids=bitcoin&vs_currencies=usd,brl,eur&include_24hr_change=true",
                 Map.class))
                 .thenThrow(new IllegalStateException("network unavailable"));
         when(redisTemplate.opsForValue()).thenThrow(new IllegalStateException("redis unavailable"));

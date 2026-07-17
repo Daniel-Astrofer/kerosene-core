@@ -44,6 +44,10 @@ public class TickerService implements FinancialTickerPort {
     @Value("${ticker.coingecko.enabled:true}")
     private boolean coingeckoEnabled;
 
+    /** When set, CoinGecko is fetched via Tor SOCKS (see tickerRestTemplate). */
+    @Value("${ticker.proxy.socks-host:}")
+    private String tickerSocksHost;
+
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
     private final NotificationService notificationService;
@@ -76,6 +80,10 @@ public class TickerService implements FinancialTickerPort {
     void initializeFallbackCache() {
         if (!coingeckoEnabled) {
             log.info("[Ticker] CoinGecko polling disabled for this profile. Using cached/fallback prices.");
+        } else if (tickerSocksHost != null && !tickerSocksHost.isBlank()) {
+            log.info("[Ticker] CoinGecko polling enabled via Tor SOCKS host '{}'.", tickerSocksHost.trim());
+        } else {
+            log.info("[Ticker] CoinGecko polling enabled with direct HTTPS (clearnet egress required).");
         }
         log.info("[Ticker] Startup does not require Redis price cache warmup. In-memory fallback prices are available.");
     }
@@ -87,7 +95,11 @@ public class TickerService implements FinancialTickerPort {
     public void updatePrices() {
         if (coingeckoEnabled) {
             try {
-                log.info("[Ticker] Fetching BTC prices from CoinGecko...");
+                if (tickerSocksHost != null && !tickerSocksHost.isBlank()) {
+                    log.info("[Ticker] Fetching BTC prices from CoinGecko via Tor SOCKS...");
+                } else {
+                    log.info("[Ticker] Fetching BTC prices from CoinGecko...");
+                }
                 Map<String, ?> response = restTemplate.getForObject(COINGECKO_URL, Map.class);
 
                 if (response != null && response.containsKey("bitcoin")) {

@@ -63,4 +63,35 @@ public interface FinancialNotificationPort {
             int confirmations) {
         // Optional for older adapters.
     }
+
+    /**
+     * Internal transfer received by destination user.
+     */
+    default void notifyInternalTransferReceived(
+            Long receiverUserId,
+            UUID transactionId,
+            UUID walletId,
+            long amountSats) {
+    }
+
+    /**
+     * Internal transfer sent by source user.
+     */
+    default void notifyInternalTransferSent(
+            Long senderUserId,
+            UUID transactionId,
+            UUID walletId,
+            long amountSats) {
+    }
+
+    /**
+     * External payment successfully sent (Lightning or Onchain).
+     */
+    default void notifyExternalPaymentSent(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats) {
+    }
 }

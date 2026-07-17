@@ -24,7 +24,13 @@ public final class NotificationMessages {
 
     public static LocalizedNotificationMessage resolve(Locale locale, NotificationMessageKey key, Object... args) {
         Locale resolvedLocale = locale != null ? locale : DEFAULT_LOCALE;
-        ResourceBundle bundle = ResourceBundle.getBundle(BUNDLE_NAME, resolvedLocale);
+        ResourceBundle bundle = null;
+        try {
+            bundle = ResourceBundle.getBundle(BUNDLE_NAME, resolvedLocale);
+        } catch (MissingResourceException missing) {
+            // Bundle is optional in some images / partial classpaths; keys still format.
+            bundle = null;
+        }
         return new LocalizedNotificationMessage(
                 format(bundle, resolvedLocale, key.titleKey(), args),
                 format(bundle, resolvedLocale, key.bodyKey(), args));
@@ -52,10 +58,21 @@ public final class NotificationMessages {
     }
 
     private static String format(ResourceBundle bundle, Locale locale, String key, Object... args) {
+        String pattern = key;
+        if (bundle != null && key != null && bundle.containsKey(key)) {
+            try {
+                pattern = bundle.getString(key);
+            } catch (MissingResourceException | ClassCastException ignored) {
+                pattern = key;
+            }
+        }
+        if (args == null || args.length == 0 || pattern == null) {
+            return pattern;
+        }
         try {
-            return new MessageFormat(bundle.getString(key), locale).format(args);
-        } catch (MissingResourceException exception) {
-            throw new IllegalArgumentException("Missing notification message key: " + key, exception);
+            return new MessageFormat(pattern, locale != null ? locale : DEFAULT_LOCALE).format(args);
+        } catch (IllegalArgumentException ignored) {
+            return pattern;
         }
     }
 }

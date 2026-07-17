@@ -59,6 +59,11 @@ public final class ErrorCodes {
     public static final String LEDGER_PAYMENT_EXPIRED = "LEDGER_007";
     public static final String LEDGER_PAYMENT_ALREADY_PAID = "LEDGER_008";
     public static final String LEDGER_PAYMENT_SELF_PAY = "LEDGER_009";
+    /**
+     * Lightning outbound targeted a custodial invoice owned by this platform.
+     * Clients must settle via INTERNAL ledger + paymentRequestPublicId instead of LND self-pay.
+     */
+    public static final String LEDGER_PLATFORM_LIGHTNING_DENIED = "LEDGER_010";
     public static final String LEDGER_GENERIC = "LEDGER_099";
 
     // Wallet Errors

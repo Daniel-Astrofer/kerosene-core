@@ -35,6 +35,10 @@ public enum AuditEventType {
     KFE_OUTBOX_RETRY,
     KFE_SETTLEMENT_COMPLETED,
     KFE_SETTLEMENT_FAILED,
+    /** Binary settlement gate outcome: map of V_* flags 0/1 + reasons (forensic). */
+    KFE_SETTLEMENT_GATE,
+    /** Channel lifecycle binary decision (open/rebal/close/ppm). */
+    KFE_CHANNEL_DECISION,
     KFE_INBOUND_CREDITED,
     KFE_INBOUND_DUPLICATE_REJECTED,
     VAULT_ATTESTATION_SUCCEEDED,

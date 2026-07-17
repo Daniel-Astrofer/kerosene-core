@@ -71,4 +71,32 @@ public class NoopFinancialNotificationPort implements FinancialNotificationPort 
             int confirmations) {
         // Intentionally empty.
     }
+
+    @Override
+    public void notifyInternalTransferReceived(
+            Long receiverUserId,
+            UUID transactionId,
+            UUID walletId,
+            long amountSats) {
+        // Intentionally empty.
+    }
+
+    @Override
+    public void notifyInternalTransferSent(
+            Long senderUserId,
+            UUID transactionId,
+            UUID walletId,
+            long amountSats) {
+        // Intentionally empty.
+    }
+
+    @Override
+    public void notifyExternalPaymentSent(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats) {
+        // Intentionally empty.
+    }
 }

@@ -118,7 +118,15 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         if (request.scope() != TransactionalAuthenticationScope.WALLET_OUTBOUND) {
             totpValid = verifyTotpIfRequiredOrPresented(user, request, accountSecurity);
         }
-        boolean passkeyValid = verifyPasskeyIfPresented(user, request.passkeyAssertionJson());
+        // Mobile accounts use Device Key (Ed25519) for step-up, not WebAuthn passkeys.
+        // WALLET_OUTBOUND (Lightning / on-chain send) must accept the same assertion shape as
+        // KFE_CUSTODIAL_TRANSFER — otherwise DEVICE_KEY JSON is misparsed as WebAuthn → HTTP 400.
+        boolean passkeyValid;
+        if (looksLikeDeviceKeyAssertion(request.passkeyAssertionJson())) {
+            passkeyValid = verifyDeviceKeyIfPresented(user, request.passkeyAssertionJson());
+        } else {
+            passkeyValid = verifyPasskeyIfPresented(user, request.passkeyAssertionJson());
+        }
 
         enforceSecurityPolicy(user, accountSecurity, passphraseValid, totpValid, passkeyValid);
 

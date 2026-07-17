@@ -179,6 +179,68 @@ public class NotificationFinancialNotificationAdapter implements FinancialNotifi
                         satsToBtc(amountSats)));
     }
 
+    @Override
+    public void notifyInternalTransferReceived(
+            Long receiverUserId,
+            UUID transactionId,
+            UUID walletId,
+            long amountSats) {
+        notificationService.notifyUser(
+                receiverUserId,
+                NotificationMessages.payload(
+                        NotificationKind.TRANSFER_RECEIVED,
+                        NotificationSeverity.SUCCESS,
+                        NotificationMessageKey.INTERNAL_TRANSFER_RECEIVED,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        creditMeta(transactionId, walletId, "INTERNAL", amountSats, null, "INBOUND"),
+                        satsToBtc(amountSats)));
+    }
+
+    @Override
+    public void notifyInternalTransferSent(
+            Long senderUserId,
+            UUID transactionId,
+            UUID walletId,
+            long amountSats) {
+        notificationService.notifyUser(
+                senderUserId,
+                NotificationMessages.payload(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.SUCCESS,
+                        NotificationMessageKey.INTERNAL_TRANSFER_SENT,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        debitMeta(transactionId, walletId, "INTERNAL", amountSats, 0),
+                        satsToBtc(amountSats)));
+    }
+
+    @Override
+    public void notifyExternalPaymentSent(
+            Long userId,
+            UUID transactionId,
+            UUID walletId,
+            String rail,
+            long amountSats) {
+        NotificationMessageKey messageKey = "LIGHTNING".equalsIgnoreCase(rail)
+                ? NotificationMessageKey.EXTERNAL_LIGHTNING_PAYMENT_SENT
+                : NotificationMessageKey.EXTERNAL_ONCHAIN_PAYMENT_SENT;
+
+        notificationService.notifyUser(
+                userId,
+                NotificationMessages.payload(
+                        NotificationKind.PAYMENT_SENT,
+                        NotificationSeverity.SUCCESS,
+                        messageKey,
+                        "/home",
+                        "transaction",
+                        transactionId.toString(),
+                        debitMeta(transactionId, walletId, rail == null ? "ONCHAIN" : rail, amountSats, 0),
+                        satsToBtc(amountSats)));
+    }
+
     private NotificationMessageKey depositMessageKey(String rail) {
         return "LIGHTNING".equalsIgnoreCase(rail)
                 ? NotificationMessageKey.EXTERNAL_LIGHTNING_DEPOSIT_CONFIRMED
