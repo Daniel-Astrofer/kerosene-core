@@ -32,10 +32,15 @@ public class HomeFeedComposer {
 
     private final UserRepository userRepository;
     private final AuthPasskeyGateway passkeyGateway;
+    private final WalletCardTierCatalog walletCardTierCatalog;
 
-    public HomeFeedComposer(UserRepository userRepository, AuthPasskeyGateway passkeyGateway) {
+    public HomeFeedComposer(
+            UserRepository userRepository,
+            AuthPasskeyGateway passkeyGateway,
+            WalletCardTierCatalog walletCardTierCatalog) {
         this.userRepository = userRepository;
         this.passkeyGateway = passkeyGateway;
+        this.walletCardTierCatalog = walletCardTierCatalog;
     }
 
     public HomeFeedResponseDTO compose(
@@ -162,190 +167,201 @@ public class HomeFeedComposer {
 
     /**
      * Seed catalog — product-owned content, no admin UI.
-     * Personalization via rules on each entry.
+     * Platform education is the three secured-card tiers (same EDUCATION kind),
+     * with fee rates and upgrade rules from {@link WalletCardTierCatalog}.
      */
     private List<CatalogEntry> catalog() {
-        return List.of(
-                // ── PLATFORM ──────────────────────────────────────────────
-                edu("edu-internal-p2p", 100, List.of("PLATFORM", "TOTAL"),
-                        icon("internalTransfer"),
-                        t("pt", "Transferências internas",
-                                "Envie valor entre contas Kerosene sem taxa de rede Bitcoin.",
-                                "PLATAFORMA"),
-                        t("en", "Internal transfers",
-                                "Move value between Kerosene accounts without Bitcoin network fees.",
-                                "PLATFORM"),
-                        t("es", "Transferencias internas",
-                                "Mueve valor entre cuentas Kerosene sin comisiones de red Bitcoin.",
-                                "PLATAFORMA")),
-                edu("edu-wallet-hash", 90, List.of("PLATFORM"),
-                        icon("biometric"),
-                        t("pt", "Hash da carteira",
-                                "Seu identificador interno protege a privacidade ao receber de outros usuários.",
-                                "PRIVACIDADE"),
-                        t("en", "Wallet handle",
-                                "Your internal handle keeps privacy when receiving from other users.",
-                                "PRIVACY"),
-                        t("es", "Identificador de billetera",
-                                "Tu identificador interno protege la privacidad al recibir de otros.",
-                                "PRIVACIDAD")),
-                edu("edu-lightning-platform", 80, List.of("PLATFORM", "TOTAL"),
-                        icon("lightning"),
-                        t("pt", "Lightning na plataforma",
-                                "Pagamentos instantâneos quando ambos os lados estão na rede Lightning.",
-                                "VELOCIDADE"),
-                        t("en", "Lightning on platform",
-                                "Instant payments when both sides are on Lightning.",
-                                "SPEED"),
-                        t("es", "Lightning en la plataforma",
-                                "Pagos instantáneos cuando ambos lados usan Lightning.",
-                                "VELOCIDAD")),
+        List<CatalogEntry> entries = new ArrayList<>();
 
-                // ── ONCHAIN ───────────────────────────────────────────────
-                edu("edu-onchain-basics", 100, List.of("ONCHAIN", "TOTAL"),
-                        icon("bitcoin"),
-                        t("pt", "Bitcoin on-chain",
-                                "Use on-chain para guardar valor, autocustódia ou enviar a carteiras externas.",
-                                "REDE PRINCIPAL"),
-                        t("en", "Bitcoin on-chain",
-                                "Use on-chain to hold value, self-custody, or send to external wallets.",
-                                "MAINNET"),
-                        t("es", "Bitcoin on-chain",
-                                "Usa on-chain para guardar valor, autocustodia o enviar a billeteras externas.",
-                                "RED PRINCIPAL")),
-                edu("edu-confirmations", 95, List.of("ONCHAIN"),
-                        icon("sync"),
-                        t("pt", "Confirmações",
-                                "Cada bloco reforça a finalização. Em geral 6 confirmações são consideradas seguras.",
-                                "SEGURANÇA"),
-                        t("en", "Confirmations",
-                                "Each block strengthens finality. Six confirmations are usually considered safe.",
-                                "SECURITY"),
-                        t("es", "Confirmaciones",
-                                "Cada bloque refuerza la finalidad. Seis confirmaciones suelen ser seguras.",
-                                "SEGURIDAD")),
-                edu("edu-fees", 90, List.of("ONCHAIN"),
-                        icon("gauge"),
-                        t("pt", "Taxas de rede",
-                                "A taxa sobe quando a mempool está cheia. Priorize urgência vs economia.",
-                                "CUSTO"),
-                        t("en", "Network fees",
-                                "Fees rise when the mempool is full. Balance urgency versus cost.",
-                                "COST"),
-                        t("es", "Comisiones de red",
-                                "La comisión sube cuando la mempool está llena. Equilibra urgencia y costo.",
-                                "COSTO")),
+        // ── PLATFORM education: exactly 3 tier cards (fees + rules) ──
+        // Highest priority so they win over promos on PLATFORM/TOTAL.
+        for (WalletCardTierCatalog.Tier tier : walletCardTierCatalog.tiers()) {
+            entries.add(cardTierEducation(tier));
+        }
 
-                // ── TOTAL / general ────────────────────────────────────────
-                edu("edu-bitcoin-general", 70, List.of("TOTAL"),
-                        icon("bitcoin"),
-                        t("pt", "Por que Bitcoin",
-                                "Ativo escasso, liquidável globalmente e com liquidação verificável.",
-                                "BASE"),
-                        t("en", "Why Bitcoin",
-                                "Scarce, globally liquid, with verifiable settlement.",
-                                "BASICS"),
-                        t("es", "Por qué Bitcoin",
-                                "Activo escaso, líquido globalmente y con liquidación verificable.",
-                                "BASE")),
+        // ── ONCHAIN network education ─────────────────────────────────
+        entries.add(edu("edu-onchain-basics", 100, List.of("ONCHAIN"),
+                icon("bitcoin"),
+                t("pt", "Bitcoin on-chain",
+                        "Use on-chain para guardar valor, autocustódia ou enviar a carteiras externas.",
+                        "REDE PRINCIPAL"),
+                t("en", "Bitcoin on-chain",
+                        "Use on-chain to hold value, self-custody, or send to external wallets.",
+                        "MAINNET"),
+                t("es", "Bitcoin on-chain",
+                        "Usa on-chain para guardar valor, autocustodia o enviar a billeteras externas.",
+                        "RED PRINCIPAL")));
+        entries.add(edu("edu-confirmations", 95, List.of("ONCHAIN"),
+                icon("sync"),
+                t("pt", "Confirmações",
+                        "Cada bloco reforça a finalização. Em geral 6 confirmações são consideradas seguras.",
+                        "SEGURANÇA"),
+                t("en", "Confirmations",
+                        "Each block strengthens finality. Six confirmations are usually considered safe.",
+                        "SECURITY"),
+                t("es", "Confirmaciones",
+                        "Cada bloque refuerza la finalidad. Seis confirmaciones suelen ser seguras.",
+                        "SEGURIDAD")));
+        entries.add(edu("edu-fees", 90, List.of("ONCHAIN"),
+                icon("gauge"),
+                t("pt", "Taxas de rede",
+                        "A taxa sobe quando a mempool está cheia. Priorize urgência vs economia.",
+                        "CUSTO"),
+                t("en", "Network fees",
+                        "Fees rise when the mempool is full. Balance urgency versus cost.",
+                        "COST"),
+                t("es", "Comisiones de red",
+                        "La comisión sube cuando la mempool está llena. Equilibra urgencia y costo.",
+                        "COSTO")));
 
-                // ── Kerosene cards announcement (Bronze / Metal / Gold) ──
-                announcement("ann-kerosene-cards-trio", 130, List.of("PLATFORM", "ONCHAIN", "TOTAL"),
-                        image("asset:assets/feed/cards/trio.png", 2.0),
-                        t("pt", "Cartões Kerosene",
-                                "Três níveis: Bronze, Metal e Gold. Cada cartão assegurado com taxas e aparência próprias.",
-                                "CARTÕES"),
-                        t("en", "Kerosene cards",
-                                "Three tiers: Bronze, Metal and Gold. Each secured card has its own look and fee profile.",
-                                "CARDS"),
-                        t("es", "Tarjetas Kerosene",
-                                "Tres niveles: Bronze, Metal y Gold. Cada tarjeta tiene estilo y comisiones propios.",
-                                "TARJETAS")),
-                feature("feat-card-bronze", 125, List.of("PLATFORM", "TOTAL"),
-                        image("asset:assets/feed/cards/bronze.png", 1.6),
-                        t("pt", "Cartão Bronze",
-                                "Entrada na Conta Assegurada. Ideal para começar com transferências internas e on-chain.",
-                                "BRONZE"),
-                        t("en", "Bronze card",
-                                "Entry secured account. Great for starting with internal and on-chain transfers.",
-                                "BRONZE"),
-                        t("es", "Tarjeta Bronze",
-                                "Cuenta asegurada de entrada. Ideal para empezar con transferencias internas y on-chain.",
-                                "BRONZE")),
-                feature("feat-card-metal", 124, List.of("PLATFORM", "TOTAL"),
-                        image("asset:assets/feed/cards/metal.png", 1.6),
-                        t("pt", "Cartão Metal",
-                                "Acabamento metálico premium. Taxas mais competitivas que o Bronze para uso frequente.",
-                                "METAL"),
-                        t("en", "Metal card",
-                                "Premium metallic finish. More competitive fees than Bronze for frequent use.",
-                                "METAL"),
-                        t("es", "Tarjeta Metal",
-                                "Acabado metálico premium. Comisiones más competitivas que Bronze para uso frecuente.",
-                                "METAL")),
-                feature("feat-card-gold", 123, List.of("PLATFORM", "TOTAL"),
-                        image("asset:assets/feed/cards/gold.png", 1.6),
-                        t("pt", "Cartão Gold",
-                                "Topo de linha: visual escuro com detalhes dourados e as menores taxas da linha assegurada.",
-                                "GOLD"),
-                        t("en", "Gold card",
-                                "Top tier: dark look with gold details and the lowest secured-card fees.",
-                                "GOLD"),
-                        t("es", "Tarjeta Gold",
-                                "Nivel superior: look oscuro con detalles dorados y las comisiones más bajas.",
-                                "GOLD")),
+        // ── Personalized security promos ──────────────────────────────
+        entries.add(promo("promo-enable-passkey", 120, List.of("PLATFORM", "ONCHAIN", "TOTAL"),
+                true, false, false,
+                icon("biometric"),
+                t("pt", "Ative a biometria",
+                        "Registre uma passkey neste aparelho para confirmar envios com mais segurança.",
+                        "SEGURANÇA"),
+                t("en", "Enable biometrics",
+                        "Register a passkey on this device to confirm sends more securely.",
+                        "SECURITY"),
+                t("es", "Activa la biometría",
+                        "Registra una passkey en este dispositivo para confirmar envíos con más seguridad.",
+                        "SEGURIDAD"),
+                cta("Configurar", "NAVIGATE", "/settings/security")));
+        entries.add(promo("promo-enable-totp", 115, List.of("PLATFORM", "ONCHAIN", "TOTAL"),
+                false, true, false,
+                icon("verified"),
+                t("pt", "Ative o 2FA",
+                        "O TOTP protege login e códigos de backup. Leva menos de um minuto.",
+                        "CONTA"),
+                t("en", "Turn on 2FA",
+                        "TOTP protects login and backup codes. It takes under a minute.",
+                        "ACCOUNT"),
+                t("es", "Activa el 2FA",
+                        "TOTP protege el acceso y los códigos de respaldo. Tarda menos de un minuto.",
+                        "CUENTA"),
+                cta("Ativar", "NAVIGATE", "/settings/security")));
+        entries.add(announcement("ann-network-hint", 60, List.of("ONCHAIN"),
+                icon("info"),
+                t("pt", "Dica de rede",
+                        "Transações on-chain dependem da rede Bitcoin. Acompanhe confirmações no cartão da home.",
+                        "AVISO"),
+                t("en", "Network tip",
+                        "On-chain transfers depend on Bitcoin. Track confirmations on the home cards.",
+                        "NOTICE"),
+                t("es", "Consejo de red",
+                        "Las transferencias on-chain dependen de Bitcoin. Sigue las confirmaciones en inicio.",
+                        "AVISO")));
 
-                // ── Personalized promos / announcements (no admin CMS) ───
-                promo("promo-enable-passkey", 120, List.of("PLATFORM", "ONCHAIN", "TOTAL"),
-                        true, false, false,
-                        icon("biometric"),
-                        t("pt", "Ative a biometria",
-                                "Registre uma passkey neste aparelho para confirmar envios com mais segurança.",
-                                "SEGURANÇA"),
-                        t("en", "Enable biometrics",
-                                "Register a passkey on this device to confirm sends more securely.",
-                                "SECURITY"),
-                        t("es", "Activa la biometría",
-                                "Registra una passkey en este dispositivo para confirmar envíos con más seguridad.",
-                                "SEGURIDAD"),
-                        cta("Configurar", "NAVIGATE", "/settings/security")),
-                promo("promo-enable-totp", 115, List.of("PLATFORM", "ONCHAIN", "TOTAL"),
-                        false, true, false,
-                        icon("verified"),
-                        t("pt", "Ative o 2FA",
-                                "O TOTP protege login e códigos de backup. Leva menos de um minuto.",
-                                "CONTA"),
-                        t("en", "Turn on 2FA",
-                                "TOTP protects login and backup codes. It takes under a minute.",
-                                "ACCOUNT"),
-                        t("es", "Activa el 2FA",
-                                "TOTP protege el acceso y los códigos de respaldo. Tarda menos de un minuto.",
-                                "CUENTA"),
-                        cta("Ativar", "NAVIGATE", "/settings/security")),
-                announcement("ann-network-hint", 60, List.of("ONCHAIN", "TOTAL"),
-                        icon("info"),
-                        t("pt", "Dica de rede",
-                                "Transações on-chain dependem da rede Bitcoin. Acompanhe confirmações no cartão da home.",
-                                "AVISO"),
-                        t("en", "Network tip",
-                                "On-chain transfers depend on Bitcoin. Track confirmations on the home cards.",
-                                "NOTICE"),
-                        t("es", "Consejo de red",
-                                "Las transferencias on-chain dependen de Bitcoin. Sigue las confirmaciones en inicio.",
-                                "AVISO")),
-                // Video-capable slot (URL may be empty until CDN assets exist — client falls back to icon)
-                feature("feat-video-welcome", 50, List.of("TOTAL"),
-                        video(null, null),
-                        t("pt", "Novidades Kerosene",
-                                "Em breve: conteúdo em vídeo e animações personalizadas no feed da home.",
-                                "NOVIDADE"),
-                        t("en", "Kerosene updates",
-                                "Coming soon: personalized video and animation content on the home feed.",
-                                "NEW"),
-                        t("es", "Novedades Kerosene",
-                                "Pronto: video y animaciones personalizadas en el feed de inicio.",
-                                "NUEVO"))
-        );
+        return List.copyOf(entries);
+    }
+
+    private CatalogEntry cardTierEducation(WalletCardTierCatalog.Tier tier) {
+        String fee = tier.formatFeePercent();
+        String volume = tier.formatVolume();
+        int months = tier.minAccountMonths();
+        String code = tier.code();
+        String id = "edu-card-" + code.toLowerCase(Locale.ROOT);
+        // Same kind for all three so the education carousel is homogeneous.
+        // Client renders a live 3D tier card from the tag — do not ship mock PNGs.
+        return edu(
+                id,
+                tier.priority(),
+                List.of("PLATFORM", "TOTAL"),
+                icon("creditCard"),
+                t("pt",
+                        titlePt(code),
+                        bodyPt(code, fee, months, volume),
+                        code),
+                t("en",
+                        titleEn(code),
+                        bodyEn(code, fee, months, volume),
+                        code),
+                t("es",
+                        titleEs(code),
+                        bodyEs(code, fee, months, volume),
+                        code));
+    }
+
+    private static String titlePt(String code) {
+        return switch (code) {
+            case "WHITE" -> "Cartão White";
+            case "BLACK" -> "Cartão Black";
+            default -> "Cartão Bronze";
+        };
+    }
+
+    private static String titleEn(String code) {
+        return switch (code) {
+            case "WHITE" -> "White card";
+            case "BLACK" -> "Black card";
+            default -> "Bronze card";
+        };
+    }
+
+    private static String titleEs(String code) {
+        return switch (code) {
+            case "WHITE" -> "Tarjeta White";
+            case "BLACK" -> "Tarjeta Black";
+            default -> "Tarjeta Bronze";
+        };
+    }
+
+    private static String bodyPt(String code, String fee, int months, String volume) {
+        return switch (code) {
+            case "WHITE" ->
+                    "Taxa de saque/depósito externo: " + fee
+                            + ". Como conseguir: movimentação mensal acima de " + volume
+                            + " e pelo menos " + months
+                            + " meses de conta. O cartão sobe automaticamente quando a conta atinge as regras.";
+            case "BLACK" ->
+                    "Menor taxa da plataforma: " + fee
+                            + " em saques e depósitos externos. Como conseguir: movimentação mensal acima de "
+                            + volume + " e pelo menos " + months
+                            + " meses de conta. Transferências internas entre usuários Kerosene continuam 0%.";
+            default ->
+                    "Nível inicial da Conta Assegurada. Taxa externa: " + fee
+                            + ". Disponível automaticamente para contas novas. Use a plataforma e aumente o tempo "
+                            + "e a movimentação mensal para subir de nível e pagar menos.";
+        };
+    }
+
+    private static String bodyEn(String code, String fee, int months, String volume) {
+        return switch (code) {
+            case "WHITE" ->
+                    "External deposit/withdrawal fee: " + fee
+                            + ". How to unlock: monthly volume above " + volume
+                            + " and at least " + months
+                            + " months of account age. The card upgrades automatically when rules are met.";
+            case "BLACK" ->
+                    "Lowest platform fee: " + fee
+                            + " on external deposits and withdrawals. How to unlock: monthly volume above "
+                            + volume + " and at least " + months
+                            + " months of account age. Internal Kerosene transfers stay 0%.";
+            default ->
+                    "Entry secured-account tier. External fee: " + fee
+                            + ". Granted automatically to new accounts. Stay active longer and grow monthly "
+                            + "volume to unlock lower tiers.";
+        };
+    }
+
+    private static String bodyEs(String code, String fee, int months, String volume) {
+        return switch (code) {
+            case "WHITE" ->
+                    "Comisión de depósito/retiro externo: " + fee
+                            + ". Cómo conseguirlo: volumen mensual superior a " + volume
+                            + " y al menos " + months
+                            + " meses de cuenta. La tarjeta sube automáticamente al cumplir las reglas.";
+            case "BLACK" ->
+                    "Menor comisión de la plataforma: " + fee
+                            + " en depósitos y retiros externos. Cómo conseguirlo: volumen mensual superior a "
+                            + volume + " y al menos " + months
+                            + " meses de cuenta. Las transferencias internas Kerosene siguen en 0%.";
+            default ->
+                    "Nivel inicial de la cuenta asegurada. Comisión externa: " + fee
+                            + ". Disponible automáticamente para cuentas nuevas. Gana antigüedad y volumen "
+                            + "mensual para subir de nivel y pagar menos.";
+        };
     }
 
     // ── catalog helpers ────────────────────────────────────────────────────
@@ -386,25 +402,12 @@ public class HomeFeedComposer {
         return new CatalogEntry(id, "ANNOUNCEMENT", priority, views, false, false, false, media, null, locales);
     }
 
-    private static CatalogEntry feature(
-            String id,
-            int priority,
-            List<String> views,
-            HomeFeedMediaDTO media,
-            Localized... locales) {
-        return new CatalogEntry(id, "FEATURE", priority, views, false, false, false, media, null, locales);
-    }
-
     private static HomeFeedMediaDTO icon(String key) {
         return new HomeFeedMediaDTO("ICON", key, null, null, 1.0);
     }
 
     private static HomeFeedMediaDTO image(String assetOrUrl, double aspectRatio) {
         return new HomeFeedMediaDTO("IMAGE", "creditCard", assetOrUrl, assetOrUrl, aspectRatio);
-    }
-
-    private static HomeFeedMediaDTO video(String url, String poster) {
-        return new HomeFeedMediaDTO("VIDEO", "play", url, poster, 16.0 / 9.0);
     }
 
     private static HomeFeedCtaDTO cta(String label, String action, String target) {
