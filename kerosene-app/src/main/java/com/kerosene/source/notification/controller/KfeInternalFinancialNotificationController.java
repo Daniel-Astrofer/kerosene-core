@@ -1,0 +1,236 @@
+package source.notification.controller;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import source.common.dto.ApiResponse;
+import source.common.financial.FinancialDepositConfirmedNotificationRequest;
+import source.common.financial.FinancialNotificationPort;
+import source.common.financial.FinancialOutboundNotificationRequest;
+import source.common.financial.FinancialPaymentRequestDepositConfirmedNotificationRequest;
+import source.common.financial.FinancialInternalTransferNotificationRequest;
+import source.common.financial.FinancialExternalPaymentNotificationRequest;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
+@RestController
+@RequestMapping("/internal/kfe/notifications")
+public class KfeInternalFinancialNotificationController {
+
+    private final FinancialNotificationPort notificationPort;
+    private final String internalSecret;
+
+    public KfeInternalFinancialNotificationController(
+            FinancialNotificationPort notificationPort,
+            @Value("${kfe.internal.shared-secret:}") String internalSecret) {
+        this.notificationPort = notificationPort;
+        this.internalSecret = internalSecret;
+    }
+
+    @PostMapping("/deposit-confirmed")
+    public ResponseEntity<ApiResponse<Void>> notifyDepositConfirmed(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialDepositConfirmedNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyDepositConfirmed(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.creditedSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE deposit notification accepted.", null));
+    }
+
+    @PostMapping("/deposit-detected")
+    public ResponseEntity<ApiResponse<Void>> notifyDepositDetected(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialDepositConfirmedNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyDepositDetected(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.creditedSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE deposit detected notification accepted.", null));
+    }
+
+    @PostMapping("/deposit-progress")
+    public ResponseEntity<ApiResponse<Void>> notifyDepositConfirmationProgress(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialDepositConfirmedNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyDepositConfirmationProgress(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.creditedSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE deposit progress notification accepted.", null));
+    }
+
+    @PostMapping("/payment-request-deposit-confirmed")
+    public ResponseEntity<ApiResponse<Void>> notifyPaymentRequestDepositConfirmed(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialPaymentRequestDepositConfirmedNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.paymentRequestId() != null, "paymentRequestId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyPaymentRequestDepositConfirmed(
+                request.userId(),
+                request.transactionId(),
+                request.paymentRequestId(),
+                request.publicId(),
+                request.walletId(),
+                request.rail(),
+                request.creditedSats());
+        return ResponseEntity.ok(ApiResponse.success("KFE payment request notification accepted.", null));
+    }
+
+    @PostMapping("/outbound-detected")
+    public ResponseEntity<ApiResponse<Void>> notifyOutboundDetected(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialOutboundNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyOutboundDetected(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.amountSats(),
+                request.confirmations(),
+                request.destinationHint());
+        return ResponseEntity.ok(ApiResponse.success("KFE outbound detected notification accepted.", null));
+    }
+
+    @PostMapping("/outbound-confirmed")
+    public ResponseEntity<ApiResponse<Void>> notifyOutboundConfirmed(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialOutboundNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyOutboundConfirmed(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.amountSats(),
+                request.confirmations());
+        return ResponseEntity.ok(ApiResponse.success("KFE outbound confirmed notification accepted.", null));
+    }
+
+    @PostMapping("/internal-transfer-received")
+    public ResponseEntity<ApiResponse<Void>> notifyInternalTransferReceived(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialInternalTransferNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyInternalTransferReceived(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.amountSats());
+        return ResponseEntity.ok(ApiResponse.success("KFE internal transfer received notification accepted.", null));
+    }
+
+    @PostMapping("/internal-transfer-sent")
+    public ResponseEntity<ApiResponse<Void>> notifyInternalTransferSent(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialInternalTransferNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyInternalTransferSent(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.amountSats());
+        return ResponseEntity.ok(ApiResponse.success("KFE internal transfer sent notification accepted.", null));
+    }
+
+    @PostMapping("/external-payment-sent")
+    public ResponseEntity<ApiResponse<Void>> notifyExternalPaymentSent(
+            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
+            @RequestBody FinancialExternalPaymentNotificationRequest request) {
+        verifyCredential(credential);
+        require(request != null, "request is required");
+        require(request.userId() != null, "userId is required");
+        require(request.transactionId() != null, "transactionId is required");
+        require(request.walletId() != null, "walletId is required");
+
+        notificationPort.notifyExternalPaymentSent(
+                request.userId(),
+                request.transactionId(),
+                request.walletId(),
+                request.rail(),
+                request.amountSats());
+        return ResponseEntity.ok(ApiResponse.success("KFE external payment sent notification accepted.", null));
+    }
+
+    private void verifyCredential(String credential) {
+        if (internalSecret == null || internalSecret.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "KFE internal shared secret is not configured");
+        }
+        if (credential == null || credential.isBlank() || !constantTimeEquals(internalSecret, credential)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid KFE internal credential");
+        }
+    }
+
+    private void require(boolean condition, String message) {
+        if (!condition) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+    }
+
+    private boolean constantTimeEquals(String expected, String provided) {
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                provided.getBytes(StandardCharsets.UTF_8));
+    }
+}
