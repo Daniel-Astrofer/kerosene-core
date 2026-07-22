@@ -129,6 +129,28 @@ class StompInboundChannelInterceptorTest {
         assertNotNull(result);
     }
 
+    @Test
+    void shouldAllowTransactionsQueueSubscribeForAuthenticatedUser() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/user/queue/transactions");
+
+        Message<?> result = interceptor.preSend(message(accessor), channel);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldAllowBtcPriceTopicSubscribeForAuthenticatedUser() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setDestination("/topic/btc-price");
+
+        Message<?> result = interceptor.preSend(message(accessor), channel);
+
+        assertNotNull(result);
+    }
+
     private Message<byte[]> message(StompHeaderAccessor accessor) {
         accessor.setLeaveMutable(true);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());

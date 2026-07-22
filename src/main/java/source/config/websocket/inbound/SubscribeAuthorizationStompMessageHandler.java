@@ -44,6 +44,12 @@ public class SubscribeAuthorizationStompMessageHandler extends AbstractStompMess
             return;
         }
 
+        if ("/topic/btc-price".equals(destination)
+                || destination.startsWith("/topic/btc-price/")) {
+            // Public market data; JWT still required on CONNECT.
+            return;
+        }
+
         if (destination.startsWith("/topic/balance/")) {
             Long destinationUserId = parseTrailingLong(destination, "/topic/balance/");
             if (destinationUserId == null || !destinationUserId.equals(principalUserId)) {

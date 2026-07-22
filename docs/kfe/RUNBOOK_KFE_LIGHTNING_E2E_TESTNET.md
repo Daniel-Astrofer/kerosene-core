@@ -6,7 +6,7 @@ End-to-end checklist for liquidação binária + Lightning in/out + channel ops 
 
 | Component | Required config |
 |-----------|-----------------|
-| Bitcoin Core | `BITCOIN_NETWORK=testnet4` (or regtest), RPC enabled, wallet bootstrap |
+| Bitcoin Core | `BITCOIN_NETWORK=testnet` (or regtest), RPC enabled, wallet bootstrap |
 | LND | REST + macaroon; `LIGHTNING_LND_REST_ENABLED=true` |
 | KFE | profile with `kfe`, Flyway through **V44** |
 | System wallets | `KfeSystemWalletService.ensureSystemWallets()` at bootstrap |

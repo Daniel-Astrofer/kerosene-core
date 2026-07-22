@@ -3,6 +3,7 @@ package source.common.service;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,6 +53,7 @@ public class TickerService implements FinancialTickerPort {
     private final RestTemplate restTemplate;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final BtcPriceEventPublisher btcPriceEventPublisher;
     private long lastEngagementSentTime = 0;
 
     public TickerService(
@@ -61,6 +63,7 @@ public class TickerService implements FinancialTickerPort {
         this.restTemplate = restTemplate;
         this.notificationService = null;
         this.userRepository = null;
+        this.btcPriceEventPublisher = null;
     }
 
     @Autowired
@@ -68,11 +71,13 @@ public class TickerService implements FinancialTickerPort {
             StringRedisTemplate redisTemplate,
             @Qualifier("tickerRestTemplate") RestTemplate restTemplate,
             NotificationService notificationService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ObjectProvider<BtcPriceEventPublisher> btcPriceEventPublisher) {
         this.redisTemplate = redisTemplate;
         this.restTemplate = restTemplate;
         this.notificationService = notificationService;
         this.userRepository = userRepository;
+        this.btcPriceEventPublisher = btcPriceEventPublisher.getIfAvailable();
     }
 
 
@@ -126,6 +131,12 @@ public class TickerService implements FinancialTickerPort {
                     log.info(
                             "[Ticker] Prices updated: USD={} ({}%), BRL={} ({}%), EUR={} ({}%)",
                             usd, usdChange, brl, brlChange, eur, eurChange);
+
+                    // Push only after a successful CoinGecko fetch — never from fallback seeds.
+                    if (btcPriceEventPublisher != null && usd != null) {
+                        btcPriceEventPublisher.publish(
+                                BtcPriceQuoteBuilder.buildFromFetched(usd, brl, eur, usdChange));
+                    }
                 } else {
                     log.warn("[Ticker] CoinGecko returned no bitcoin node. Keeping cached/fallback prices.");
                 }

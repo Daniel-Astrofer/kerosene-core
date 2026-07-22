@@ -1,5 +1,8 @@
 package source.notification.service;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
@@ -35,13 +38,33 @@ public class NotificationPersistenceService {
         entity.setEntityId(payload.entityId());
         entity.setMetadata(payload.metadata());
         entity.setRead(false);
+        entity.setCreatedAt(resolveCreatedAtUtc(payload));
 
         NotificationEntity saved = repository.save(entity);
 
         Map<String, Object> payloadMap = new LinkedHashMap<>(payload.toMap());
         payloadMap.put("id", saved.getId());
+        // Keep live push on the same Instant that was persisted.
+        Instant createdAt = saved.getCreatedAtUtc();
+        if (createdAt != null) {
+            String zulu = createdAt.toString();
+            payloadMap.put("createdAt", zulu);
+            payloadMap.put("timestamp", zulu);
+        }
 
         eventPublisher.publishEvent(new NotificationPersistedEvent(userId, payloadMap));
         return saved;
+    }
+
+    private static LocalDateTime resolveCreatedAtUtc(UserNotificationPayload payload) {
+        String raw = payload.createdAt() != null ? payload.createdAt() : payload.timestamp();
+        if (raw != null && !raw.isBlank()) {
+            try {
+                return LocalDateTime.ofInstant(Instant.parse(raw), ZoneOffset.UTC);
+            } catch (Exception ignored) {
+                // fall through to clock
+            }
+        }
+        return LocalDateTime.now(ZoneOffset.UTC);
     }
 }

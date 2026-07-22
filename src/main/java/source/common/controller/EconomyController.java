@@ -6,9 +6,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import source.common.dto.ApiResponse;
+import source.common.service.BtcPriceQuoteBuilder;
 import source.common.service.TickerService;
 
-import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,26 +45,7 @@ public class EconomyController {
 
     @GetMapping("/btc-price")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBtcPrice() {
-        BigDecimal btcUsd = tickerService.getPrice("usd");
-        BigDecimal btcBrl = tickerService.getPrice("brl");
-        BigDecimal btcEur = tickerService.getPrice("eur");
-        BigDecimal usdBrl = BigDecimal.ZERO;
-
-        if (btcUsd.compareTo(BigDecimal.ZERO) > 0) {
-            usdBrl = btcBrl.divide(btcUsd, 8, java.math.RoundingMode.HALF_UP);
-        }
-
-        BigDecimal change24h = tickerService.getChange24hPercent("usd");
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("btcUsd", btcUsd);
-        data.put("btcBrl", btcBrl);
-        data.put("btcEur", btcEur);
-        data.put("usdBrl", usdBrl);
-        if (change24h != null) {
-            data.put("btcUsdChange24hPercent", change24h);
-        }
-
+        Map<String, Object> data = BtcPriceQuoteBuilder.build(tickerService);
         return ResponseEntity.ok(ApiResponse.success(
                 "Current BTC market prices retrieved.",
                 data));

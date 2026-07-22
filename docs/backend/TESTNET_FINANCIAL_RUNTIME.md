@@ -5,7 +5,7 @@ Use this profile when deposits and withdrawals must run through a Bitcoin test n
 Required runtime values:
 
 ```env
-BITCOIN_NETWORK=testnet4
+BITCOIN_NETWORK=testnet
 BITCOIN_RPC_ENABLED=true
 BITCOIN_RPC_REQUIRED=true
 BITCOIN_RPC_URL=http://bitcoin-core:8332
@@ -29,4 +29,4 @@ Runtime behavior:
 - `keroseneFeeSats` is credited to the system profit wallet when a transaction settles.
 - No development balance injection or instant fake deposit credit is available.
 
-For Android wallet testing, every app in the flow must explicitly support `testnet4`.
+For Android wallet testing, every app in the flow must explicitly support classic testnet (`tb1…` / Electrum testnet). Use `BITCOIN_NETWORK=testnet` (LND chain dir name); Core reports `chain=test`.

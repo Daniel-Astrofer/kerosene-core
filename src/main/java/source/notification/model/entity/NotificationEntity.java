@@ -1,6 +1,8 @@
 package source.notification.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -9,7 +11,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.Map;
 
@@ -34,8 +38,9 @@ public class NotificationEntity {
     private String entityId;
     @Column(name = "is_read")
     private boolean read;
+    /** Stored as UTC wall clock; wire format is Instant with explicit {@code Z}. */
     @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt = LocalDateTime.now(ZoneOffset.UTC);
 
     /** Structured fields for clients (rail, amountBtc, confirmations, …). */
     @Convert(converter = StringStringMapJsonConverter.class)
@@ -63,8 +68,23 @@ public class NotificationEntity {
     public void setEntityId(String entityId) { this.entityId = entityId; }
     public boolean isRead() { return read; }
     public void setRead(boolean read) { this.read = read; }
+
+    @JsonIgnore
     public LocalDateTime getCreatedAt() { return createdAt; }
+
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    /** REST/WS clients: Zulu Instant (e.g. {@code 2026-07-21T22:47:00Z}). */
+    @JsonProperty("createdAt")
+    public Instant getCreatedAtUtc() {
+        return createdAt == null ? null : createdAt.toInstant(ZoneOffset.UTC);
+    }
+
+    @JsonProperty("timestamp")
+    public Instant getTimestampUtc() {
+        return getCreatedAtUtc();
+    }
+
     public Map<String, String> getMetadata() {
         return metadata == null ? Collections.emptyMap() : metadata;
     }

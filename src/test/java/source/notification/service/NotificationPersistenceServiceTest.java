@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,6 +58,9 @@ class NotificationPersistenceServiceTest {
         assertEquals(7L, saved.getUserId());
         assertEquals(payload.kind(), saved.getKind());
         assertEquals("ledger", saved.getMetadata().get("channel"));
+        assertEquals(
+                Instant.parse(payload.createdAt()),
+                saved.getCreatedAtUtc());
         verify(eventPublisher).publishEvent(argThat((Object event) -> {
             if (!(event instanceof NotificationPersistedEvent persistedEvent)) {
                 return false;
@@ -66,6 +70,8 @@ class NotificationPersistenceServiceTest {
                     && persistedEvent.payload().get("id").equals(42L)
                     && persistedEvent.payload().get("title").equals("Saldo atualizado")
                     && persistedEvent.payload().get("entityId").equals("pay_123")
+                    && payload.createdAt().equals(persistedEvent.payload().get("createdAt"))
+                    && payload.createdAt().equals(persistedEvent.payload().get("timestamp"))
                     && meta instanceof Map<?, ?> map
                     && "ledger".equals(map.get("channel"));
         }));
