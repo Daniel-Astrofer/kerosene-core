@@ -411,7 +411,7 @@ class PasskeyControllerTest {
                 eq("auth-data"),
                 eq("android-client-data"))).thenReturn(true);
         when(passkeyService.resolveRelyingPartyIdFromClientData("android-client-data"))
-                .thenReturn("epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion");
+                .thenReturn("examplehiddenservice.onion");
         when(passkeyService.extractOriginHostFromClientData("android-client-data"))
                 .thenReturn("android:apk-key-hash:kerosene");
         when(finalizeSignupAccount.execute("session-1")).thenReturn(user);
@@ -444,7 +444,7 @@ class PasskeyControllerTest {
                 eq("auth-data"),
                 eq("android-client-data"))).thenReturn(true);
         when(passkeyService.resolveRelyingPartyIdFromClientData("android-client-data"))
-                .thenReturn("epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion");
+                .thenReturn("examplehiddenservice.onion");
         when(passkeyService.extractOriginHostFromClientData("android-client-data"))
                 .thenReturn("android:apk-key-hash:kerosene");
         when(finalizeSignupAccount.execute("session-1"))

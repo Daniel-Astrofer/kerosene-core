@@ -31,7 +31,7 @@ class PasskeyServiceTest {
 
     @Test
     void verifySignatureAcceptsDynamicOnionHostWhenRequestMatchesOrigin() throws Exception {
-        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        String onionHost = "examplehiddenservice.onion";
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setServerName(onionHost);
         request.addHeader("Host", onionHost);
@@ -93,7 +93,7 @@ class PasskeyServiceTest {
 
     @Test
     void verifySignatureAcceptsConfiguredAndroidAppOriginWithOnionRpId() throws Exception {
-        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        String onionHost = "examplehiddenservice.onion";
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setServerName(onionHost);
         request.addHeader("Host", onionHost);
@@ -128,7 +128,7 @@ class PasskeyServiceTest {
 
     @Test
     void verifySignatureUsesAppScopedRpIdForConfiguredAppOrigin() throws Exception {
-        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        String onionHost = "examplehiddenservice.onion";
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setServerName(onionHost);
         request.addHeader("Host", onionHost);
@@ -164,7 +164,7 @@ class PasskeyServiceTest {
 
     @Test
     void verifySignatureAcceptsLegacyDynamicRpIdHashForConfiguredAppOrigin() throws Exception {
-        String onionHost = "epef24frbttdyirb45zif4smrkmhfd4di34my7wdhadzomfcpcf5fbyd.onion";
+        String onionHost = "examplehiddenservice.onion";
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setServerName(onionHost);
         request.addHeader("Host", onionHost);

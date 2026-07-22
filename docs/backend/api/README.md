@@ -39,7 +39,7 @@ Os documentos por serviço foram elevados para um padrão prático de integraç�
 
 | Serviço | Arquivo | Estado atual |
 | --- | --- | --- |
-| Admin Operations | [ADMIN_OPERATIONS.md](ADMIN_OPERATIONS.md) | Endpoints ativos documentados. |
+| Admin Operations | — | Documentação operacional admin fica fora do repositório público. |
 | Auditoria | [AUDIT.md](AUDIT.md) | `4` endpoints ativos em `/api/admin/kfe/audit/**`; rotas antigas `/audit/**` e `/v1/audit/**` reclassificadas como stale. |
 | Auth e Conta | [AUTH.md](AUTH.md) | Endpoints ativos de autenticação, TOTP, passkey, PIN, device-key, recovery e admin access. |
 | Bitcoin Accounts | [BITCOIN_ACCOUNTS.md](BITCOIN_ACCOUNTS.md) | Controller legado ausente; documento aponta para endpoints KFE ativos de carteira, UTXO e PSBT. |

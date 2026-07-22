@@ -10,9 +10,9 @@ Fontes revisadas:
 | --- | --- |
 | `infra/docker/images.yaml` | Contrato canônico de imagens, tags locais, Dockerfiles e contextos de build durante a migração para `infra/`. |
 | `infra/docker/compose/local.compose.yaml` | Topologia local atual com múltiplos shards incluindo shards da aplicação, Postgres, Redis, sidecars MPC, Tor, Vault, serviços Bitcoin, serviços Lightning, Prometheus e web admin. |
-| `infra/docker/compose/hardened.compose.yaml` | Topologia distribuída endurecida com shards regionais, serviços ocultos Tor, Vanguards, Vault, MPC, PostgreSQL, Redis e LND. |
+| `infra/docker/compose/hardened.compose.yaml` | *(fora do repo público)* Topologia distribuída endurecida — mantida em checkout de ops privado. |
 | `backend/kerosene/src/main/resources/application*.properties` | Configuração de runtime do backend para perfis default, Docker e produção. |
-| `scripts/*.sh` | Scripts de ciclo de vida local, logging, arming do Vault, build do web admin e release. |
+| `scripts/*.sh` | Scripts de ciclo de vida local, logging, build do web admin e release. Arming do Vault fica em ops privado. |
 | `backend/mpc-sidecar`, `backend/vault` | Serviços de suporte para assinatura MPC e custódia de material sensível. |
 | `backend/kerosene/src/main/resources/db/migration` | Histórico do esquema de banco de dados gerenciado pelo Flyway. |
 
@@ -57,14 +57,7 @@ Serviços locais principais:
 
 ### Topologia Distribuída
 
-`infra/docker/compose/hardened.compose.yaml` modela a implantação distribuída endurecida:
-
-- Um serviço Vault central exposto internamente através do `kerosene-tor-vault`, sem `ports` diretas no host.
-- Três shards regionais: `IS`, `CH` e `SG`.
-- Limites de rede separados para tráfego de banco de dados, Tor e MPC.
-- PostgreSQL com SSL, Redis com proteção por senha, sidecars MPC com mTLS e volumes persistentes específicos do shard.
-- Contêineres da aplicação configurados com capacidades Linux reduzidas, `no-new-privileges`, tmpfs e identidade de shard persistente.
-- Serviço oculto Tor e serviço Vanguards por shard.
+A topologia `hardened` (shards regionais endurecidos, Tor/Vanguards, Vault Raft) **não é publicada** neste repositório. Operadores mantêm esse compose e os overlays de produção em um checkout de ops privado.
 
 ## Runtime do Backend
 
