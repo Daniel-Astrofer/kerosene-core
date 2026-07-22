@@ -45,6 +45,8 @@ deploy/local/**
 src/main/resources/secrets/
 service-account.json
 google-services.json
+identity/shard.priv
+identity/shard.pub
 
 # Tor hidden service private key — NEVER commit this
 tor/kerosene_service/
