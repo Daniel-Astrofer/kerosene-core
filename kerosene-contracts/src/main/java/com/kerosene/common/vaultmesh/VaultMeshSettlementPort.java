@@ -9,6 +9,44 @@ public interface VaultMeshSettlementPort {
     VaultMeshReceipt submitIntent(VaultMeshIntent intent);
 
     /**
+     * Soft-reserve Intent capital ({@code POST /v1/intent/reserve}). Prefer for paths that
+     * may fail after debit (e.g. CHANNELS→LND open): {@link #releaseIntent} on failure,
+     * {@link #commitIntent} after success. Default rejects so non-mesh adapters stay fail-closed.
+     */
+    default VaultMeshReceipt reserveIntent(VaultMeshIntent intent) {
+        return new VaultMeshReceipt(
+                intent == null ? null : intent.intentId(),
+                VaultMeshReceipt.Status.REJECTED,
+                "MESH_INTENT_RESERVE_UNSUPPORTED",
+                null,
+                System.currentTimeMillis());
+    }
+
+    /**
+     * Roll back a soft reservation ({@code POST /v1/intent/release}).
+     */
+    default VaultMeshReceipt releaseIntent(String intentId, String bucket, long amountSats) {
+        return new VaultMeshReceipt(
+                intentId,
+                VaultMeshReceipt.Status.REJECTED,
+                "MESH_INTENT_RELEASE_UNSUPPORTED",
+                null,
+                System.currentTimeMillis());
+    }
+
+    /**
+     * Promote reservation → durable consume ({@code POST /v1/intent/commit}).
+     */
+    default VaultMeshReceipt commitIntent(String intentId) {
+        return new VaultMeshReceipt(
+                intentId,
+                VaultMeshReceipt.Status.REJECTED,
+                "MESH_INTENT_COMMIT_UNSUPPORTED",
+                null,
+                System.currentTimeMillis());
+    }
+
+    /**
      * Intent-gated Bitcoin PSBT signing (Taproot key-path via frost-secp256k1-tr).
      * Default rejects so non-mesh adapters stay fail-closed.
      */

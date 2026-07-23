@@ -134,7 +134,7 @@ Settlement signing for treasury Taproot PSBT goes through **vault mesh Intent/Re
 | Gap | Status now | Notes |
 | --- | --- | --- |
 | **SNP VCEK / full HW attestation** | planned (fail-closed) | Staging stub / fail-closed without HW; **do not** claim production SNP quotes |
-| **CHANNELS → LND inject** | planned (fail-closed stub) | `ChannelsMeshInjectGateway` refuses `CHANNELS_MESH_INJECT_NOT_WIRED`; go-live requires inject flag + disables auto-open; LND wallet balance ≠ mesh CHANNELS capital |
+| **CHANNELS → LND inject** | landed (kfe lifecycle) | Soft-reserve CHANNELS → LND `openChannel` → commit; release on open failure; go-live `require-channels-mesh-inject=true` + `capacity.auto-open=false`. Gaps: no mesh→LND on-chain fund PSBT yet (LND wallet still funds open); pending-channels not checked; crash between open success and commit |
 | **Deposit xpub vs `tb1p`** | enforced (policy guard) | Mesh deposit is Taproot `GET /v1/bitcoin/deposit` (`tr()` / `tb1p…`); KFE platform xpub issuance is separate; vaultmesh client/tb1p-only receive address policy is enforced for `WATCH_ONLY` USERS flows |
 
 ## Security model
