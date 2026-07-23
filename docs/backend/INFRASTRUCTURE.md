@@ -15,8 +15,7 @@ Runtime and custody layout for Kerosene. Canonical deploy paths: `infra/docker/`
 | `backend/kerosene/.../application*.properties` | app runtime profiles |
 | `backend/kerosene/kfe-service/.../kfe-service-vaultmesh-*.properties` | mesh bridge profiles |
 | `backend/kerosene-vault` | vault mesh (Rust) — treasury / FROST shares |
-| `backend/vault` | optional ops-secret helper (not treasury custody) |
-| `backend/mpc-sidecar` | **legacy** signer — removed from local-full/deploy |
+| Ops AES (`AES_SECRET`) | Core `VaultKeyProvider` loads ops AES from env only (no Java vault service) |
 | `.../db/migration` | Flyway |
 
 Do not call the stack “Hydra”. Use Kerosene backend / shards / vault mesh.
@@ -27,9 +26,9 @@ Do not call the stack “Hydra”. Use Kerosene backend / shards / vault mesh.
 | --- | --- |
 | **`kfe-service` (`com.kerosene.kfe`)** | Bank: ledger, balances, rules, Intent emit / Receipt handle. No FROST shares. |
 | **Vault mesh (`kerosene-vault`)** | Treasury/signing plane: FROST shares, DKG, day-advance + reshare, Taproot PSBT cosign, governance rewards. |
-| **`kerosene-app` / Core** | Auth, product shell, admin health probes into mesh. |
-| **`mpc-sidecar`** | Not on go-live/local-full path. Tree may remain for history; do not re-wire as primary signer. |
-| **HashiCorp Vault Raft** | Not treasury SoT. Optional only for non-treasury ops secrets if ever used; admin Raft readiness is not the custody health signal. |
+| **`kerosene-app` / Core** | Auth, product shell, admin health probes into mesh; ops AES from `AES_SECRET`. |
+| **`mpc-sidecar`** | Removed from tree and local-full/deploy; do not re-wire as primary signer. |
+| **HashiCorp Vault Raft** | Not treasury SoT. Residual overlays (e.g. local-ha) may still mention it; not custody health. |
 
 Cutover is **clean**: mesh on, mpc signing off (`kfe.vaultmesh.mesh-only=true`, `kfe.mpc.signing-enabled=false`). No gradual HashiCorp→mesh treasury migration.
 
