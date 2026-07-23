@@ -1,4 +1,4 @@
-package source.auth.application.service.identityaccess;
+package com.kerosene.auth.application.service.identityaccess;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -6,16 +6,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.application.service.passkey.PasskeyService;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 import java.util.Base64;
 import java.util.Optional;
@@ -62,9 +62,9 @@ class TransactionalAuthenticationServiceTest {
                 passkeyService,
                 passkeyInventoryService,
                 passkeyCredentialRepository,
-                mock(source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository.class),
-                mock(source.auth.application.service.devicekey.DeviceKeyService.class),
-                mock(source.auth.application.service.devicebinding.DeviceCredentialReplayGuard.class),
+                mock(com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository.class),
+                mock(com.kerosene.auth.application.service.devicekey.DeviceKeyService.class),
+                mock(com.kerosene.auth.application.service.devicebinding.DeviceCredentialReplayGuard.class),
                 totpVerifier,
                 hasher,
                 userService,

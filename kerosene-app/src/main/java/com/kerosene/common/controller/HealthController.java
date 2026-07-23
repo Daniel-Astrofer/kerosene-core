@@ -1,11 +1,11 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.common.infra.health.OperationalHealthService;
-import source.common.infra.health.OperationalHealthSnapshot;
+import com.kerosene.common.infra.health.OperationalHealthService;
+import com.kerosene.common.infra.health.OperationalHealthSnapshot;
 
 @RestController
 public class HealthController {

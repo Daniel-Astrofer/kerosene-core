@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 /**
  * Optional call-to-action on a home feed card.

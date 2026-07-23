@@ -1,18 +1,18 @@
-package source.auth.application.service.devicebinding;
+package com.kerosene.auth.application.service.devicebinding;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.model.entity.PasskeyCredential;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.List;
 
-import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
+import com.kerosene.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

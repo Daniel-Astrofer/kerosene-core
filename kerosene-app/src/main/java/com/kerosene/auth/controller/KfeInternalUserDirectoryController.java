@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -9,11 +9,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import source.auth.AuthConstants;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
-import source.common.financial.FinancialUserDirectoryLookupRequest;
-import source.common.financial.FinancialUserDirectoryPort;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
+import com.kerosene.common.financial.FinancialUserDirectoryLookupRequest;
+import com.kerosene.common.financial.FinancialUserDirectoryPort;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

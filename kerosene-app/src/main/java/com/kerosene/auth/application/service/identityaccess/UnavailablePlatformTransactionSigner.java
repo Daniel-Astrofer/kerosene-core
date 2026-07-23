@@ -1,8 +1,8 @@
-package source.auth.application.service.identityaccess;
+package com.kerosene.auth.application.service.identityaccess;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 @Profile("!prod")

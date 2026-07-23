@@ -1,16 +1,16 @@
-package source.auth.application.service.recovery.start.chain;
+package com.kerosene.auth.application.service.recovery.start.chain;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthExceptions;
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.recovery.RecoveryCodeService;
-import source.auth.application.service.recovery.RecoveryRateLimitService;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
+import com.kerosene.auth.application.service.recovery.RecoveryRateLimitService;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 @Order(40)

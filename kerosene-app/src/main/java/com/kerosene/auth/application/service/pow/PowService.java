@@ -1,9 +1,9 @@
-package source.auth.application.service.pow;
+package com.kerosene.auth.application.service.pow;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import source.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

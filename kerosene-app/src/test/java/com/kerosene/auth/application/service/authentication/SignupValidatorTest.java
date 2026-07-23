@@ -1,4 +1,4 @@
-package source.auth.application.service.authentication;
+package com.kerosene.auth.application.service.authentication;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,14 +10,14 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import source.auth.AuthExceptions;
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.application.service.authentication.signup.SignupCredentialRules;
-import source.auth.application.service.authentication.signup.chain.SignupPassphrasePolicyHandler;
-import source.auth.application.service.authentication.signup.chain.SignupRequiredFieldsHandler;
-import source.auth.application.service.authentication.signup.chain.SignupUsernameAvailabilityHandler;
-import source.auth.application.service.authentication.signup.chain.SignupUsernamePolicyHandler;
-import source.auth.application.service.authentication.signup.chain.SignupValidationChain;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.application.service.authentication.signup.SignupCredentialRules;
+import com.kerosene.auth.application.service.authentication.signup.chain.SignupPassphrasePolicyHandler;
+import com.kerosene.auth.application.service.authentication.signup.chain.SignupRequiredFieldsHandler;
+import com.kerosene.auth.application.service.authentication.signup.chain.SignupUsernameAvailabilityHandler;
+import com.kerosene.auth.application.service.authentication.signup.chain.SignupUsernamePolicyHandler;
+import com.kerosene.auth.application.service.authentication.signup.chain.SignupValidationChain;
 
 class SignupValidatorTest {
 

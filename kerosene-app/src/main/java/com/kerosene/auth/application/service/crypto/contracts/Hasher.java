@@ -1,4 +1,4 @@
-package source.auth.application.service.cripto.contracts;
+package com.kerosene.auth.application.service.cripto.contracts;
 
 public interface Hasher {
 

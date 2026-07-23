@@ -1,4 +1,4 @@
-package source.content.controller;
+package com.kerosene.content.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import source.common.dto.ApiResponse;
-import source.content.dto.HomeSurfaceResponseDTO;
-import source.content.dto.HomeUiPublishRequestDTO;
-import source.content.model.entity.HomeUiOverrideEntity;
-import source.content.service.HomeSurfaceComposer;
-import source.content.service.HomeUiOverrideService;
-import source.content.service.HomeUiPushService;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.content.dto.HomeSurfaceResponseDTO;
+import com.kerosene.content.dto.HomeUiPublishRequestDTO;
+import com.kerosene.content.model.entity.HomeUiOverrideEntity;
+import com.kerosene.content.service.HomeSurfaceComposer;
+import com.kerosene.content.service.HomeUiOverrideService;
+import com.kerosene.content.service.HomeUiPushService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

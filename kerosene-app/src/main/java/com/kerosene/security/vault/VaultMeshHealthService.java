@@ -1,4 +1,4 @@
-package source.security.vault;
+package com.kerosene.security.vault;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

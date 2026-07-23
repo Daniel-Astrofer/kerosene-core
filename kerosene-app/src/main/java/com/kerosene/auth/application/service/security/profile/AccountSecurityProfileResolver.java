@@ -1,8 +1,8 @@
-package source.auth.application.service.security.profile;
+package com.kerosene.auth.application.service.security.profile;
 
 import org.springframework.stereotype.Service;
 
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.dto.UserDTO;
 
 @Service
 public class AccountSecurityProfileResolver {

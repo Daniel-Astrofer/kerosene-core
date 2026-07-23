@@ -1,9 +1,9 @@
-package source.auth.application.service.recovery.start;
+package com.kerosene.auth.application.service.recovery.start;
 
 import java.util.List;
 
-import source.auth.dto.EmergencyRecoveryStartRequest;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 public class EmergencyRecoveryStartContext {
 

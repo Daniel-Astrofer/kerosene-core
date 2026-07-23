@@ -1,6 +1,6 @@
-package source.auth.application.service.cripto.hasher;
+package com.kerosene.auth.application.service.cripto.hasher;
 
-import source.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 

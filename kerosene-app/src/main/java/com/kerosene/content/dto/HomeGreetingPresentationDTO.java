@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 /**
  * How the client plays greeting messages.

@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 /**
  * Full home surface composition envelope.

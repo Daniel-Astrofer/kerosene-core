@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery.start.chain;
+package com.kerosene.auth.application.service.recovery.start.chain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,8 +6,8 @@ import java.util.List;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Component;
 
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
 
 @Component
 public class EmergencyRecoveryStartChain {

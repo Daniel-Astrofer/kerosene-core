@@ -1,17 +1,17 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.model.entity.UserDataBase;
-import source.notification.l10n.NotificationMessageKey;
-import source.notification.l10n.NotificationMessages;
-import source.notification.model.NotificationKind;
-import source.notification.model.NotificationSeverity;
-import source.notification.service.NotificationService;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.notification.l10n.NotificationMessageKey;
+import com.kerosene.notification.l10n.NotificationMessages;
+import com.kerosene.notification.model.NotificationKind;
+import com.kerosene.notification.model.NotificationSeverity;
+import com.kerosene.notification.service.NotificationService;
 
 import java.util.List;
 import java.util.Map;

@@ -1,10 +1,10 @@
-package source.auth.application.orchestrator.login.contracts;
+package com.kerosene.auth.application.orchestrator.login.contracts;
 
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.dto.UserDTO;
 
 public interface Signup {
 
-    source.auth.dto.SignupResponseDTO signupUser(UserDTO dto);
+    com.kerosene.auth.dto.SignupResponseDTO signupUser(UserDTO dto);
 
     String createUser(UserDTO dto);
 }

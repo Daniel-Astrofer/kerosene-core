@@ -1,9 +1,9 @@
-package source.auth.application.service.user;
+package com.kerosene.auth.application.service.user;
 
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.UserDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

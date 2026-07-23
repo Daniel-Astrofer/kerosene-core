@@ -1,4 +1,4 @@
-package source.common.exception;
+package com.kerosene.common.exception;
 
 public abstract class KeroseneException extends RuntimeException {
 

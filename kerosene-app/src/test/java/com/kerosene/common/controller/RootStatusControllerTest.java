@@ -1,4 +1,4 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.junit.jupiter.api.Test;
 

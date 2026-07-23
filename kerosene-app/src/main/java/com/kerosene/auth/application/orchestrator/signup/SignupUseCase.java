@@ -1,10 +1,10 @@
-package source.auth.application.orchestrator.signup;
+package com.kerosene.auth.application.orchestrator.signup;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.application.orchestrator.login.contracts.Signup;
-import source.auth.dto.SignupResponseDTO;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.application.orchestrator.login.contracts.Signup;
+import com.kerosene.auth.dto.SignupResponseDTO;
+import com.kerosene.auth.dto.UserDTO;
 
 @Component
 public class SignupUseCase implements Signup {

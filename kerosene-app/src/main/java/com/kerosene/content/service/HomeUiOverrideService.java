@@ -1,4 +1,4 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import source.content.dto.HomeSurfaceResponseDTO;
-import source.content.model.entity.HomeUiOverrideEntity;
-import source.content.repository.HomeUiOverrideRepository;
+import com.kerosene.content.dto.HomeSurfaceResponseDTO;
+import com.kerosene.content.model.entity.HomeUiOverrideEntity;
+import com.kerosene.content.repository.HomeUiOverrideRepository;
 
 import java.time.Instant;
 import java.util.ArrayList;

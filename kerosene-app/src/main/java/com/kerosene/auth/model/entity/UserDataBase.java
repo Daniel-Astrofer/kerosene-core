@@ -1,11 +1,11 @@
-package source.auth.model.entity;
+package com.kerosene.auth.model.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import source.auth.model.contracts.UserDB;
-import source.auth.model.enums.AccountSecurityType;
-import source.auth.model.enums.UserRole;
+import com.kerosene.auth.model.contracts.UserDB;
+import com.kerosene.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.model.enums.UserRole;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
@@ -26,11 +26,11 @@ public class UserDataBase implements UserDB {
     @Column(name = "username", nullable = false, unique = true)
     private String username;
 
-    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
+    @Convert(converter = com.kerosene.security.persistence.StringCryptoConverter.class)
     @Column(name = "password_hash")
     private String passwordHash;
 
-    @Convert(converter = source.security.persistence.StringCryptoConverter.class)
+    @Convert(converter = com.kerosene.security.persistence.StringCryptoConverter.class)
     @Column(name = "totp_secret")
     private String totpSecret;
 

@@ -1,4 +1,4 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
@@ -10,8 +10,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import source.auth.model.entity.AdminAccessAttemptEntity;
-import source.auth.model.enums.AdminAccessAttemptStatus;
+import com.kerosene.auth.model.entity.AdminAccessAttemptEntity;
+import com.kerosene.auth.model.enums.AdminAccessAttemptStatus;
 
 @Repository
 public interface AdminAccessAttemptRepository extends JpaRepository<AdminAccessAttemptEntity, UUID> {

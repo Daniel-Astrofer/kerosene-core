@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -7,9 +7,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.application.usecase.me.GetCurrentUserProfileUseCase;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.application.usecase.me.GetCurrentUserProfileUseCase;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
 
 import java.util.Map;
 

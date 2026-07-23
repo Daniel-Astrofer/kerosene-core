@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 public record HomeRestingHeaderDTO(Greeting greeting, Actions actions) {
 

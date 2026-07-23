@@ -1,4 +1,4 @@
-package source.notification.service;
+package com.kerosene.notification.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -17,8 +17,8 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
-import source.notification.model.entity.NotificationDeviceTokenEntity;
-import source.notification.repository.NotificationDeviceTokenRepository;
+import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
+import com.kerosene.notification.repository.NotificationDeviceTokenRepository;
 
 class WebhookPushNotificationAdapterTest {
 

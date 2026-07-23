@@ -1,6 +1,6 @@
-package source.auth.application.orchestrator.login.contracts;
+package com.kerosene.auth.application.orchestrator.login.contracts;
 
-import source.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
 
 public interface Login {
 

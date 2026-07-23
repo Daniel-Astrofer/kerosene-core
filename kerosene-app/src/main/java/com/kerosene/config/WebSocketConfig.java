@@ -1,4 +1,4 @@
-package source.config;
+package com.kerosene.config;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Configuration;
@@ -9,10 +9,10 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
-import source.config.websocket.StompInboundChannelInterceptor;
-import source.config.websocket.StompOutboundChannelInterceptor;
-import source.config.websocket.WebSocketEndpointRegistrar;
-import source.config.websocket.WebSocketTransportCustomizer;
+import com.kerosene.config.websocket.StompInboundChannelInterceptor;
+import com.kerosene.config.websocket.StompOutboundChannelInterceptor;
+import com.kerosene.config.websocket.WebSocketEndpointRegistrar;
+import com.kerosene.config.websocket.WebSocketTransportCustomizer;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSocketMessageBroker

@@ -1,4 +1,4 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -9,9 +9,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import source.common.dto.ApiResponse;
-import source.common.financial.StompUserPublishRequest;
-import source.common.service.StompUserRelayService;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.financial.StompUserPublishRequest;
+import com.kerosene.common.service.StompUserRelayService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

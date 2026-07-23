@@ -1,4 +1,4 @@
-package source.config;
+package com.kerosene.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;

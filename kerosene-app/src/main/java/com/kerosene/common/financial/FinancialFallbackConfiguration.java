@@ -1,4 +1,4 @@
-package source.common.financial;
+package com.kerosene.common.financial;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;

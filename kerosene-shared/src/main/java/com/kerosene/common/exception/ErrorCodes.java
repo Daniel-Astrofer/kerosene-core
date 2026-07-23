@@ -1,4 +1,4 @@
-package source.common.exception;
+package com.kerosene.common.exception;
 
 /**
  * Standardized Error Codes for the Kerosene Platform.

@@ -1,9 +1,9 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.springframework.stereotype.Service;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.model.entity.UserDataBase;
-import source.common.financial.FinancialUserDirectoryPort;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.common.financial.FinancialUserDirectoryPort;
 
 import java.util.Locale;
 import java.util.Optional;

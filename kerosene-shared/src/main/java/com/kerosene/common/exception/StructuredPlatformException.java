@@ -1,4 +1,4 @@
-package source.common.exception;
+package com.kerosene.common.exception;
 
 import org.springframework.http.HttpStatus;
 

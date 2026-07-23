@@ -1,4 +1,4 @@
-package source.content.controller;
+package com.kerosene.content.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -10,11 +10,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import source.common.dto.ApiResponse;
-import source.content.dto.HomeStageAckRequestDTO;
-import source.content.dto.HomeSurfaceResponseDTO;
-import source.content.service.HomeStageImpressionService;
-import source.content.service.HomeSurfaceComposer;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.content.dto.HomeStageAckRequestDTO;
+import com.kerosene.content.dto.HomeSurfaceResponseDTO;
+import com.kerosene.content.service.HomeStageImpressionService;
+import com.kerosene.content.service.HomeSurfaceComposer;
 
 @RestController
 @RequestMapping("/content")

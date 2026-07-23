@@ -1,11 +1,11 @@
-package source.security.application.honeypot.handler;
+package com.kerosene.security.application.honeypot.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import source.common.infra.logging.LogSanitizer;
-import source.security.application.honeypot.HoneypotInspectionContext;
-import source.security.domain.honeypot.HoneypotInspectionResult;
+import com.kerosene.common.infra.logging.LogSanitizer;
+import com.kerosene.security.application.honeypot.HoneypotInspectionContext;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionResult;
 
 import java.util.Optional;
 

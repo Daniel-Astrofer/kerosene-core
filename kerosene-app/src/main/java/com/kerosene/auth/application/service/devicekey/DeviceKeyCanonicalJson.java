@@ -1,4 +1,4 @@
-package source.auth.application.service.devicekey;
+package com.kerosene.auth.application.service.devicekey;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;

@@ -1,14 +1,14 @@
-package source.auth.application.orchestrator.signup.infra;
+package com.kerosene.auth.application.orchestrator.signup.infra;
 
 import java.time.Duration;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.dto.SignupState;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.UserDTO;
 
 @Component
 public class RedisSignupStateStore implements SignupStateStore {

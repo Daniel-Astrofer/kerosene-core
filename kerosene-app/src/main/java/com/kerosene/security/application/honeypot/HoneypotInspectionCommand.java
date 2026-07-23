@@ -1,4 +1,4 @@
-package source.security.application.honeypot;
+package com.kerosene.security.application.honeypot;
 
 import java.util.Arrays;
 

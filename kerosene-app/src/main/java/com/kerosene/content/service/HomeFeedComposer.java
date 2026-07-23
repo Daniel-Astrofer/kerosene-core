@@ -1,13 +1,13 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import org.springframework.stereotype.Service;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.port.out.AuthPasskeyGateway;
-import source.auth.model.entity.UserDataBase;
-import source.content.dto.HomeFeedCtaDTO;
-import source.content.dto.HomeFeedItemDTO;
-import source.content.dto.HomeFeedMediaDTO;
-import source.content.dto.HomeFeedResponseDTO;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.port.out.AuthPasskeyGateway;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.content.dto.HomeFeedCtaDTO;
+import com.kerosene.content.dto.HomeFeedItemDTO;
+import com.kerosene.content.dto.HomeFeedMediaDTO;
+import com.kerosene.content.dto.HomeFeedResponseDTO;
 
 import java.time.Instant;
 import java.util.ArrayList;

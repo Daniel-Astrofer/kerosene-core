@@ -1,4 +1,4 @@
-package source.config.websocket.inbound;
+package com.kerosene.config.websocket.inbound;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

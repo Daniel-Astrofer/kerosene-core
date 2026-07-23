@@ -1,10 +1,10 @@
-package source.auth.application.service.authentication.signup;
+package com.kerosene.auth.application.service.authentication.signup;
 
 import org.springframework.stereotype.Service;
 
-import source.auth.AuthConstants;
-import source.auth.AuthExceptions;
-import source.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
 
 @Service
 public class SignupCredentialRules {

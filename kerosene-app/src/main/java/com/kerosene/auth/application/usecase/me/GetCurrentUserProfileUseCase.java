@@ -1,10 +1,10 @@
-package source.auth.application.usecase.me;
+package com.kerosene.auth.application.usecase.me;
 
 import org.springframework.stereotype.Component;
-import source.auth.application.service.account.AppPinService;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.UserRole;
+import com.kerosene.auth.application.service.account.AppPinService;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.UserRole;
 
 import java.util.HashMap;
 import java.util.Map;

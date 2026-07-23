@@ -1,11 +1,11 @@
-package source.auth.application.service.validation.totp;
+package com.kerosene.auth.application.service.validation.totp;
 
 import org.apache.commons.codec.binary.Base32;
 import org.junit.jupiter.api.Test;
-import source.auth.AuthExceptions;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.cripto.contracts.Cryptography;
-import source.security.VaultKeyProvider;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.security.VaultKeyProvider;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;

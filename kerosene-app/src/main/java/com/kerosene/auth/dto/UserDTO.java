@@ -1,7 +1,7 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
-import source.auth.dto.contracts.UserDTOContract;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;

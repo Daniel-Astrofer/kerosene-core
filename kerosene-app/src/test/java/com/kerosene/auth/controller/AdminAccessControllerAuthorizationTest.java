@@ -1,16 +1,16 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.jpa.AdminAccessAttemptRepository;
-import source.auth.application.service.admin.AdminAccessService;
-import source.auth.dto.AdminLoginResponseDTO;
-import source.auth.model.entity.AdminAccessAttemptEntity;
-import source.auth.model.enums.AdminAccessAttemptStatus;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.infra.persistence.jpa.AdminAccessAttemptRepository;
+import com.kerosene.auth.application.service.admin.AdminAccessService;
+import com.kerosene.auth.dto.AdminLoginResponseDTO;
+import com.kerosene.auth.model.entity.AdminAccessAttemptEntity;
+import com.kerosene.auth.model.enums.AdminAccessAttemptStatus;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 import java.time.LocalDateTime;
 import java.lang.reflect.Method;
@@ -55,7 +55,7 @@ class AdminAccessControllerAuthorizationTest {
     @Test
     void loginPollingEndpointsRemainPublicEntryPoints() throws Exception {
         assertFalse(AdminAccessController.class
-                .getDeclaredMethod("startLogin", source.auth.dto.AdminLoginRequestDTO.class,
+                .getDeclaredMethod("startLogin", com.kerosene.auth.dto.AdminLoginRequestDTO.class,
                         jakarta.servlet.http.HttpServletRequest.class)
                 .isAnnotationPresent(PreAuthorize.class));
         assertFalse(AdminAccessController.class

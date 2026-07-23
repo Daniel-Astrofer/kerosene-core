@@ -1,4 +1,4 @@
-package source.auth.application.service.security.profile;
+package com.kerosene.auth.application.service.security.profile;
 
 import java.util.ArrayList;
 import java.util.List;

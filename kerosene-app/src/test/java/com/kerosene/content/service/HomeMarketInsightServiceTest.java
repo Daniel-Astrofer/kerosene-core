@@ -1,11 +1,11 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.common.service.TickerService;
-import source.content.dto.HomeStageDTO;
+import com.kerosene.common.service.TickerService;
+import com.kerosene.content.dto.HomeStageDTO;
 
 import java.math.BigDecimal;
 

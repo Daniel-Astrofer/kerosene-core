@@ -1,4 +1,4 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,9 +8,9 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
-import source.common.financial.FinancialWalletProvisioningPort;
-import source.common.financial.FinancialWalletProvisioningRequest;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.common.financial.FinancialWalletProvisioningPort;
+import com.kerosene.common.financial.FinancialWalletProvisioningRequest;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 @Component
 @Profile("!kfe")

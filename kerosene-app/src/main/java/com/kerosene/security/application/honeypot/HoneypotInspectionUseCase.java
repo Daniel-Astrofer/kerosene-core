@@ -1,12 +1,12 @@
-package source.security.application.honeypot;
+package com.kerosene.security.application.honeypot;
 
 import org.springframework.stereotype.Service;
-import source.security.application.honeypot.handler.AllowRequestInspectionHandler;
-import source.security.application.honeypot.handler.EmptyBodyInspectionHandler;
-import source.security.application.honeypot.handler.HoneypotFieldInspectionHandler;
-import source.security.application.honeypot.handler.HoneypotInspectionHandler;
-import source.security.application.honeypot.handler.JsonPayloadInspectionHandler;
-import source.security.domain.honeypot.HoneypotInspectionResult;
+import com.kerosene.security.application.honeypot.handler.AllowRequestInspectionHandler;
+import com.kerosene.security.application.honeypot.handler.EmptyBodyInspectionHandler;
+import com.kerosene.security.application.honeypot.handler.HoneypotFieldInspectionHandler;
+import com.kerosene.security.application.honeypot.handler.HoneypotInspectionHandler;
+import com.kerosene.security.application.honeypot.handler.JsonPayloadInspectionHandler;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionResult;
 
 @Service
 public class HoneypotInspectionUseCase {

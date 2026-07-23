@@ -1,4 +1,4 @@
-package source.auth.model.contracts;
+package com.kerosene.auth.model.contracts;
 
 public interface UserDB extends User {
     String getTOTPSecret();

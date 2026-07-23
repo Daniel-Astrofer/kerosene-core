@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,20 +7,20 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import source.auth.application.usecase.passkey.GetPasskeyInventoryUseCase;
-import source.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
-import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
-import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.dto.SignupState;
-import source.auth.dto.passkey.PasskeyRegistrationRequest;
-import source.auth.dto.passkey.PasskeyVerifyRequest;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.application.usecase.passkey.GetPasskeyInventoryUseCase;
+import com.kerosene.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
+import com.kerosene.auth.application.orchestrator.signup.FinalizeSignupAccount;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.orchestrator.passkey.PasskeyOrchestrator;
+import com.kerosene.auth.application.service.passkey.PasskeyService;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.passkey.PasskeyRegistrationRequest;
+import com.kerosene.auth.dto.passkey.PasskeyVerifyRequest;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
 
 @RestController
 @RequestMapping("/auth/passkey")

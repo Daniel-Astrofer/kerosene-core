@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery.start.chain;
+package com.kerosene.auth.application.service.recovery.start.chain;
 
 import java.util.List;
 
@@ -6,10 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import source.auth.application.service.recovery.RecoveryCodeService;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.application.service.authentication.contracts.SignupVerifier;
+import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
 
 @Component
 @Order(10)

@@ -1,12 +1,12 @@
-package source.auth.application.usecase.devicekey;
+package com.kerosene.auth.application.usecase.devicekey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
-import source.auth.model.entity.DeviceKeyCredential;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.dto.devicekey.DeviceKeyDeviceDTO;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.List;
 import java.util.Optional;

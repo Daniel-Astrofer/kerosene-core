@@ -1,4 +1,4 @@
-package source.common.util;
+package com.kerosene.common.util;
 
 import java.util.Base64;
 

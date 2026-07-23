@@ -1,7 +1,7 @@
-package source.auth.application.service.security.profile;
+package com.kerosene.auth.application.service.security.profile;
 
-import source.auth.dto.UserDTO;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 public class AccountSecurityProfileContext {
 

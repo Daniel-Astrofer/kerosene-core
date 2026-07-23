@@ -1,9 +1,9 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 public class JpaAuthUserGateway implements AuthUserGateway {

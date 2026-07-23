@@ -1,6 +1,6 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.entity.UserDataBase;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

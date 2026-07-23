@@ -1,4 +1,4 @@
-package source.common.financial;
+package com.kerosene.common.financial;
 
 /**
  * Boundary used by signup/auth flows to request financial onboarding without depending on

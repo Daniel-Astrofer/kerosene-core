@@ -1,16 +1,16 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import source.auth.application.orchestrator.login.contracts.Login;
-import source.auth.application.orchestrator.login.contracts.Signup;
-import source.auth.application.usecase.user.GeneratePowChallengeUseCase;
-import source.auth.application.usecase.user.LogoutCurrentSessionUseCase;
-import source.auth.dto.UserDTO;
-import source.common.exception.GlobalExceptionHandler;
+import com.kerosene.auth.application.orchestrator.login.contracts.Login;
+import com.kerosene.auth.application.orchestrator.login.contracts.Signup;
+import com.kerosene.auth.application.usecase.user.GeneratePowChallengeUseCase;
+import com.kerosene.auth.application.usecase.user.LogoutCurrentSessionUseCase;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.common.exception.GlobalExceptionHandler;
 
 import java.util.Map;
 

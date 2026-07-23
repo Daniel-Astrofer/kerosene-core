@@ -1,8 +1,8 @@
-package source.auth.application.service.validation.jwt;
+package com.kerosene.auth.application.service.validation.jwt;
 
-import source.auth.AuthConstants;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
 import io.jsonwebtoken.Jwts;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;

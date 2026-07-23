@@ -1,4 +1,4 @@
-package source.common.release;
+package com.kerosene.common.release;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

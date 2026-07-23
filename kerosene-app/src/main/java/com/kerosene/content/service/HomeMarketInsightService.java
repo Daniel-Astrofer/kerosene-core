@@ -1,20 +1,20 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import source.common.service.TickerService;
-import source.content.dto.HomeActionVisibilityDTO;
-import source.content.dto.HomeGreetingDTO;
-import source.content.dto.HomeGreetingFallbackDTO;
-import source.content.dto.HomeGreetingMessageDTO;
-import source.content.dto.HomeGreetingPresentationDTO;
-import source.content.dto.HomeGreetingRotationDTO;
-import source.content.dto.HomeHeaderActionsDTO;
-import source.content.dto.HomeHeaderDTO;
-import source.content.dto.HomeHeaderSpacingDTO;
-import source.content.dto.HomeLayoutDTO;
-import source.content.dto.HomeStyleTokensDTO;
+import com.kerosene.common.service.TickerService;
+import com.kerosene.content.dto.HomeActionVisibilityDTO;
+import com.kerosene.content.dto.HomeGreetingDTO;
+import com.kerosene.content.dto.HomeGreetingFallbackDTO;
+import com.kerosene.content.dto.HomeGreetingMessageDTO;
+import com.kerosene.content.dto.HomeGreetingPresentationDTO;
+import com.kerosene.content.dto.HomeGreetingRotationDTO;
+import com.kerosene.content.dto.HomeHeaderActionsDTO;
+import com.kerosene.content.dto.HomeHeaderDTO;
+import com.kerosene.content.dto.HomeHeaderSpacingDTO;
+import com.kerosene.content.dto.HomeLayoutDTO;
+import com.kerosene.content.dto.HomeStyleTokensDTO;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

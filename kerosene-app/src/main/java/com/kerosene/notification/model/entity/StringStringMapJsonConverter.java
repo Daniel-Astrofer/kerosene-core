@@ -1,4 +1,4 @@
-package source.notification.model.entity;
+package com.kerosene.notification.model.entity;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

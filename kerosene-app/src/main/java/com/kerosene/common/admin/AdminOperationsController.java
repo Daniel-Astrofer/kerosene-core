@@ -1,4 +1,4 @@
-package source.common.admin;
+package com.kerosene.common.admin;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -6,11 +6,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import source.common.financial.FinancialOperationsAdminPort;
-import source.common.infra.health.OperationalHealthService;
-import source.common.infra.health.OperationalHealthSnapshot;
-import source.common.release.ReleaseManifestService;
-import source.security.vault.VaultMeshHealthService;
+import com.kerosene.common.financial.FinancialOperationsAdminPort;
+import com.kerosene.common.infra.health.OperationalHealthService;
+import com.kerosene.common.infra.health.OperationalHealthSnapshot;
+import com.kerosene.common.release.ReleaseManifestService;
+import com.kerosene.security.vault.VaultMeshHealthService;
 
 import java.time.Instant;
 import java.util.List;

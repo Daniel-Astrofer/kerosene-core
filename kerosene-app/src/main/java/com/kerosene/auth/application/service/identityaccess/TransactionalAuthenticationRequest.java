@@ -1,6 +1,6 @@
-package source.auth.application.service.identityaccess;
+package com.kerosene.auth.application.service.identityaccess;
 
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 public record TransactionalAuthenticationRequest(
         UserDataBase user,

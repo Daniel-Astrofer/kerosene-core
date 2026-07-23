@@ -1,4 +1,4 @@
-package source.common.infra.logging;
+package com.kerosene.common.infra.logging;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -125,7 +125,7 @@ public final class LogSanitizer {
 
     /**
      * Checks whether a JSON field name should be masked.
-     * Used by {@link source.common.observability.SensitiveDataMasker}.
+     * Used by {@link com.kerosene.common.observability.SensitiveDataMasker}.
      */
     public static boolean isSensitiveKey(String key) {
         if (key == null) return false;

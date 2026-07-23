@@ -1,4 +1,4 @@
-package source.common.infra.logging;
+package com.kerosene.common.infra.logging;
 
 /**
  * Stable structured log field names used across runtime, access and audit logs.

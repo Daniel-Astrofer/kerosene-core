@@ -1,15 +1,15 @@
-package source.common.exception;
+package com.kerosene.common.exception;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import source.auth.AuthExceptions;
-import source.common.dto.ApiResponse;
-import source.common.infra.logging.StructuredLogField;
-import source.common.observability.FinancialOperationsMetrics;
-import source.common.exception.FinancialProviderUnavailableException;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.infra.logging.StructuredLogField;
+import com.kerosene.common.observability.FinancialOperationsMetrics;
+import com.kerosene.common.exception.FinancialProviderUnavailableException;
 
 import java.util.Map;
 

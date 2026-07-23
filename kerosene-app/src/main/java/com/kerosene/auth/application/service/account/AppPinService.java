@@ -1,19 +1,19 @@
-package source.auth.application.service.account;
+package com.kerosene.auth.application.service.account;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.jpa.UserAppPinSettingsRepository;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.dto.AppPinStatusDTO;
-import source.auth.dto.ConfigureAppPinRequestDTO;
-import source.auth.model.entity.UserAppPinSettings;
-import source.auth.model.entity.UserDataBase;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.infra.persistence.jpa.UserAppPinSettingsRepository;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.dto.AppPinStatusDTO;
+import com.kerosene.auth.dto.ConfigureAppPinRequestDTO;
+import com.kerosene.auth.model.entity.UserAppPinSettings;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.common.exception.ErrorCodes;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;

@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.recovery;
+package com.kerosene.auth.application.orchestrator.recovery;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -10,20 +10,20 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import source.auth.application.service.recovery.RecoveryCredentialRotator;
-import source.auth.application.service.recovery.RecoveryCredentialRotator.RotationResult;
-import source.auth.application.service.recovery.RecoverySecretProtector;
-import source.auth.application.service.recovery.RecoverySecretProtector.PreparedRecoverySecrets;
-import source.auth.application.service.recovery.RecoveryStateStore;
-import source.auth.application.service.recovery.RecoveryStateStore.StoredRecoverySession;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.application.service.recovery.start.chain.EmergencyRecoveryStartChain;
-import source.auth.dto.EmergencyRecoveryFinishRequest;
-import source.auth.dto.EmergencyRecoveryFinishResponse;
-import source.auth.dto.EmergencyRecoveryStartRequest;
-import source.auth.dto.EmergencyRecoveryStartResponse;
-import source.auth.dto.EmergencyRecoveryState;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.service.recovery.RecoveryCredentialRotator;
+import com.kerosene.auth.application.service.recovery.RecoveryCredentialRotator.RotationResult;
+import com.kerosene.auth.application.service.recovery.RecoverySecretProtector;
+import com.kerosene.auth.application.service.recovery.RecoverySecretProtector.PreparedRecoverySecrets;
+import com.kerosene.auth.application.service.recovery.RecoveryStateStore;
+import com.kerosene.auth.application.service.recovery.RecoveryStateStore.StoredRecoverySession;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.application.service.recovery.start.chain.EmergencyRecoveryStartChain;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishResponse;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryStartResponse;
+import com.kerosene.auth.dto.EmergencyRecoveryState;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 @Component
 public class EmergencyRecoveryUseCase {

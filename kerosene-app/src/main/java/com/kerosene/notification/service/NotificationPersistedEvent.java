@@ -1,4 +1,4 @@
-package source.notification.service;
+package com.kerosene.notification.service;
 
 import java.util.Map;
 

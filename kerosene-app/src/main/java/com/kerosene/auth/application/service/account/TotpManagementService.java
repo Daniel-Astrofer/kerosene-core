@@ -1,16 +1,16 @@
-package source.auth.application.service.account;
+package com.kerosene.auth.application.service.account;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.AuthConstants;
-import source.auth.AuthExceptions;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.dto.BackupCodesStatusDTO;
-import source.auth.dto.TotpSetupResponseDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.dto.BackupCodesStatusDTO;
+import com.kerosene.auth.dto.TotpSetupResponseDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Service
 public class TotpManagementService {

@@ -1,4 +1,4 @@
-package source.architecture;
+package com.kerosene.architecture;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -14,8 +14,8 @@ import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
 import org.springframework.core.type.classreading.MetadataReaderFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.mock.env.MockEnvironment;
-import source.Application;
-import source.config.KfeProfileCoreControllerExclusionFilter;
+import com.kerosene.Application;
+import com.kerosene.config.KfeProfileCoreControllerExclusionFilter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,7 +32,7 @@ class ArchitectureGuardrailsTest {
 
     private static final JavaClasses PRODUCTION_CLASSES = new ClassFileImporter()
             .withImportOption(new ImportOption.DoNotIncludeTests())
-            .importPackages("source", "com.kerosene.kfe");
+            .importPackages("com.kerosene", "com.kerosene.kfe");
 
     @Test
     void productionCodeDoesNotUseMisspelledStructuralNames() {
@@ -60,7 +60,7 @@ class ArchitectureGuardrailsTest {
     @Test
     void objectMappersAreCreatedOnlyInSpringConfiguration() {
         List<String> violations = PRODUCTION_CLASSES.stream()
-                .filter(javaClass -> !javaClass.getPackageName().startsWith("source.config"))
+                .filter(javaClass -> !javaClass.getPackageName().startsWith("com.kerosene.config"))
                 .filter(javaClass -> !javaClass.isAssignableTo(jakarta.persistence.AttributeConverter.class))
                 .flatMap(javaClass -> javaClass.getConstructorCallsFromSelf().stream())
                 .filter(this::isObjectMapperConstructorCall)
@@ -85,7 +85,7 @@ class ArchitectureGuardrailsTest {
     void kfeProductionCodeDoesNotDependOnAuthImplementationPackages() {
         noClasses()
                 .that().resideInAPackage("com.kerosene.kfe..")
-                .should().dependOnClassesThat().resideInAPackage("source.auth..")
+                .should().dependOnClassesThat().resideInAPackage("com.kerosene.auth..")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -94,7 +94,7 @@ class ArchitectureGuardrailsTest {
     void kfeProductionCodeDoesNotDependOnNotificationImplementationPackages() {
         noClasses()
                 .that().resideInAPackage("com.kerosene.kfe..")
-                .should().dependOnClassesThat().resideInAPackage("source.notification..")
+                .should().dependOnClassesThat().resideInAPackage("com.kerosene.notification..")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -103,7 +103,7 @@ class ArchitectureGuardrailsTest {
     void kfeProductionCodeDoesNotDependOnSecurityImplementationPackages() {
         noClasses()
                 .that().resideInAPackage("com.kerosene.kfe..")
-                .should().dependOnClassesThat().resideInAPackage("source.security..")
+                .should().dependOnClassesThat().resideInAPackage("com.kerosene.security..")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -112,7 +112,7 @@ class ArchitectureGuardrailsTest {
     void kfeProductionCodeDoesNotDependOnSovereignImplementationPackages() {
         noClasses()
                 .that().resideInAPackage("com.kerosene.kfe..")
-                .should().dependOnClassesThat().resideInAPackage("source.sovereign..")
+                .should().dependOnClassesThat().resideInAPackage("com.kerosene.sovereign..")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -153,12 +153,12 @@ class ArchitectureGuardrailsTest {
 
         assertTrue(
                 !filter.match(
-                        metadataReaderFactory.getMetadataReader("source.common.controller.HealthController"),
+                        metadataReaderFactory.getMetadataReader("com.kerosene.common.controller.HealthController"),
                         metadataReaderFactory),
                 "KFE runtime must keep shared health endpoints available for Kubernetes probes");
         assertTrue(
                 filter.match(
-                        metadataReaderFactory.getMetadataReader("source.auth.controller.UserController"),
+                        metadataReaderFactory.getMetadataReader("com.kerosene.auth.controller.UserController"),
                         metadataReaderFactory),
                 "KFE runtime must still exclude Core HTTP controllers");
     }
@@ -185,20 +185,20 @@ class ArchitectureGuardrailsTest {
     @Test
     void applicationAndDomainLayersDoNotDependOnControllers() {
         noClasses()
-                .that().resideInAnyPackage("source..application..", "source..domain..")
-                .should().dependOnClassesThat().resideInAPackage("source..controller..")
+                .that().resideInAnyPackage("com.kerosene..application..", "com.kerosene..domain..")
+                .should().dependOnClassesThat().resideInAPackage("com.kerosene..controller..")
                 .check(PRODUCTION_CLASSES);
     }
 
     @Test
     void domainLayerDoesNotDependOnSpringOrInfrastructureAdapters() {
         noClasses()
-                .that().resideInAPackage("source..domain..")
+                .that().resideInAPackage("com.kerosene..domain..")
                 .should().dependOnClassesThat().resideInAnyPackage(
                         "org.springframework..",
-                        "source..controller..",
-                        "source..infra..",
-                        "source..repository..")
+                        "com.kerosene..controller..",
+                        "com.kerosene..infra..",
+                        "com.kerosene..repository..")
                 .check(PRODUCTION_CLASSES);
     }
 

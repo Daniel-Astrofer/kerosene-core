@@ -1,9 +1,9 @@
-package source.content.repository;
+package com.kerosene.content.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import source.content.model.entity.HomeStageImpressionEntity;
+import com.kerosene.content.model.entity.HomeStageImpressionEntity;
 
 import java.time.Instant;
 import java.util.Optional;

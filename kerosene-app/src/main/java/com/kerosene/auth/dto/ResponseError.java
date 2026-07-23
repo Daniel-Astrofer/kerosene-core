@@ -1,4 +1,4 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
 import org.springframework.http.HttpStatus;
 

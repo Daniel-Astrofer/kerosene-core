@@ -1,4 +1,4 @@
-package source.common.infra.health;
+package com.kerosene.common.infra.health;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

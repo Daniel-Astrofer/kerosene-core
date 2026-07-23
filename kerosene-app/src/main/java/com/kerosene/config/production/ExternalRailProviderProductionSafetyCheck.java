@@ -1,6 +1,6 @@
-package source.config.production;
+package com.kerosene.config.production;
 
-import source.common.financial.FinancialRailProductionSafetyPort;
+import com.kerosene.common.financial.FinancialRailProductionSafetyPort;
 
 public class ExternalRailProviderProductionSafetyCheck extends AbstractProductionSafetyCheck {
 

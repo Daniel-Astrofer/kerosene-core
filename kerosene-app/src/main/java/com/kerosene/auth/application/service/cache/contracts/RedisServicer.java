@@ -1,6 +1,6 @@
-package source.auth.application.service.cache.contracts;
+package com.kerosene.auth.application.service.cache.contracts;
 
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.dto.UserDTO;
 
 public interface RedisServicer {
 

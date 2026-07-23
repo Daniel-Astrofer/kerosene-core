@@ -1,11 +1,11 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthExceptions;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 public class LoginThrottlePolicy {

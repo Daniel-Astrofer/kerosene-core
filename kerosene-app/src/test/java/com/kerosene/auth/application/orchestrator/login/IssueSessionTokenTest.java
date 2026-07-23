@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,10 +11,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.model.entity.UserDataBase;
-import source.notification.model.UserNotificationPayload;
-import source.notification.service.NotificationService;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.notification.model.UserNotificationPayload;
+import com.kerosene.notification.service.NotificationService;
 
 class IssueSessionTokenTest {
 

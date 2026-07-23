@@ -1,4 +1,4 @@
-package source.auth.dto.contracts;
+package com.kerosene.auth.dto.contracts;
 
 public interface UserDTOContract {
 

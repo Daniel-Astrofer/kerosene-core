@@ -1,4 +1,4 @@
-package source.sovereign.quorum;
+package com.kerosene.sovereign.quorum;
 
 public interface QuorumMembership {
 

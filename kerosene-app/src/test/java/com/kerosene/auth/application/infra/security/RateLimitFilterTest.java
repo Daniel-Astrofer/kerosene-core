@@ -1,4 +1,4 @@
-package source.auth.application.infra.security;
+package com.kerosene.auth.application.infra.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
-import source.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

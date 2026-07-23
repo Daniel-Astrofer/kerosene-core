@@ -1,4 +1,4 @@
-package source.security.domain.honeypot;
+package com.kerosene.security.domain.honeypot;
 
 public record HoneypotInspectionResult(
         HoneypotInspectionOutcome outcome,

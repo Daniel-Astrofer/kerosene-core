@@ -1,4 +1,4 @@
-package source.security;
+package com.kerosene.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

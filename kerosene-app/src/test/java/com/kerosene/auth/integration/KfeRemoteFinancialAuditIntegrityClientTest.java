@@ -1,4 +1,4 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;

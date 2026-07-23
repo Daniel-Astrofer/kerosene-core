@@ -1,4 +1,4 @@
-package source.auth;
+package com.kerosene.auth;
 
 import org.springframework.http.HttpStatus;
 

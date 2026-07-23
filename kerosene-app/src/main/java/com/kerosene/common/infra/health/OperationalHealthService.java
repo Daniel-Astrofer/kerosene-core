@@ -1,4 +1,4 @@
-package source.common.infra.health;
+package com.kerosene.common.infra.health;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,10 +10,10 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import source.config.production.ProductionProfileDetector;
-import source.config.production.ProductionSafetyCheckChain;
-import source.security.vault.VaultMeshHealthService;
-import source.common.financial.FinancialRailHealthPort;
+import com.kerosene.config.production.ProductionProfileDetector;
+import com.kerosene.config.production.ProductionSafetyCheckChain;
+import com.kerosene.security.vault.VaultMeshHealthService;
+import com.kerosene.common.financial.FinancialRailHealthPort;
 
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;

@@ -1,4 +1,4 @@
-package source.common.infra.health;
+package com.kerosene.common.infra.health;
 
 import java.util.Map;
 

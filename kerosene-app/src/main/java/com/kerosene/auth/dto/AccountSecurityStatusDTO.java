@@ -1,4 +1,4 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
 public record AccountSecurityStatusDTO(
         boolean passwordConfigured,

@@ -1,12 +1,12 @@
-package source.notification.controller;
+package com.kerosene.notification.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
-import source.notification.dto.DeviceTokenRegisterRequest;
-import source.notification.dto.DeviceTokenResponse;
-import source.notification.model.entity.NotificationDeviceTokenEntity;
-import source.notification.service.NotificationDeviceTokenService;
-import source.notification.service.NotificationService;
+import com.kerosene.notification.dto.DeviceTokenRegisterRequest;
+import com.kerosene.notification.dto.DeviceTokenResponse;
+import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
+import com.kerosene.notification.service.NotificationDeviceTokenService;
+import com.kerosene.notification.service.NotificationService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;

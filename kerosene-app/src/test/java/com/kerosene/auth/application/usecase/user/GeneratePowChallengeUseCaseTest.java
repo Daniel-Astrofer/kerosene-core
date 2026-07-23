@@ -1,7 +1,7 @@
-package source.auth.application.usecase.user;
+package com.kerosene.auth.application.usecase.user;
 
 import org.junit.jupiter.api.Test;
-import source.auth.application.service.pow.PowService;
+import com.kerosene.auth.application.service.pow.PowService;
 
 import java.util.Map;
 

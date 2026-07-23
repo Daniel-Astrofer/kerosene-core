@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -6,22 +6,22 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.application.service.devicekey.DeviceKeyChallengeException;
-import source.auth.application.service.devicekey.DeviceKeyProtocolException;
-import source.auth.application.service.devicekey.DeviceKeyReplayException;
-import source.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
-import source.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegistrationUseCase;
-import source.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
-import source.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
-import source.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
-import source.auth.application.usecase.devicekey.StartOnboardingDeviceKeyRegistrationUseCase;
-import source.auth.application.usecase.devicekey.VerifyDeviceKeyLoginUseCase;
-import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
-import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
-import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
-import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyChallengeException;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyProtocolException;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyReplayException;
+import com.kerosene.auth.application.usecase.devicekey.FinishAuthenticatedDeviceKeyRegistrationUseCase;
+import com.kerosene.auth.application.usecase.devicekey.FinishOnboardingDeviceKeyRegistrationUseCase;
+import com.kerosene.auth.application.usecase.devicekey.GetDeviceKeyAuthenticationChallengeUseCase;
+import com.kerosene.auth.application.usecase.devicekey.ManageDeviceKeyDevicesUseCase;
+import com.kerosene.auth.application.usecase.devicekey.StartAuthenticatedDeviceKeyRegistrationUseCase;
+import com.kerosene.auth.application.usecase.devicekey.StartOnboardingDeviceKeyRegistrationUseCase;
+import com.kerosene.auth.application.usecase.devicekey.VerifyDeviceKeyLoginUseCase;
+import com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse;
+import com.kerosene.auth.dto.devicekey.DeviceKeyDeviceDTO;
+import com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest;
+import com.kerosene.auth.dto.devicekey.DeviceKeyVerifyRequest;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
 
 import java.util.List;
 

@@ -1,22 +1,22 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
-import source.content.dto.HomeActionVisibilityDTO;
-import source.content.dto.HomeFeedSurfaceDTO;
-import source.content.dto.HomeGreetingDTO;
-import source.content.dto.HomeGreetingFallbackDTO;
-import source.content.dto.HomeGreetingPresentationDTO;
-import source.content.dto.HomeGreetingRotationDTO;
-import source.content.dto.HomeHeaderActionsDTO;
-import source.content.dto.HomeHeaderDTO;
-import source.content.dto.HomeHeaderSpacingDTO;
-import source.content.dto.HomeLayoutDTO;
-import source.content.dto.HomeRestingHeaderDTO;
-import source.content.dto.HomeStageDTO;
-import source.content.dto.HomeStyleTokensDTO;
-import source.content.dto.HomeSurfaceResponseDTO;
+import com.kerosene.content.dto.HomeActionVisibilityDTO;
+import com.kerosene.content.dto.HomeFeedSurfaceDTO;
+import com.kerosene.content.dto.HomeGreetingDTO;
+import com.kerosene.content.dto.HomeGreetingFallbackDTO;
+import com.kerosene.content.dto.HomeGreetingPresentationDTO;
+import com.kerosene.content.dto.HomeGreetingRotationDTO;
+import com.kerosene.content.dto.HomeHeaderActionsDTO;
+import com.kerosene.content.dto.HomeHeaderDTO;
+import com.kerosene.content.dto.HomeHeaderSpacingDTO;
+import com.kerosene.content.dto.HomeLayoutDTO;
+import com.kerosene.content.dto.HomeRestingHeaderDTO;
+import com.kerosene.content.dto.HomeStageDTO;
+import com.kerosene.content.dto.HomeStyleTokensDTO;
+import com.kerosene.content.dto.HomeSurfaceResponseDTO;
 
 import java.util.List;
 

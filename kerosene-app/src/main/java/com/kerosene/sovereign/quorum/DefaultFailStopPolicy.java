@@ -1,10 +1,10 @@
-package source.sovereign.quorum;
+package com.kerosene.sovereign.quorum;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.security.SuicideService;
+import com.kerosene.security.SuicideService;
 
 import java.time.Duration;
 import java.time.Instant;

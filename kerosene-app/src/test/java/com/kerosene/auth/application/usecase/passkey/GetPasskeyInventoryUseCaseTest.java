@@ -1,11 +1,11 @@
-package source.auth.application.usecase.passkey;
+package com.kerosene.auth.application.usecase.passkey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.List;
 import java.util.Optional;

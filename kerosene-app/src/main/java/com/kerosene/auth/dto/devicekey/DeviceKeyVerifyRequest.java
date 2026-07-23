@@ -1,4 +1,4 @@
-package source.auth.dto.devicekey;
+package com.kerosene.auth.dto.devicekey;
 
 public class DeviceKeyVerifyRequest {
     private String username;

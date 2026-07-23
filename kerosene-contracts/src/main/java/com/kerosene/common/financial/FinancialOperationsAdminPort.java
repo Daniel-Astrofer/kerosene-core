@@ -1,4 +1,4 @@
-package source.common.financial;
+package com.kerosene.common.financial;
 
 import java.util.List;
 import java.util.Map;

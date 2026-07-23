@@ -1,11 +1,11 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import source.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
 
 import java.time.LocalDateTime;
 import java.util.List;

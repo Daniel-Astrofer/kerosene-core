@@ -1,9 +1,9 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.junit.jupiter.api.Test;
-import source.common.infra.health.DependencyHealth;
-import source.common.infra.health.OperationalHealthService;
-import source.common.infra.health.OperationalHealthSnapshot;
+import com.kerosene.common.infra.health.DependencyHealth;
+import com.kerosene.common.infra.health.OperationalHealthService;
+import com.kerosene.common.infra.health.OperationalHealthSnapshot;
 
 import java.time.Instant;
 import java.util.Map;

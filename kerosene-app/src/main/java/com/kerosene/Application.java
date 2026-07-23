@@ -1,4 +1,4 @@
-package source;
+package com.kerosene;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -6,24 +6,24 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import source.config.KfeProfileCoreControllerExclusionFilter;
+import com.kerosene.config.KfeProfileCoreControllerExclusionFilter;
 
 @SpringBootApplication
 @ComponentScan(
-        basePackages = "source",
+        basePackages = "com.kerosene",
         excludeFilters = {
                 @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.kerosene\\.kfe\\..*"),
                 @ComponentScan.Filter(type = FilterType.CUSTOM, classes = KfeProfileCoreControllerExclusionFilter.class)
         })
 @EntityScan(basePackages = {
-        "source.auth.model.entity",
-        "source.notification.model.entity",
-        "source.content.model.entity"
+        "com.kerosene.auth.model.entity",
+        "com.kerosene.notification.model.entity",
+        "com.kerosene.content.model.entity"
 })
 @EnableJpaRepositories(basePackages = {
-        "source.auth.application.infra.persistence.jpa",
-        "source.notification.repository",
-        "source.content.repository"
+        "com.kerosene.auth.application.infra.persistence.jpa",
+        "com.kerosene.notification.repository",
+        "com.kerosene.content.repository"
 })
 public class Application {
 

@@ -1,4 +1,4 @@
-package source.notification.model;
+package com.kerosene.notification.model;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;

@@ -1,4 +1,4 @@
-package source.content.model.entity;
+package com.kerosene.content.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

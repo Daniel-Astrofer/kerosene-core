@@ -1,4 +1,4 @@
-package source.security;
+package com.kerosene.security;
 
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;

@@ -1,4 +1,4 @@
-package source.auth.application.service.common.chain;
+package com.kerosene.auth.application.service.common.chain;
 
 public interface ChainHandler<T> {
 

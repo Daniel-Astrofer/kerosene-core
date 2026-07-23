@@ -1,11 +1,11 @@
-package source.auth.application.service.authentication;
+package com.kerosene.auth.application.service.authentication;
 
 import org.springframework.stereotype.Service;
 
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import source.auth.application.service.authentication.signup.SignupCredentialRules;
-import source.auth.application.service.authentication.signup.SignupValidationContext;
-import source.auth.application.service.authentication.signup.chain.SignupValidationChain;
+import com.kerosene.auth.application.service.authentication.contracts.SignupVerifier;
+import com.kerosene.auth.application.service.authentication.signup.SignupCredentialRules;
+import com.kerosene.auth.application.service.authentication.signup.SignupValidationContext;
+import com.kerosene.auth.application.service.authentication.signup.chain.SignupValidationChain;
 
 /**
  * Service for verifying user credentials during signup.

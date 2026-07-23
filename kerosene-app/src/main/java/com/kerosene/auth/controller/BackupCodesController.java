@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -7,9 +7,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.application.usecase.backupcodes.BackupCodesOperationsUseCase;
-import source.auth.dto.BackupCodesStatusDTO;
-import source.common.dto.ApiResponse;
+import com.kerosene.auth.application.usecase.backupcodes.BackupCodesOperationsUseCase;
+import com.kerosene.auth.dto.BackupCodesStatusDTO;
+import com.kerosene.common.dto.ApiResponse;
 
 @RestController
 @RequestMapping("/auth/backup-codes")

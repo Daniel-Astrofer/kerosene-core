@@ -1,10 +1,10 @@
-package source.auth.application.infra.persistence.redis;
+package com.kerosene.auth.application.infra.persistence.redis;
 
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
-import source.auth.dto.UserDTO;
-import source.auth.dto.SignupState;
-import source.auth.dto.EmergencyRecoveryState;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.EmergencyRecoveryState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -46,7 +46,7 @@ public class RedisRepository implements RedisContract {
             if (json == null) {
                 return null;
             }
-            return mapper.readValue(json, source.auth.dto.UserDTO.class);
+            return mapper.readValue(json, com.kerosene.auth.dto.UserDTO.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(
                     "[Redis] Failed to deserialise UserDTO for user '" + dto.getUsername() + "': " + e.getMessage(), e);

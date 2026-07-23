@@ -1,6 +1,6 @@
-package source.content.service;
+package com.kerosene.content.service;
 
-import source.content.dto.HomeStageDTO;
+import com.kerosene.content.dto.HomeStageDTO;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

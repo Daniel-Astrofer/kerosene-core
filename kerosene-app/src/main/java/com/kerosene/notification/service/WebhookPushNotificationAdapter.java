@@ -1,4 +1,4 @@
-package source.notification.service;
+package com.kerosene.notification.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -12,8 +12,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
-import source.notification.model.entity.NotificationDeviceTokenEntity;
-import source.notification.repository.NotificationDeviceTokenRepository;
+import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
+import com.kerosene.notification.repository.NotificationDeviceTokenRepository;
 
 import java.time.Duration;
 import java.util.ArrayList;

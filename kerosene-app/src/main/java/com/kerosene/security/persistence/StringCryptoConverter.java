@@ -1,11 +1,11 @@
-package source.security.persistence;
+package com.kerosene.security.persistence;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import source.auth.application.service.security.CosignerSecretService;
+import com.kerosene.auth.application.service.security.CosignerSecretService;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;

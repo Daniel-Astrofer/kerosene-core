@@ -1,15 +1,15 @@
-package source.auth.application.service.devicekey;
+package com.kerosene.auth.application.service.devicekey;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
-import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
-import source.auth.dto.devicekey.DeviceKeyVerifyRequest;
-import source.auth.model.entity.DeviceKeyCredential;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse;
+import com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest;
+import com.kerosene.auth.dto.devicekey.DeviceKeyVerifyRequest;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;

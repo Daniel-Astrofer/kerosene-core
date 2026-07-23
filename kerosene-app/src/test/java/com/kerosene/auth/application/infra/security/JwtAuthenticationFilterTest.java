@@ -1,4 +1,4 @@
-package source.auth.application.infra.security;
+package com.kerosene.auth.application.infra.security;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,10 +10,10 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.servlet.HandlerExceptionResolver;
-import source.auth.AuthConstants;
-import source.auth.AuthExceptions;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.validation.jwt.JwtService;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.validation.jwt.JwtService;
 
 import java.util.Date;
 import java.util.List;

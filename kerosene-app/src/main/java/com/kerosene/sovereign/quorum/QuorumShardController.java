@@ -1,4 +1,4 @@
-package source.sovereign.quorum;
+package com.kerosene.sovereign.quorum;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

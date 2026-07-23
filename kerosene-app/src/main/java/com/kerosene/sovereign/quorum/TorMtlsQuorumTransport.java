@@ -1,4 +1,4 @@
-package source.sovereign.quorum;
+package com.kerosene.sovereign.quorum;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

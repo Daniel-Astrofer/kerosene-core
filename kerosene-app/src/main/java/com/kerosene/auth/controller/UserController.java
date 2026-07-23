@@ -1,18 +1,18 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
-import source.auth.application.orchestrator.login.contracts.Login;
-import source.auth.application.orchestrator.login.contracts.Signup;
-import source.auth.application.usecase.user.GeneratePowChallengeUseCase;
-import source.auth.application.usecase.user.LogoutCurrentSessionUseCase;
-import source.auth.dto.UserDTO;
-import source.auth.dto.SignupResponseDTO;
-import source.auth.dto.SignupTotpVerifyRequestDTO;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.application.orchestrator.login.contracts.Login;
+import com.kerosene.auth.application.orchestrator.login.contracts.Signup;
+import com.kerosene.auth.application.usecase.user.GeneratePowChallengeUseCase;
+import com.kerosene.auth.application.usecase.user.LogoutCurrentSessionUseCase;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.dto.SignupResponseDTO;
+import com.kerosene.auth.dto.SignupTotpVerifyRequestDTO;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
 
 import java.util.Map;
 

@@ -1,4 +1,4 @@
-package source.config.websocket.inbound;
+package com.kerosene.config.websocket.inbound;
 
 import java.util.Optional;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;

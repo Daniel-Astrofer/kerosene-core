@@ -1,11 +1,11 @@
-package source.auth.application.service.recovery.start.chain;
+package com.kerosene.auth.application.service.recovery.start.chain;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthExceptions;
-import source.auth.application.service.pow.PowService;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.pow.PowService;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
 
 @Component
 @Order(30)

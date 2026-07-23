@@ -1,4 +1,4 @@
-package source.common.infra.logging;
+package com.kerosene.common.infra.logging;
 
 import org.slf4j.Marker;
 import org.slf4j.MarkerFactory;

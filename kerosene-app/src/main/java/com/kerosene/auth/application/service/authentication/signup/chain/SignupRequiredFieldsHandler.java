@@ -1,10 +1,10 @@
-package source.auth.application.service.authentication.signup.chain;
+package com.kerosene.auth.application.service.authentication.signup.chain;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import source.auth.application.service.authentication.signup.SignupCredentialRules;
-import source.auth.application.service.authentication.signup.SignupValidationContext;
+import com.kerosene.auth.application.service.authentication.signup.SignupCredentialRules;
+import com.kerosene.auth.application.service.authentication.signup.SignupValidationContext;
 
 @Component
 @Order(10)

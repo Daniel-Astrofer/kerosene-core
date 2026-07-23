@@ -1,4 +1,4 @@
-package source.auth.application.infra.security;
+package com.kerosene.auth.application.infra.security;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.security.CachedBodyHttpServletRequest;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.security.CachedBodyHttpServletRequest;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

@@ -1,6 +1,6 @@
-package source.auth.dto.devicekey;
+package com.kerosene.auth.dto.devicekey;
 
-import source.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
 
 import java.time.LocalDateTime;
 

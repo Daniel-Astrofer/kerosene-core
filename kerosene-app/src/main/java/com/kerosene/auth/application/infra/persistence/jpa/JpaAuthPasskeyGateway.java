@@ -1,11 +1,11 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
 import java.util.List;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.application.port.out.AuthPasskeyGateway;
-import source.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.application.port.out.AuthPasskeyGateway;
+import com.kerosene.auth.model.entity.PasskeyCredential;
 
 @Component
 public class JpaAuthPasskeyGateway implements AuthPasskeyGateway {

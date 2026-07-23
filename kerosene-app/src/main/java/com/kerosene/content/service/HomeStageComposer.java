@@ -1,9 +1,9 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import org.springframework.stereotype.Service;
-import source.common.service.TickerService;
-import source.content.dto.HomeRestingHeaderDTO;
-import source.content.dto.HomeStageDTO;
+import com.kerosene.common.service.TickerService;
+import com.kerosene.content.dto.HomeRestingHeaderDTO;
+import com.kerosene.content.dto.HomeStageDTO;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

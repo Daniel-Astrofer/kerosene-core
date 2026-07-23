@@ -1,7 +1,7 @@
-package source.auth.application.service.devicebinding;
+package com.kerosene.auth.application.service.devicebinding;
 
-import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
+import com.kerosene.common.exception.ErrorCodes;
 
 /**
  * Raised when a deviceInstallId is owned by another account and confirmUnlinkDevice was not set.

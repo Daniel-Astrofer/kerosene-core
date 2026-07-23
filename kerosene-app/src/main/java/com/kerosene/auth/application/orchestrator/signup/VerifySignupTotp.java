@@ -1,13 +1,13 @@
-package source.auth.application.orchestrator.signup;
+package com.kerosene.auth.application.orchestrator.signup;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthConstants;
-import source.auth.AuthExceptions;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.dto.SignupState;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.UserDTO;
 
 @Component
 public class VerifySignupTotp {

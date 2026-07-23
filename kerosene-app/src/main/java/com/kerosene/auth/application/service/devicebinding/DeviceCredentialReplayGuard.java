@@ -1,12 +1,12 @@
-package source.auth.application.service.devicebinding;
+package com.kerosene.auth.application.service.devicebinding;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.common.infra.logging.LogDomain;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.common.infra.logging.LogDomain;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 /**
  * Tracks signature-counter replay failures per credential and applies a short soft-lock

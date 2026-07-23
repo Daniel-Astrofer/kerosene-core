@@ -1,4 +1,4 @@
-package source.common.infra.health;
+package com.kerosene.common.infra.health;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.health.Health;

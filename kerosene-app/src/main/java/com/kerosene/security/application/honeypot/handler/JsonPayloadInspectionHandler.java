@@ -1,10 +1,10 @@
-package source.security.application.honeypot.handler;
+package com.kerosene.security.application.honeypot.handler;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import source.security.application.honeypot.HoneypotInspectionContext;
-import source.security.application.honeypot.RequestJsonBodyParser;
-import source.security.domain.honeypot.HoneypotInspectionResult;
+import com.kerosene.security.application.honeypot.HoneypotInspectionContext;
+import com.kerosene.security.application.honeypot.RequestJsonBodyParser;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionResult;
 
 import java.io.IOException;
 import java.util.Optional;

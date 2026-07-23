@@ -1,12 +1,12 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import source.auth.application.usecase.security.AppPinOperationsUseCase;
-import source.auth.dto.AppPinStatusDTO;
-import source.auth.dto.ConfigureAppPinRequestDTO;
-import source.auth.dto.VerifyAppPinRequestDTO;
-import source.common.dto.ApiResponse;
+import com.kerosene.auth.application.usecase.security.AppPinOperationsUseCase;
+import com.kerosene.auth.dto.AppPinStatusDTO;
+import com.kerosene.auth.dto.ConfigureAppPinRequestDTO;
+import com.kerosene.auth.dto.VerifyAppPinRequestDTO;
+import com.kerosene.common.dto.ApiResponse;
 
 @RestController
 @RequestMapping("/auth/security/app-pin")

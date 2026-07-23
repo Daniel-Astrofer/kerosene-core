@@ -1,15 +1,15 @@
-package source.auth.application.usecase.devicekey;
+package com.kerosene.auth.application.usecase.devicekey;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.service.devicebinding.DeviceBindingPolicy;
-import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
-import source.auth.dto.devicekey.DeviceKeyRegistrationRequest;
-import source.auth.model.entity.DeviceKeyCredential;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.service.devicebinding.DeviceBindingPolicy;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyService;
+import com.kerosene.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
+import com.kerosene.auth.dto.devicekey.DeviceKeyRegistrationRequest;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 public class FinishAuthenticatedDeviceKeyRegistrationUseCase {

@@ -1,4 +1,4 @@
-package source.config.websocket.inbound;
+package com.kerosene.config.websocket.inbound;
 
 import java.util.Collections;
 import org.slf4j.Logger;
@@ -8,7 +8,7 @@ import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
 
 public class ConnectAuthenticationStompMessageHandler extends AbstractStompMessageHandler {
 

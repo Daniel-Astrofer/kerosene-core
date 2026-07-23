@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery;
+package com.kerosene.auth.application.service.recovery;
 
 import java.security.SecureRandom;
 import java.util.HexFormat;
@@ -7,10 +7,10 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.dto.EmergencyRecoveryState;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.dto.EmergencyRecoveryState;
 
 @Service
 public class RecoveryStateStore {

@@ -1,8 +1,8 @@
-package source.auth.application.orchestrator.signup.port;
+package com.kerosene.auth.application.orchestrator.signup.port;
 
 import java.util.List;
 
-import source.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.PasskeyCredential;
 
 public interface PasskeyGateway {
 

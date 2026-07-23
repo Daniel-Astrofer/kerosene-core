@@ -1,4 +1,4 @@
-package source.config.production;
+package com.kerosene.config.production;
 
 import java.util.Set;
 import org.springframework.util.ClassUtils;
@@ -28,7 +28,7 @@ public class MockBeanProductionSafetyCheck extends AbstractProductionSafetyCheck
             Class<?> userClass = ClassUtils.getUserClass(beanType);
             Package beanPackage = userClass.getPackage();
             String packageName = beanPackage != null ? beanPackage.getName() : "";
-            if (!packageName.startsWith("source.")) {
+            if (!packageName.startsWith("com.kerosene.")) {
                 continue;
             }
 

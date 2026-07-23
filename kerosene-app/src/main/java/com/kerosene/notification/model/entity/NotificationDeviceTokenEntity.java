@@ -1,4 +1,4 @@
-package source.notification.model.entity;
+package com.kerosene.notification.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

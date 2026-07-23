@@ -1,14 +1,14 @@
-package source.notification.service;
+package com.kerosene.notification.service;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.service.security.CosignerSecretService;
-import source.common.financial.FinancialNotificationAuditPort;
-import source.common.infra.logging.LogSanitizer;
-import source.notification.dto.DeviceTokenRegisterRequest;
-import source.notification.model.entity.NotificationDeviceTokenEntity;
-import source.notification.repository.NotificationDeviceTokenRepository;
+import com.kerosene.auth.application.service.security.CosignerSecretService;
+import com.kerosene.common.financial.FinancialNotificationAuditPort;
+import com.kerosene.common.infra.logging.LogSanitizer;
+import com.kerosene.notification.dto.DeviceTokenRegisterRequest;
+import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
+import com.kerosene.notification.repository.NotificationDeviceTokenRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

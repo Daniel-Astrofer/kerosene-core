@@ -1,8 +1,8 @@
-package source.common.admin;
+package com.kerosene.common.admin;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.common.release.ReleaseManifestService;
+import com.kerosene.common.release.ReleaseManifestService;
 
 @RestController
 public class SystemReleaseController {

@@ -1,4 +1,4 @@
-package source.auth.application.service.security.profile;
+package com.kerosene.auth.application.service.security.profile;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;

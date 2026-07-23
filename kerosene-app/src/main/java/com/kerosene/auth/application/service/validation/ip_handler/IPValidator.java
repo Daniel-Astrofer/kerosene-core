@@ -1,6 +1,6 @@
-package source.auth.application.service.validation.ip_handler;
+package com.kerosene.auth.application.service.validation.ip_handler;
 
-import source.auth.application.service.validation.ip_handler.contracts.IP;
+import com.kerosene.auth.application.service.validation.ip_handler.contracts.IP;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Component;
 

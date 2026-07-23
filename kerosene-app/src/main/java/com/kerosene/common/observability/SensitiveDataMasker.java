@@ -1,8 +1,8 @@
-package source.common.observability;
+package com.kerosene.common.observability;
 
 import com.fasterxml.jackson.core.JsonStreamContext;
 import net.logstash.logback.mask.ValueMasker;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 /**
  * Logback value masker plugged into {@code MaskingJsonGeneratorDecorator}.

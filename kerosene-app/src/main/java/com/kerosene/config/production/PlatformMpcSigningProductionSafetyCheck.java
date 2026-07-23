@@ -1,7 +1,7 @@
-package source.config.production;
+package com.kerosene.config.production;
 
 import java.util.Map;
-import source.auth.application.service.identityaccess.PlatformTransactionSignerPort;
+import com.kerosene.auth.application.service.identityaccess.PlatformTransactionSignerPort;
 
 public class PlatformMpcSigningProductionSafetyCheck extends AbstractProductionSafetyCheck {
 

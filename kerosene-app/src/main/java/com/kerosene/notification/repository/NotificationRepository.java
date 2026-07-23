@@ -1,8 +1,8 @@
-package source.notification.repository;
+package com.kerosene.notification.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import source.notification.model.entity.NotificationEntity;
+import com.kerosene.notification.model.entity.NotificationEntity;
 
 import java.util.List;
 import java.util.Optional;

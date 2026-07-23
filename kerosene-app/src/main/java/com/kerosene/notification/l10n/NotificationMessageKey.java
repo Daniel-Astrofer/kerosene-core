@@ -1,4 +1,4 @@
-package source.notification.l10n;
+package com.kerosene.notification.l10n;
 
 public enum NotificationMessageKey {
     ACCOUNT_CREATED("notification.account.created"),

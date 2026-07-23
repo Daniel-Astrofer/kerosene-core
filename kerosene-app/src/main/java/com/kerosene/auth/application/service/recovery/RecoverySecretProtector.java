@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery;
+package com.kerosene.auth.application.service.recovery;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -7,11 +7,11 @@ import java.util.Base64;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import source.auth.AuthConstants;
-import source.auth.application.service.cripto.contracts.Cryptography;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
-import source.security.VaultKeyProvider;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import com.kerosene.security.VaultKeyProvider;
 
 @Service
 public class RecoverySecretProtector {

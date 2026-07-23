@@ -1,7 +1,7 @@
-package source.auth.application.service.authentication.signup.chain;
+package com.kerosene.auth.application.service.authentication.signup.chain;
 
-import source.auth.application.service.authentication.signup.SignupValidationContext;
-import source.auth.application.service.common.chain.AbstractChainHandler;
+import com.kerosene.auth.application.service.authentication.signup.SignupValidationContext;
+import com.kerosene.auth.application.service.common.chain.AbstractChainHandler;
 
 public abstract class AbstractSignupValidationHandler extends AbstractChainHandler<SignupValidationContext>
         implements SignupValidationHandler {

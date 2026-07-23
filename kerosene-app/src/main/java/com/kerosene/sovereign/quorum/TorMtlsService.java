@@ -1,4 +1,4 @@
-package source.sovereign.quorum;
+package com.kerosene.sovereign.quorum;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

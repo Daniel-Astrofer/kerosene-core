@@ -1,4 +1,4 @@
-package source.common.infra.logging;
+package com.kerosene.common.infra.logging;
 
 import net.logstash.logback.argument.StructuredArgument;
 

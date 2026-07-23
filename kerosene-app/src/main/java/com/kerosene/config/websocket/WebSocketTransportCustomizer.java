@@ -1,4 +1,4 @@
-package source.config.websocket;
+package com.kerosene.config.websocket;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;

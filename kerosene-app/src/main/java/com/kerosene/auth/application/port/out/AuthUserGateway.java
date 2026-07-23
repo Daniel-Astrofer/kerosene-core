@@ -1,6 +1,6 @@
-package source.auth.application.port.out;
+package com.kerosene.auth.application.port.out;
 
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 public interface AuthUserGateway {
 

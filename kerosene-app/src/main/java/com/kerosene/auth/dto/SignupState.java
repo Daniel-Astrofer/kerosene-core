@@ -1,8 +1,8 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
 import java.io.Serial;
 import java.io.Serializable;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 /**
  * Holds the temporary onboarding state for a user while they complete the

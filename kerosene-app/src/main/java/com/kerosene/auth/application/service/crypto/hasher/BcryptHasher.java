@@ -1,6 +1,6 @@
-package source.auth.application.service.cripto.hasher;
+package com.kerosene.auth.application.service.cripto.hasher;
 
-import source.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;

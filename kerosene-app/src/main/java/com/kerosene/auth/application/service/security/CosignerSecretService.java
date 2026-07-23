@@ -1,11 +1,11 @@
-package source.auth.application.service.security;
+package com.kerosene.auth.application.service.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import source.common.security.StringColumnCryptoPort;
-import source.auth.application.service.cripto.encrypter.AES256;
-import source.security.VaultKeyProvider;
+import com.kerosene.common.security.StringColumnCryptoPort;
+import com.kerosene.auth.application.service.cripto.encrypter.AES256;
+import com.kerosene.security.VaultKeyProvider;
 
 import java.util.Arrays;
 import java.util.Base64;

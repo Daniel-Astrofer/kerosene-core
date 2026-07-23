@@ -1,4 +1,4 @@
-package source.auth.application.service.authentication.contracts;
+package com.kerosene.auth.application.service.authentication.contracts;
 
 public interface SignupVerifier {
 

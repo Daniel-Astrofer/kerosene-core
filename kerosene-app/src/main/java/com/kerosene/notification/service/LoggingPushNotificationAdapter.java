@@ -1,10 +1,10 @@
-package source.notification.service;
+package com.kerosene.notification.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import source.notification.model.entity.NotificationDeviceTokenEntity;
-import source.notification.repository.NotificationDeviceTokenRepository;
+import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
+import com.kerosene.notification.repository.NotificationDeviceTokenRepository;
 
 import java.util.List;
 import java.util.Map;

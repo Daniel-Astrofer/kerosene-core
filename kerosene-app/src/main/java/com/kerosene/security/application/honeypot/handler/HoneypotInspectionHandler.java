@@ -1,7 +1,7 @@
-package source.security.application.honeypot.handler;
+package com.kerosene.security.application.honeypot.handler;
 
-import source.security.application.honeypot.HoneypotInspectionContext;
-import source.security.domain.honeypot.HoneypotInspectionResult;
+import com.kerosene.security.application.honeypot.HoneypotInspectionContext;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionResult;
 
 public interface HoneypotInspectionHandler {
 

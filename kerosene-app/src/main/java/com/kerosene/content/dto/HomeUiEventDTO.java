@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

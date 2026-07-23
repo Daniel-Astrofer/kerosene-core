@@ -1,4 +1,4 @@
-package source.auth.application.service.security.profile;
+package com.kerosene.auth.application.service.security.profile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -9,9 +9,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import source.auth.AuthExceptions;
-import source.auth.dto.UserDTO;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 class AccountSecurityProfileResolverTest {
 

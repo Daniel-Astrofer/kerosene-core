@@ -1,10 +1,10 @@
-package source.auth.application.infra.security;
+package com.kerosene.auth.application.infra.security;
 
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.servlet.HandlerExceptionResolver;
-import source.auth.AuthExceptions;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.application.service.validation.jwt.JwtService;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.validation.jwt.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

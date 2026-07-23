@@ -1,7 +1,7 @@
-package source.auth.application.service.authentication.login.chain;
+package com.kerosene.auth.application.service.authentication.login.chain;
 
-import source.auth.application.service.authentication.login.LoginValidationContext;
-import source.auth.application.service.common.chain.ChainHandler;
+import com.kerosene.auth.application.service.authentication.login.LoginValidationContext;
+import com.kerosene.auth.application.service.common.chain.ChainHandler;
 
 public interface LoginValidationHandler extends ChainHandler<LoginValidationContext> {
 }

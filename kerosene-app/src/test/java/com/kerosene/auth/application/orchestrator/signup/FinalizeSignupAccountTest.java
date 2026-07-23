@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.signup;
+package com.kerosene.auth.application.orchestrator.signup;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,18 +8,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.common.financial.FinancialWalletProvisioningPort;
-import source.auth.application.orchestrator.signup.port.PasskeyGateway;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.orchestrator.signup.port.UserNotifier;
-import source.auth.application.service.security.CosignerSecretService;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.SignupState;
-import source.auth.model.entity.PasskeyCredential;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.AccountSecurityType;
-import source.security.VaultKeyProvider;
-import source.notification.model.UserNotificationPayload;
+import com.kerosene.common.financial.FinancialWalletProvisioningPort;
+import com.kerosene.auth.application.orchestrator.signup.port.PasskeyGateway;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.orchestrator.signup.port.UserNotifier;
+import com.kerosene.auth.application.service.security.CosignerSecretService;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.AccountSecurityType;
+import com.kerosene.security.VaultKeyProvider;
+import com.kerosene.notification.model.UserNotificationPayload;
 
 import java.util.List;
 

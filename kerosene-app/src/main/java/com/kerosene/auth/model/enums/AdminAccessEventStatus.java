@@ -1,4 +1,4 @@
-package source.auth.model.enums;
+package com.kerosene.auth.model.enums;
 
 public enum AdminAccessEventStatus {
     APPROVED,

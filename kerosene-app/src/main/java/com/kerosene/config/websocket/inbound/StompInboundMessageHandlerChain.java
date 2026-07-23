@@ -1,8 +1,8 @@
-package source.config.websocket.inbound;
+package com.kerosene.config.websocket.inbound;
 
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
 
 @Component
 public class StompInboundMessageHandlerChain implements StompMessageHandler {

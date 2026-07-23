@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -7,13 +7,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.AuthExceptions;
-import source.auth.application.orchestrator.recovery.EmergencyRecoveryUseCase;
-import source.auth.dto.EmergencyRecoveryFinishRequest;
-import source.auth.dto.EmergencyRecoveryFinishResponse;
-import source.auth.dto.EmergencyRecoveryStartRequest;
-import source.auth.dto.EmergencyRecoveryStartResponse;
-import source.common.dto.ApiResponse;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.orchestrator.recovery.EmergencyRecoveryUseCase;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishResponse;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryStartResponse;
+import com.kerosene.common.dto.ApiResponse;
 
 @RestController
 @RequestMapping("/auth/recovery/emergency")

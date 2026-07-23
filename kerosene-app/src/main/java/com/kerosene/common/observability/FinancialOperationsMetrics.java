@@ -1,4 +1,4 @@
-package source.common.observability;
+package com.kerosene.common.observability;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

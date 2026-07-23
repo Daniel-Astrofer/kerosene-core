@@ -1,4 +1,4 @@
-package source.common.service;
+package com.kerosene.common.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

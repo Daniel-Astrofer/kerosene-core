@@ -1,4 +1,4 @@
-package source.common.security;
+package com.kerosene.common.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -141,7 +141,7 @@ class EndpointPolicyRegistryTest {
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
 
         List<Class<?>> controllers = new ArrayList<>();
-        for (var beanDefinition : scanner.findCandidateComponents("source")) {
+        for (var beanDefinition : scanner.findCandidateComponents("com.kerosene")) {
             controllers.add(Class.forName(beanDefinition.getBeanClassName()));
         }
         return controllers;

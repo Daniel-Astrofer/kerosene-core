@@ -1,4 +1,4 @@
-package source.auth.application.service.identityaccess;
+package com.kerosene.auth.application.service.identityaccess;
 
 public interface TransactionalAuthenticationPort {
 

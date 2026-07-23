@@ -1,12 +1,12 @@
-package source.auth.application.service.account;
+package com.kerosene.auth.application.service.account;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.BackupCodesStatusDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.BackupCodesStatusDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;

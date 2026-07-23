@@ -1,14 +1,14 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.content.dto.HomeStageAckRequestDTO;
-import source.content.dto.HomeStageDTO;
-import source.content.dto.HomeSurfaceResponseDTO;
-import source.content.model.entity.HomeStageImpressionEntity;
-import source.content.repository.HomeStageImpressionRepository;
+import com.kerosene.content.dto.HomeStageAckRequestDTO;
+import com.kerosene.content.dto.HomeStageDTO;
+import com.kerosene.content.dto.HomeSurfaceResponseDTO;
+import com.kerosene.content.model.entity.HomeStageImpressionEntity;
+import com.kerosene.content.repository.HomeStageImpressionRepository;
 
 import java.time.Instant;
 import java.util.Locale;

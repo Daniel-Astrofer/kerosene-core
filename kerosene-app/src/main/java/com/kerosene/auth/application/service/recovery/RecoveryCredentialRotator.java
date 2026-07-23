@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery;
+package com.kerosene.auth.application.service.recovery;
 
 import java.util.Base64;
 import java.util.HashSet;
@@ -6,22 +6,22 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import source.auth.AuthExceptions;
-import source.auth.application.port.out.AuthPasskeyGateway;
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.application.service.devicebinding.DeviceBindingPolicy;
-import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
-import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.dto.EmergencyRecoveryFinishRequest;
-import source.auth.dto.EmergencyRecoveryState;
-import source.auth.model.entity.PasskeyCredential;
-import source.auth.model.entity.UserDataBase;
-import source.notification.l10n.NotificationMessageKey;
-import source.notification.l10n.NotificationMessages;
-import source.notification.model.NotificationKind;
-import source.notification.model.NotificationSeverity;
-import source.notification.service.NotificationService;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.port.out.AuthPasskeyGateway;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.application.service.devicebinding.DeviceBindingPolicy;
+import com.kerosene.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
+import com.kerosene.auth.application.service.passkey.PasskeyService;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryState;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.notification.l10n.NotificationMessageKey;
+import com.kerosene.notification.l10n.NotificationMessages;
+import com.kerosene.notification.model.NotificationKind;
+import com.kerosene.notification.model.NotificationSeverity;
+import com.kerosene.notification.service.NotificationService;
 
 import java.util.Map;
 

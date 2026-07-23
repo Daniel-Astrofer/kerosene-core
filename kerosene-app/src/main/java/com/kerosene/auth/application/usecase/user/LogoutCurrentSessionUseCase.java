@@ -1,7 +1,7 @@
-package source.auth.application.usecase.user;
+package com.kerosene.auth.application.usecase.user;
 
 import org.springframework.stereotype.Component;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
 
 @Component
 public class LogoutCurrentSessionUseCase {

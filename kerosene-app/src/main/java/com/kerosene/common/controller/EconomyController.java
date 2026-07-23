@@ -1,13 +1,13 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.common.dto.ApiResponse;
-import source.common.service.BtcPriceQuoteBuilder;
-import source.common.service.TickerService;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.service.BtcPriceQuoteBuilder;
+import com.kerosene.common.service.TickerService;
 
 import java.util.HashMap;
 import java.util.Map;

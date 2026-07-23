@@ -1,4 +1,4 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,8 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-import source.content.dto.HomeSurfaceResponseDTO;
-import source.content.dto.HomeUiEventDTO;
+import com.kerosene.content.dto.HomeSurfaceResponseDTO;
+import com.kerosene.content.dto.HomeUiEventDTO;
 
 import java.time.Instant;
 

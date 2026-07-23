@@ -1,4 +1,4 @@
-package source.content.service;
+package com.kerosene.content.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;

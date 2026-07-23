@@ -1,7 +1,7 @@
-package source.auth.application.service.authentication.contracts;
+package com.kerosene.auth.application.service.authentication.contracts;
 
-import source.auth.dto.contracts.UserDTOContract;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 public interface LoginVerifier {
 

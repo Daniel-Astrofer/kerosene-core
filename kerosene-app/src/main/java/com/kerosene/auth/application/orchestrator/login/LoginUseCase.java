@@ -1,10 +1,10 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import org.springframework.stereotype.Component;
 
-import source.auth.application.orchestrator.login.contracts.Login;
-import source.auth.dto.contracts.UserDTOContract;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.orchestrator.login.contracts.Login;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 public class LoginUseCase implements Login {

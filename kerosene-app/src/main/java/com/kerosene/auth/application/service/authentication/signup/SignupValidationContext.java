@@ -1,4 +1,4 @@
-package source.auth.application.service.authentication.signup;
+package com.kerosene.auth.application.service.authentication.signup;
 
 public record SignupValidationContext(String username, char[] passphrase) {
 }

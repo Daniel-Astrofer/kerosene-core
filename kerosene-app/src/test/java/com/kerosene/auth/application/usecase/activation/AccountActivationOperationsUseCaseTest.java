@@ -1,8 +1,8 @@
-package source.auth.application.usecase.activation;
+package com.kerosene.auth.application.usecase.activation;
 
 import org.junit.jupiter.api.Test;
-import source.auth.application.service.account.AccountActivationService;
-import source.auth.dto.AccountActivationStatusDTO;
+import com.kerosene.auth.application.service.account.AccountActivationService;
+import com.kerosene.auth.dto.AccountActivationStatusDTO;
 
 import java.math.BigDecimal;
 

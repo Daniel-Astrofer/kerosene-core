@@ -1,7 +1,7 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 import java.util.ArrayList;
 import java.util.List;

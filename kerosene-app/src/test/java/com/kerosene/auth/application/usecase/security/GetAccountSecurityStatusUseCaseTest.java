@@ -1,10 +1,10 @@
-package source.auth.application.usecase.security;
+package com.kerosene.auth.application.usecase.security;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import source.auth.application.service.account.AccountSecurityStatusService;
-import source.auth.dto.AccountSecurityStatusDTO;
-import source.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.application.service.account.AccountSecurityStatusService;
+import com.kerosene.auth.dto.AccountSecurityStatusDTO;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
 
 import java.util.List;
 

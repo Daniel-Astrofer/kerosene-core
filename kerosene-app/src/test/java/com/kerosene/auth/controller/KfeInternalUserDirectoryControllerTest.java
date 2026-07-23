@@ -1,10 +1,10 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-import source.common.financial.FinancialUserDirectoryLookupRequest;
-import source.common.financial.FinancialUserDirectoryPort;
+import com.kerosene.common.financial.FinancialUserDirectoryLookupRequest;
+import com.kerosene.common.financial.FinancialUserDirectoryPort;
 
 import java.util.Optional;
 

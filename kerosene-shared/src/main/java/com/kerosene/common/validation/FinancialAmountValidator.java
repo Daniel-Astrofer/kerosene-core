@@ -1,4 +1,4 @@
-package source.common.validation;
+package com.kerosene.common.validation;
 
 import java.math.BigDecimal;
 

@@ -1,4 +1,4 @@
-package source.auth.application.service.passkey;
+package com.kerosene.auth.application.service.passkey;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import source.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;

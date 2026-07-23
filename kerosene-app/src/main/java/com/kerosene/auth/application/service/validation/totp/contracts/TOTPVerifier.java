@@ -1,4 +1,4 @@
-package source.auth.application.service.validation.totp.contracts;
+package com.kerosene.auth.application.service.validation.totp.contracts;
 
 import javax.crypto.SecretKey;
 

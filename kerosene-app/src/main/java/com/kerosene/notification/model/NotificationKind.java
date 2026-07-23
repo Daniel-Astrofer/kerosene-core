@@ -1,4 +1,4 @@
-package source.notification.model;
+package com.kerosene.notification.model;
 
 public enum NotificationKind {
     SYSTEM_INFO("system_info"),

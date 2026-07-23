@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,12 +16,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import source.auth.AuthExceptions;
-import source.auth.application.service.authentication.contracts.LoginVerifier;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.dto.UserDTO;
-import source.auth.model.contracts.User;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.contracts.User;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 class StartLoginTest {
 

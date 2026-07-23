@@ -1,4 +1,4 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -8,7 +8,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import source.common.financial.FinancialRailHealthPort;
+import com.kerosene.common.financial.FinancialRailHealthPort;
 
 import java.util.Map;
 

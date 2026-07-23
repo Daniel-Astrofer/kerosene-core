@@ -1,4 +1,4 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import source.common.financial.FinancialAuditIntegrityPort;
+import com.kerosene.common.financial.FinancialAuditIntegrityPort;
 
 @Component
 @Profile("!kfe")

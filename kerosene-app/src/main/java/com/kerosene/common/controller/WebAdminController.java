@@ -1,4 +1,4 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;

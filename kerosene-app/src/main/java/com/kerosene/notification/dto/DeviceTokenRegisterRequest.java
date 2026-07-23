@@ -1,4 +1,4 @@
-package source.notification.dto;
+package com.kerosene.notification.dto;
 
 public record DeviceTokenRegisterRequest(
         String platform,

@@ -1,8 +1,8 @@
-package source.auth.application.port.out;
+package com.kerosene.auth.application.port.out;
 
 import java.util.List;
 
-import source.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.PasskeyCredential;
 
 public interface AuthPasskeyGateway {
 

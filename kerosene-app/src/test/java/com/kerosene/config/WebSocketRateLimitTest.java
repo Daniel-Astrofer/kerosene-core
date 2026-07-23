@@ -1,4 +1,4 @@
-package source.config;
+package com.kerosene.config;
 
 import io.github.bucket4j.Bucket;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +14,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;

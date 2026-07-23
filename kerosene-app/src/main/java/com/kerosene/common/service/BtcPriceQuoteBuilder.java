@@ -1,4 +1,4 @@
-package source.common.service;
+package com.kerosene.common.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

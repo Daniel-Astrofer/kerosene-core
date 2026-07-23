@@ -1,4 +1,4 @@
-package source.common.service;
+package com.kerosene.common.service;
 
 import org.bitcoinj.core.Base58;
 import org.bitcoinj.core.NetworkParameters;
@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

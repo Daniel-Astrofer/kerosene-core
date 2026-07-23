@@ -1,4 +1,4 @@
-package source.auth.application.service.authentication.signup.chain;
+package com.kerosene.auth.application.service.authentication.signup.chain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Component;
 
-import source.auth.application.service.authentication.signup.SignupValidationContext;
+import com.kerosene.auth.application.service.authentication.signup.SignupValidationContext;
 
 @Component
 public class SignupValidationChain {

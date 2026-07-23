@@ -1,6 +1,6 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 public class AccountSecurityUpdateRequestDTO {
 

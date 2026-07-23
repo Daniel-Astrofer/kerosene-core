@@ -1,4 +1,4 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

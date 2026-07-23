@@ -1,4 +1,4 @@
-package source.config.websocket;
+package com.kerosene.config.websocket;
 
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -6,8 +6,8 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
-import source.config.websocket.inbound.StompInboundMessageHandlerChain;
-import source.config.websocket.inbound.StompMessageContext;
+import com.kerosene.config.websocket.inbound.StompInboundMessageHandlerChain;
+import com.kerosene.config.websocket.inbound.StompMessageContext;
 
 @Component
 public class StompInboundChannelInterceptor implements ChannelInterceptor {

@@ -1,9 +1,9 @@
-package source.security.infra.honeypot;
+package com.kerosene.security.infra.honeypot;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
-import source.security.application.honeypot.RequestJsonBodyParser;
+import com.kerosene.security.application.honeypot.RequestJsonBodyParser;
 
 import java.io.IOException;
 

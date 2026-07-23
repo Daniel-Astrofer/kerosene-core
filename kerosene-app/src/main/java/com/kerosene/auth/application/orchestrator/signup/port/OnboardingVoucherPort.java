@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.signup.port;
+package com.kerosene.auth.application.orchestrator.signup.port;
 
 import java.math.BigDecimal;
 

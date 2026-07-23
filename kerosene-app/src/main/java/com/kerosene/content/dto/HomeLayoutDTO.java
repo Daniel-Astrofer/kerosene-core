@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 /**
  * Logical spacing units (logical pixels at density 1). Client clamps.

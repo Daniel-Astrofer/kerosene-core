@@ -1,10 +1,10 @@
-package source.common.audit;
+package com.kerosene.common.audit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import source.common.infra.logging.LogDomain;
-import source.common.infra.logging.StructuredLogEvent;
+import com.kerosene.common.infra.logging.LogDomain;
+import com.kerosene.common.infra.logging.StructuredLogEvent;
 
 import java.util.Map;
 import java.util.UUID;

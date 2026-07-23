@@ -1,13 +1,13 @@
-package source.notification.integration;
+package com.kerosene.notification.integration;
 
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
-import source.common.financial.FinancialNotificationPort;
-import source.notification.l10n.NotificationMessageKey;
-import source.notification.l10n.NotificationMessages;
-import source.notification.model.NotificationKind;
-import source.notification.model.NotificationSeverity;
-import source.notification.service.NotificationService;
+import com.kerosene.common.financial.FinancialNotificationPort;
+import com.kerosene.notification.l10n.NotificationMessageKey;
+import com.kerosene.notification.l10n.NotificationMessages;
+import com.kerosene.notification.model.NotificationKind;
+import com.kerosene.notification.model.NotificationSeverity;
+import com.kerosene.notification.service.NotificationService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

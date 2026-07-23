@@ -1,4 +1,4 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
 public record PasskeyVerificationProjection(
         byte[] credentialId,

@@ -1,4 +1,4 @@
-package source.common.financial;
+package com.kerosene.common.financial;
 
 /**
  * Internal KFE-to-Core user lookup request.

@@ -1,13 +1,13 @@
-package source.auth.application.usecase.passkey;
+package com.kerosene.auth.application.usecase.passkey;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.model.entity.PasskeyCredential;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.Optional;
 

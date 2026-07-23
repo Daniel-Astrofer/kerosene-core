@@ -1,17 +1,17 @@
-package source.auth.application.service.devicebinding;
+package com.kerosene.auth.application.service.devicebinding;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
-import source.auth.model.entity.DeviceKeyCredential;
-import source.auth.model.entity.PasskeyCredential;
-import source.common.infra.logging.LogDomain;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.dto.devicebinding.DeviceAlreadyBoundDTO;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.common.infra.logging.LogDomain;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 import java.util.ArrayList;
 import java.util.List;

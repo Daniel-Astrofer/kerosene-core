@@ -1,21 +1,21 @@
-package source.auth.application.service.passkey;
+package com.kerosene.auth.application.service.passkey;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyInventoryProjection;
-import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.dto.DeviceCredentialChallengeDTO;
-import source.auth.dto.PasskeyActionRequiredDTO;
-import source.auth.dto.PasskeyDeviceDTO;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
-import source.auth.model.entity.PasskeyCredential;
-import source.auth.model.entity.UserDataBase;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyInventoryProjection;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyService;
+import com.kerosene.auth.dto.DeviceCredentialChallengeDTO;
+import com.kerosene.auth.dto.PasskeyActionRequiredDTO;
+import com.kerosene.auth.dto.PasskeyDeviceDTO;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

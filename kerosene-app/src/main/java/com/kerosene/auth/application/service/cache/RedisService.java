@@ -1,11 +1,11 @@
-package source.auth.application.service.cache;
+package com.kerosene.auth.application.service.cache;
 
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.cripto.contracts.Cryptography;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.dto.UserDTO;
-import source.security.VaultKeyProvider;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.security.VaultKeyProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 

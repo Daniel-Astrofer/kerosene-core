@@ -1,4 +1,4 @@
-package source.auth.application.service.validation.ip_handler.contracts;
+package com.kerosene.auth.application.service.validation.ip_handler.contracts;
 
 import jakarta.servlet.http.HttpServletRequest;
 

@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery;
+package com.kerosene.auth.application.service.recovery;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import source.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
 
 @Service
 public class RecoveryCodeService {

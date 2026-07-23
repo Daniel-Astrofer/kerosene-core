@@ -1,10 +1,10 @@
-package source.security.application.honeypot;
+package com.kerosene.security.application.honeypot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import source.security.domain.honeypot.HoneypotInspectionOutcome;
-import source.security.infra.honeypot.JacksonRequestJsonBodyParser;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionOutcome;
+import com.kerosene.security.infra.honeypot.JacksonRequestJsonBodyParser;
 
 import java.nio.charset.StandardCharsets;
 

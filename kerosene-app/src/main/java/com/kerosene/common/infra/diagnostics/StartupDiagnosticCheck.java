@@ -1,4 +1,4 @@
-package source.common.infra.diagnostics;
+package com.kerosene.common.infra.diagnostics;
 
 import java.util.List;
 

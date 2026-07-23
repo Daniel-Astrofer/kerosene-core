@@ -1,6 +1,6 @@
-package source.auth.application.service.cripto.encrypter;
+package com.kerosene.auth.application.service.cripto.encrypter;
 
-import source.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;

@@ -1,4 +1,4 @@
-package source.common.infra.logging;
+package com.kerosene.common.infra.logging;
 
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.Test;

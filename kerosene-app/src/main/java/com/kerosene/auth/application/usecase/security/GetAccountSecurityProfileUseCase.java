@@ -1,11 +1,11 @@
-package source.auth.application.usecase.security;
+package com.kerosene.auth.application.usecase.security;
 
 import org.springframework.stereotype.Component;
-import source.auth.application.service.account.AppPinService;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.dto.AccountSecurityProfileDTO;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.service.account.AppPinService;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.dto.AccountSecurityProfileDTO;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 public class GetAccountSecurityProfileUseCase {

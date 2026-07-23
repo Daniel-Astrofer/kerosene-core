@@ -1,4 +1,4 @@
-package source.auth.application.service.devicekey;
+package com.kerosene.auth.application.service.devicekey;
 
 public class DeviceKeySignatureException extends DeviceKeyProtocolException {
     public DeviceKeySignatureException(String message) {

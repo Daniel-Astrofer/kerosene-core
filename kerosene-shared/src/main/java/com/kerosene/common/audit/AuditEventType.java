@@ -1,4 +1,4 @@
-package source.common.audit;
+package com.kerosene.common.audit;
 
 import java.util.Arrays;
 import java.util.Locale;

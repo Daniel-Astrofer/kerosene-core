@@ -1,9 +1,9 @@
-package source.auth.application.usecase.totp;
+package com.kerosene.auth.application.usecase.totp;
 
 import org.springframework.stereotype.Component;
-import source.auth.application.service.account.TotpManagementService;
-import source.auth.dto.BackupCodesStatusDTO;
-import source.auth.dto.TotpSetupResponseDTO;
+import com.kerosene.auth.application.service.account.TotpManagementService;
+import com.kerosene.auth.dto.BackupCodesStatusDTO;
+import com.kerosene.auth.dto.TotpSetupResponseDTO;
 
 @Component
 public class TotpOperationsUseCase {

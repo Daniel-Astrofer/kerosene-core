@@ -1,14 +1,14 @@
-package source.auth.application.service.recovery.start.chain;
+package com.kerosene.auth.application.service.recovery.start.chain;
 
 import java.util.List;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthExceptions;
-import source.auth.application.service.recovery.RecoveryCodeService;
-import source.auth.application.service.recovery.RecoveryRateLimitService;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
+import com.kerosene.auth.application.service.recovery.RecoveryRateLimitService;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
 
 @Component
 @Order(50)

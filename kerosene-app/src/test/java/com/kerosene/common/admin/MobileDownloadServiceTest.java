@@ -1,4 +1,4 @@
-package source.common.admin;
+package com.kerosene.common.admin;
 
 import org.junit.jupiter.api.Test;
 

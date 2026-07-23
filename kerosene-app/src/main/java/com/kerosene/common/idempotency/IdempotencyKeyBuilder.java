@@ -1,4 +1,4 @@
-package source.common.idempotency;
+package com.kerosene.common.idempotency;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

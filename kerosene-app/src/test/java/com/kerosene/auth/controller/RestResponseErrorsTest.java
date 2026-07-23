@@ -1,12 +1,12 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import source.auth.AuthExceptions;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;

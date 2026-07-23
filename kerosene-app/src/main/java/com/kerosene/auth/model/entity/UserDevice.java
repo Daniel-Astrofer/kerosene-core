@@ -1,4 +1,4 @@
-package source.auth.model.entity;
+package com.kerosene.auth.model.entity;
 
 import jakarta.persistence.*;
 

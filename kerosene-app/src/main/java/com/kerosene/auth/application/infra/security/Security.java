@@ -1,10 +1,10 @@
-package source.auth.application.infra.security;
+package com.kerosene.auth.application.infra.security;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.servlet.HandlerExceptionResolver;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -15,8 +15,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import source.common.release.ReleaseAttestationFilter;
-import source.common.security.EndpointPolicyRegistry;
+import com.kerosene.common.release.ReleaseAttestationFilter;
+import com.kerosene.common.security.EndpointPolicyRegistry;
 
 @Configuration
 @EnableWebSecurity

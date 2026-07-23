@@ -1,4 +1,4 @@
-package source.auth.application.service.recovery.start.chain;
+package com.kerosene.auth.application.service.recovery.start.chain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -14,16 +14,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.pow.PowService;
-import source.auth.application.service.recovery.RecoveryCodeService;
-import source.auth.application.service.recovery.RecoveryRateLimitService;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.dto.EmergencyRecoveryStartRequest;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.application.service.authentication.contracts.SignupVerifier;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.pow.PowService;
+import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
+import com.kerosene.auth.application.service.recovery.RecoveryRateLimitService;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 class EmergencyRecoveryStartChainTest {
 

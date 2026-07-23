@@ -1,12 +1,12 @@
-package source.auth.application.usecase.devicekey;
+package com.kerosene.auth.application.usecase.devicekey;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.dto.devicekey.DeviceKeyDeviceDTO;
-import source.auth.model.entity.DeviceKeyCredential;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.dto.devicekey.DeviceKeyDeviceDTO;
+import com.kerosene.auth.model.entity.DeviceKeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.time.LocalDateTime;
 import java.util.List;

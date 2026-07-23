@@ -1,11 +1,11 @@
 /*package auth.service.orchestratorTest.loginTest;
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.orchestrator.login.LoginUseCase;
-import source.auth.application.service.authentication.contracts.LoginVerifier;
-import source.auth.application.service.device.UserDeviceService;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.orchestrator.login.LoginUseCase;
+import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
+import com.kerosene.auth.application.service.device.UserDeviceService;
+import com.kerosene.auth.dto.UserDTO;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

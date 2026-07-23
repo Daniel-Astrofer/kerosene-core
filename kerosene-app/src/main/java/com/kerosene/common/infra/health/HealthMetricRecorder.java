@@ -1,4 +1,4 @@
-package source.common.infra.health;
+package com.kerosene.common.infra.health;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

@@ -1,4 +1,4 @@
-package source.common.exception;
+package com.kerosene.common.exception;
 
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -13,13 +13,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import source.auth.AuthExceptions;
-import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
-import source.common.dto.ApiResponse;
-import source.common.infra.logging.StructuredLogField;
-import source.common.observability.FinancialOperationsMetrics;
-import source.common.exception.FinancialSelfPaymentException;
-import source.common.exception.FinancialProviderUnavailableException;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.orchestrator.signup.FinalizeSignupAccount;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.infra.logging.StructuredLogField;
+import com.kerosene.common.observability.FinancialOperationsMetrics;
+import com.kerosene.common.exception.FinancialSelfPaymentException;
+import com.kerosene.common.exception.FinancialProviderUnavailableException;
 
 import java.util.Map;
 import java.util.regex.Pattern;

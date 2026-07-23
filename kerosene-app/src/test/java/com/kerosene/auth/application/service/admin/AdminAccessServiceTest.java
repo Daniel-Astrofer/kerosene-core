@@ -1,4 +1,4 @@
-package source.auth.application.service.admin;
+package com.kerosene.auth.application.service.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -17,17 +17,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import source.auth.application.infra.persistence.jpa.AdminAccessAttemptRepository;
-import source.auth.application.infra.persistence.jpa.AdminAccessDeviceRepository;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.dto.AdminLoginResponseDTO;
-import source.auth.model.entity.AdminAccessAttemptEntity;
-import source.auth.model.entity.AdminAccessDeviceEntity;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.AdminAccessAttemptStatus;
-import source.auth.model.enums.AdminAccessDeviceStatus;
-import source.auth.model.enums.UserRole;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.infra.persistence.jpa.AdminAccessAttemptRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.AdminAccessDeviceRepository;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.dto.AdminLoginResponseDTO;
+import com.kerosene.auth.model.entity.AdminAccessAttemptEntity;
+import com.kerosene.auth.model.entity.AdminAccessDeviceEntity;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.AdminAccessAttemptStatus;
+import com.kerosene.auth.model.enums.AdminAccessDeviceStatus;
+import com.kerosene.auth.model.enums.UserRole;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 class AdminAccessServiceTest {
 

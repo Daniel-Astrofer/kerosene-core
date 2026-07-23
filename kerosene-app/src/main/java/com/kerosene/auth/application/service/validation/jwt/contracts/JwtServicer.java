@@ -1,4 +1,4 @@
-package source.auth.application.service.validation.jwt.contracts;
+package com.kerosene.auth.application.service.validation.jwt.contracts;
 
 import java.util.Collection;
 import java.util.List;

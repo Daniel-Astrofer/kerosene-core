@@ -1,4 +1,4 @@
-package source.common.dto;
+package com.kerosene.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

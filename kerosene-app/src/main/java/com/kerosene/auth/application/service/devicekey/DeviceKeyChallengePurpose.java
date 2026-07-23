@@ -1,4 +1,4 @@
-package source.auth.application.service.devicekey;
+package com.kerosene.auth.application.service.devicekey;
 
 public enum DeviceKeyChallengePurpose {
     REGISTER_DEVICE_KEY,

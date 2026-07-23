@@ -1,6 +1,6 @@
-package source.auth.application.service.validation.totp;
+package com.kerosene.auth.application.service.validation.totp;
 
-import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
 import org.jboss.aerogear.security.otp.api.Base32;
 import org.springframework.stereotype.Component;
 

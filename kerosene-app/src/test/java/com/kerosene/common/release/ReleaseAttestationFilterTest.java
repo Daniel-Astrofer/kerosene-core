@@ -1,4 +1,4 @@
-package source.common.release;
+package com.kerosene.common.release;
 
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.Test;

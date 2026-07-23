@@ -1,4 +1,4 @@
-package source.notification.service;
+package com.kerosene.notification.service;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -8,9 +8,9 @@ import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import source.notification.model.UserNotificationPayload;
-import source.notification.model.entity.NotificationEntity;
-import source.notification.repository.NotificationRepository;
+import com.kerosene.notification.model.UserNotificationPayload;
+import com.kerosene.notification.model.entity.NotificationEntity;
+import com.kerosene.notification.repository.NotificationRepository;
 
 @Service
 public class NotificationPersistenceService {

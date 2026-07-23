@@ -1,8 +1,8 @@
-package source.auth.application.usecase.security;
+package com.kerosene.auth.application.usecase.security;
 
 import org.springframework.stereotype.Component;
-import source.auth.application.service.account.AccountSecurityStatusService;
-import source.auth.dto.AccountSecurityStatusDTO;
+import com.kerosene.auth.application.service.account.AccountSecurityStatusService;
+import com.kerosene.auth.dto.AccountSecurityStatusDTO;
 
 @Component
 public class GetAccountSecurityStatusUseCase {

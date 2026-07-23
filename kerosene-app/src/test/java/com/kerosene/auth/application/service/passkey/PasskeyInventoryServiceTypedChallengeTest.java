@@ -1,4 +1,4 @@
-package source.auth.application.service.passkey;
+package com.kerosene.auth.application.service.passkey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -7,12 +7,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import source.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.dto.PasskeyActionRequiredDTO;
-import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyService;
+import com.kerosene.auth.dto.PasskeyActionRequiredDTO;
+import com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.List;
 

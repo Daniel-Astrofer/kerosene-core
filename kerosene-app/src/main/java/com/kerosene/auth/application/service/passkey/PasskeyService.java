@@ -1,4 +1,4 @@
-package source.auth.application.service.passkey;
+package com.kerosene.auth.application.service.passkey;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,8 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;

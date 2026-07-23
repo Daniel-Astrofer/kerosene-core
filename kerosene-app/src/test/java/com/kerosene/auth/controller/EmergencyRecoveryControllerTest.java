@@ -1,13 +1,13 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import source.auth.AuthExceptions;
-import source.auth.application.orchestrator.recovery.EmergencyRecoveryUseCase;
-import source.auth.dto.EmergencyRecoveryFinishRequest;
-import source.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.orchestrator.recovery.EmergencyRecoveryUseCase;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
 
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;

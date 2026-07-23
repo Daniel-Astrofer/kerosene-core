@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -7,8 +7,8 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
-import source.auth.dto.contracts.UserDTOContract;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 class LoginUseCaseTest {
 

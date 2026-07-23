@@ -1,4 +1,4 @@
-package source.common.security;
+package com.kerosene.common.security;
 
 public interface StringColumnCryptoPort {
 

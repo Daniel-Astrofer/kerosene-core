@@ -1,4 +1,4 @@
-package source.config;
+package com.kerosene.config;
 
 import org.springframework.context.EnvironmentAware;
 import org.springframework.core.env.Environment;
@@ -20,7 +20,7 @@ import java.util.Arrays;
 public final class KfeProfileCoreControllerExclusionFilter implements TypeFilter, EnvironmentAware {
 
     private static final String KFE_PACKAGE_PREFIX = "com.kerosene.kfe.";
-    private static final String HEALTH_CONTROLLER = "source.common.controller.HealthController";
+    private static final String HEALTH_CONTROLLER = "com.kerosene.common.controller.HealthController";
     private static final String CONTROLLER_ANNOTATION = Controller.class.getName();
     private static final String REST_CONTROLLER_ANNOTATION = RestController.class.getName();
 

@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.signup;
+package com.kerosene.auth.application.orchestrator.signup;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -11,17 +11,17 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthConstants;
-import source.auth.AuthExceptions;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.pow.PowService;
-import source.auth.application.service.security.profile.AccountSecurityProfileResolver;
-import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
-import source.auth.dto.SignupState;
-import source.auth.dto.SignupResponseDTO;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.AuthConstants;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.service.authentication.contracts.SignupVerifier;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.pow.PowService;
+import com.kerosene.auth.application.service.security.profile.AccountSecurityProfileResolver;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.SignupResponseDTO;
+import com.kerosene.auth.dto.UserDTO;
 
 @Component
 public class StartSignup {

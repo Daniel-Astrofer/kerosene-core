@@ -2,15 +2,15 @@
 
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.orchestrator.login.LoginUseCase;
-import source.auth.application.service.authentication.LoginValidator;
-import source.auth.application.service.cripto.hasher.BcryptHasher;
-import source.auth.application.service.device.UserDeviceService;
-import source.auth.application.service.validation.ip_handler.contracts.IP;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.entity.UserDevice;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.orchestrator.login.LoginUseCase;
+import com.kerosene.auth.application.service.authentication.LoginValidator;
+import com.kerosene.auth.application.service.cripto.hasher.BcryptHasher;
+import com.kerosene.auth.application.service.device.UserDeviceService;
+import com.kerosene.auth.application.service.validation.ip_handler.contracts.IP;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.entity.UserDevice;
+import com.kerosene.auth.dto.UserDTO;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

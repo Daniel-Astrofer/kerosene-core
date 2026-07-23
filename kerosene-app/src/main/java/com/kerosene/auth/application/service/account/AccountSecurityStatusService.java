@@ -1,11 +1,11 @@
-package source.auth.application.service.account;
+package com.kerosene.auth.application.service.account;
 
 import org.springframework.stereotype.Service;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.AccountSecurityStatusDTO;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.AccountSecurityStatusDTO;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Service
 public class AccountSecurityStatusService {

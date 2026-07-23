@@ -1,4 +1,4 @@
-package source.notification.model;
+package com.kerosene.notification.model;
 
 public enum NotificationSeverity {
     INFO("info"),

@@ -1,8 +1,8 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
 import org.junit.jupiter.api.Test;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.AccountSecurityType;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.AccountSecurityType;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

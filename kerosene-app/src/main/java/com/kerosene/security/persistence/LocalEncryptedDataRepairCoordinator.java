@@ -1,4 +1,4 @@
-package source.security.persistence;
+package com.kerosene.security.persistence;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
-import source.auth.application.service.security.CosignerSecretService;
+import com.kerosene.auth.application.service.security.CosignerSecretService;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;

@@ -1,8 +1,8 @@
-package source.auth.application.infra.persistence.redis.contracts;
+package com.kerosene.auth.application.infra.persistence.redis.contracts;
 
-import source.auth.dto.UserDTO;
-import source.auth.dto.SignupState;
-import source.auth.dto.EmergencyRecoveryState;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.EmergencyRecoveryState;
 
 public interface RedisContract {
 

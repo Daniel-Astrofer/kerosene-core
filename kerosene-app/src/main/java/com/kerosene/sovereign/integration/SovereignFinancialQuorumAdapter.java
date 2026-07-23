@@ -1,16 +1,16 @@
-package source.sovereign.integration;
+package com.kerosene.sovereign.integration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import source.common.financial.FinancialQuorumPort;
-import source.sovereign.quorum.FailStopPolicy;
-import source.sovereign.quorum.QuorumMembership;
-import source.sovereign.quorum.QuorumPeer;
-import source.sovereign.quorum.QuorumPhaseResult;
-import source.sovereign.quorum.QuorumTopology;
-import source.sovereign.quorum.QuorumTransport;
+import com.kerosene.common.financial.FinancialQuorumPort;
+import com.kerosene.sovereign.quorum.FailStopPolicy;
+import com.kerosene.sovereign.quorum.QuorumMembership;
+import com.kerosene.sovereign.quorum.QuorumPeer;
+import com.kerosene.sovereign.quorum.QuorumPhaseResult;
+import com.kerosene.sovereign.quorum.QuorumTopology;
+import com.kerosene.sovereign.quorum.QuorumTransport;
 
 import java.util.List;
 

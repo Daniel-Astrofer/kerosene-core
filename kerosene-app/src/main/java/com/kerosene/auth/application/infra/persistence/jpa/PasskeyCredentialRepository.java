@@ -1,4 +1,4 @@
-package source.auth.application.infra.persistence.jpa;
+package com.kerosene.auth.application.infra.persistence.jpa;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.PasskeyCredential;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +23,7 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
     List<PasskeyCredential> findByUserId(Long userId);
 
     @Query("""
-            select new source.auth.application.infra.persistence.jpa.PasskeyInventoryProjection(
+            select new com.kerosene.auth.application.infra.persistence.jpa.PasskeyInventoryProjection(
                 p.credentialId,
                 p.deviceName,
                 p.brand,
@@ -45,7 +45,7 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
     List<PasskeyInventoryProjection> findInventoryByUserId(@Param("userId") Long userId);
 
     @Query("""
-            select new source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection(
+            select new com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection(
                 p.credentialId,
                 p.publicKeyCose,
                 p.signatureCount,
@@ -64,7 +64,7 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
             @Param("credentialId") byte[] credentialId);
 
     @Query("""
-            select new source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection(
+            select new com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection(
                 p.credentialId,
                 p.publicKeyCose,
                 p.signatureCount,

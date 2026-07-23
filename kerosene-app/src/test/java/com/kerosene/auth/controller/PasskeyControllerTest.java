@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -10,27 +10,27 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
-import source.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.application.orchestrator.signup.FinalizeSignupAccount;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.orchestrator.login.StartLogin;
-import source.auth.application.orchestrator.passkey.PasskeyOrchestrator;
-import source.auth.application.usecase.passkey.GetPasskeyInventoryUseCase;
-import source.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.dto.SignupState;
-import source.auth.dto.passkey.PasskeyRegistrationRequest;
-import source.auth.dto.passkey.PasskeyVerifyRequest;
-import source.auth.model.entity.UserDataBase;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
-import source.common.exception.FinancialProviderUnavailableException;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
+import com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.application.orchestrator.signup.FinalizeSignupAccount;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.application.service.passkey.PasskeyService;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.orchestrator.login.StartLogin;
+import com.kerosene.auth.application.orchestrator.passkey.PasskeyOrchestrator;
+import com.kerosene.auth.application.usecase.passkey.GetPasskeyInventoryUseCase;
+import com.kerosene.auth.application.usecase.passkey.UpdatePasskeyDeviceStatusUseCase;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.passkey.PasskeyRegistrationRequest;
+import com.kerosene.auth.dto.passkey.PasskeyVerifyRequest;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
+import com.kerosene.common.exception.FinancialProviderUnavailableException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -87,8 +87,8 @@ class PasskeyControllerTest {
                 passkeyInventoryService,
                 finalizeSignupAccount,
                 redisService,
-                mock(source.auth.application.service.devicebinding.DeviceBindingPolicy.class),
-                mock(source.auth.application.service.devicebinding.DeviceCredentialReplayGuard.class),
+                mock(com.kerosene.auth.application.service.devicebinding.DeviceBindingPolicy.class),
+                mock(com.kerosene.auth.application.service.devicebinding.DeviceCredentialReplayGuard.class),
                 mock(org.springframework.transaction.PlatformTransactionManager.class));
         controller = new PasskeyController(
                 passkeyService,

@@ -1,4 +1,4 @@
-package source.auth.application.service.authentication;
+package com.kerosene.auth.application.service.authentication;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,18 +16,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import source.auth.AuthExceptions;
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.application.service.authentication.login.LoginCredentialRules;
-import source.auth.application.service.authentication.login.chain.LoginPassphraseVerificationHandler;
-import source.auth.application.service.authentication.login.chain.LoginRateLimitHandler;
-import source.auth.application.service.authentication.login.chain.LoginRequiredFieldsHandler;
-import source.auth.application.service.authentication.login.chain.LoginUserLookupHandler;
-import source.auth.application.service.authentication.login.chain.LoginValidationChain;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.dto.UserDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.application.service.authentication.login.LoginCredentialRules;
+import com.kerosene.auth.application.service.authentication.login.chain.LoginPassphraseVerificationHandler;
+import com.kerosene.auth.application.service.authentication.login.chain.LoginRateLimitHandler;
+import com.kerosene.auth.application.service.authentication.login.chain.LoginRequiredFieldsHandler;
+import com.kerosene.auth.application.service.authentication.login.chain.LoginUserLookupHandler;
+import com.kerosene.auth.application.service.authentication.login.chain.LoginValidationChain;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 class LoginValidatorTest {
 

@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.signup.infra;
+package com.kerosene.auth.application.orchestrator.signup.infra;
 
 import java.math.BigDecimal;
 
@@ -6,8 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import source.auth.application.orchestrator.signup.port.OnboardingVoucherPort;
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.auth.application.orchestrator.signup.port.OnboardingVoucherPort;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 @Component
 public class VoucherOnboardingVoucherAdapter implements OnboardingVoucherPort {

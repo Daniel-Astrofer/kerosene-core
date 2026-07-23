@@ -1,7 +1,7 @@
-package source.sovereign.integration;
+package com.kerosene.sovereign.integration;
 
 import org.springframework.stereotype.Component;
-import source.common.financial.FinancialMpcKeyPort;
+import com.kerosene.common.financial.FinancialMpcKeyPort;
 
 import java.util.UUID;
 

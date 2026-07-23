@@ -1,10 +1,10 @@
-package source.auth.application.service.recovery;
+package com.kerosene.auth.application.service.recovery;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import source.auth.AuthExceptions;
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
 
 @Service
 public class RecoveryRateLimitService {

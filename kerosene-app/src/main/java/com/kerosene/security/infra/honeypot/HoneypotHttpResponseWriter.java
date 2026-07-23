@@ -1,9 +1,9 @@
-package source.security.infra.honeypot;
+package com.kerosene.security.infra.honeypot;
 
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
-import source.security.domain.honeypot.HoneypotInspectionOutcome;
-import source.security.domain.honeypot.HoneypotInspectionResult;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionOutcome;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionResult;
 
 import java.io.IOException;
 import java.time.Instant;

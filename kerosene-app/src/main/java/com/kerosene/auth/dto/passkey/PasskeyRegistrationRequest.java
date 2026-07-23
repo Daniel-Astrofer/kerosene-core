@@ -1,4 +1,4 @@
-package source.auth.dto.passkey;
+package com.kerosene.auth.dto.passkey;
 
 public class PasskeyRegistrationRequest {
     private String publicKey;

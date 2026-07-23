@@ -1,6 +1,6 @@
-package source.common.audit;
+package com.kerosene.common.audit;
 
-import source.common.infra.logging.LogSanitizer;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 import java.util.Collection;
 import java.util.Collections;

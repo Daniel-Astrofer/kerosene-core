@@ -1,4 +1,4 @@
-package source.auth.model.enums;
+package com.kerosene.auth.model.enums;
 
 /**
  * Defines the account security mode chosen by the user at signup.

@@ -1,13 +1,13 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.springframework.stereotype.Service;
-import source.auth.AuthExceptions;
-import source.auth.application.service.account.AppPinService;
-import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
-import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.model.entity.UserDataBase;
-import source.common.financial.FinancialTransactionApprovalPort;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.account.AppPinService;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationPort;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.common.financial.FinancialTransactionApprovalPort;
 
 @Service
 public class AuthFinancialTransactionApprovalAdapter implements FinancialTransactionApprovalPort {

@@ -1,9 +1,9 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.AuthExceptions;
-import source.common.dto.ApiResponse;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.common.dto.ApiResponse;
+import com.kerosene.common.exception.ErrorCodes;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;

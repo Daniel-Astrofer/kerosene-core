@@ -1,33 +1,33 @@
-package source.auth.application.orchestrator.recovery;
+package com.kerosene.auth.application.orchestrator.recovery;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
-import source.auth.application.infra.persistence.redis.contracts.RedisContract;
-import source.auth.application.port.out.AuthPasskeyGateway;
-import source.auth.application.port.out.AuthUserGateway;
-import source.auth.application.service.cripto.contracts.Cryptography;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.passkey.PasskeyService;
-import source.auth.application.service.recovery.RecoveryCredentialRotator;
-import source.auth.application.service.recovery.RecoveryCodeService;
-import source.auth.application.service.recovery.RecoverySecretProtector;
-import source.auth.application.service.recovery.RecoveryStateStore;
-import source.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
-import source.auth.application.service.recovery.start.chain.EmergencyRecoveryStartChain;
-import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.dto.EmergencyRecoveryFinishRequest;
-import source.auth.dto.EmergencyRecoveryFinishResponse;
-import source.auth.dto.EmergencyRecoveryStartRequest;
-import source.auth.dto.EmergencyRecoveryStartResponse;
-import source.auth.dto.EmergencyRecoveryState;
-import source.auth.model.entity.PasskeyCredential;
-import source.auth.model.entity.UserDataBase;
-import source.notification.model.UserNotificationPayload;
-import source.notification.service.NotificationService;
-import source.security.VaultKeyProvider;
+import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
+import com.kerosene.auth.application.port.out.AuthPasskeyGateway;
+import com.kerosene.auth.application.port.out.AuthUserGateway;
+import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.passkey.PasskeyService;
+import com.kerosene.auth.application.service.recovery.RecoveryCredentialRotator;
+import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
+import com.kerosene.auth.application.service.recovery.RecoverySecretProtector;
+import com.kerosene.auth.application.service.recovery.RecoveryStateStore;
+import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
+import com.kerosene.auth.application.service.recovery.start.chain.EmergencyRecoveryStartChain;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryFinishResponse;
+import com.kerosene.auth.dto.EmergencyRecoveryStartRequest;
+import com.kerosene.auth.dto.EmergencyRecoveryStartResponse;
+import com.kerosene.auth.dto.EmergencyRecoveryState;
+import com.kerosene.auth.model.entity.PasskeyCredential;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.notification.model.UserNotificationPayload;
+import com.kerosene.notification.service.NotificationService;
+import com.kerosene.security.VaultKeyProvider;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -97,7 +97,7 @@ class EmergencyRecoveryUseCaseTest {
                 passkeyGateway,
                 recoveryCodeService,
                 notificationService,
-                mock(source.auth.application.service.devicebinding.DeviceBindingPolicy.class));
+                mock(com.kerosene.auth.application.service.devicebinding.DeviceBindingPolicy.class));
 
         useCase = new EmergencyRecoveryUseCase(
                 recoveryStartChain,

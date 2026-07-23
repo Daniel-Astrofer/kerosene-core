@@ -1,4 +1,4 @@
-package source.config.websocket;
+package com.kerosene.config.websocket;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -22,8 +22,8 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.config.websocket.inbound.StompInboundMessageHandlerChain;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.config.websocket.inbound.StompInboundMessageHandlerChain;
 
 class StompInboundChannelInterceptorTest {
 

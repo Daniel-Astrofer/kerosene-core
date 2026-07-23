@@ -1,6 +1,6 @@
-package source.auth.application.orchestrator.signup.port;
+package com.kerosene.auth.application.orchestrator.signup.port;
 
-import source.notification.model.UserNotificationPayload;
+import com.kerosene.notification.model.UserNotificationPayload;
 
 public interface UserNotifier {
 

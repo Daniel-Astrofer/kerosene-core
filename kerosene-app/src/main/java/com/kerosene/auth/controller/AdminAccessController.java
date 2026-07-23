@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -15,17 +15,17 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.AuthExceptions;
-import source.auth.application.service.admin.AdminAccessService;
-import source.auth.dto.AdminAccessAttemptDTO;
-import source.auth.dto.AdminAccessDecisionRequestDTO;
-import source.auth.dto.AdminAuthenticatedDeviceDTO;
-import source.auth.dto.AdminKeyCreateRequestDTO;
-import source.auth.dto.AdminKeyStatusDTO;
-import source.auth.dto.AdminLoginRequestDTO;
-import source.auth.dto.AdminLoginResponseDTO;
-import source.auth.model.enums.AdminAccessDeviceStatus;
-import source.common.dto.ApiResponse;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.admin.AdminAccessService;
+import com.kerosene.auth.dto.AdminAccessAttemptDTO;
+import com.kerosene.auth.dto.AdminAccessDecisionRequestDTO;
+import com.kerosene.auth.dto.AdminAuthenticatedDeviceDTO;
+import com.kerosene.auth.dto.AdminKeyCreateRequestDTO;
+import com.kerosene.auth.dto.AdminKeyStatusDTO;
+import com.kerosene.auth.dto.AdminLoginRequestDTO;
+import com.kerosene.auth.dto.AdminLoginResponseDTO;
+import com.kerosene.auth.model.enums.AdminAccessDeviceStatus;
+import com.kerosene.common.dto.ApiResponse;
 
 @RestController
 @RequestMapping("/auth/admin")

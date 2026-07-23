@@ -1,11 +1,11 @@
-package source.auth.application.usecase.backupcodes;
+package com.kerosene.auth.application.usecase.backupcodes;
 
 import org.springframework.stereotype.Component;
-import source.auth.AuthExceptions;
-import source.auth.application.service.account.BackupCodeService;
-import source.auth.application.service.identityaccess.TransactionalAuthenticationPort;
-import source.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
-import source.auth.dto.BackupCodesStatusDTO;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.account.BackupCodeService;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationPort;
+import com.kerosene.auth.application.service.identityaccess.TransactionalAuthenticationRequest;
+import com.kerosene.auth.dto.BackupCodesStatusDTO;
 
 @Component
 public class BackupCodesOperationsUseCase {

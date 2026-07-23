@@ -1,4 +1,4 @@
-package source.architecture;
+package com.kerosene.architecture;
 
 import org.junit.jupiter.api.Test;
 

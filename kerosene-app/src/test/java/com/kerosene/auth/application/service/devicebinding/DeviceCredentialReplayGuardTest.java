@@ -1,4 +1,4 @@
-package source.auth.application.service.devicebinding;
+package com.kerosene.auth.application.service.devicebinding;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -6,7 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

@@ -1,12 +1,12 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
-import source.common.financial.FinancialColdWalletPsbtApprovalRequest;
-import source.common.financial.FinancialCustodyTransferApprovalRequest;
-import source.common.financial.FinancialLocalFactorApprovalRequest;
-import source.common.financial.FinancialTransactionApprovalPort;
-import source.common.financial.FinancialWalletOutboundApprovalRequest;
+import com.kerosene.common.financial.FinancialColdWalletPsbtApprovalRequest;
+import com.kerosene.common.financial.FinancialCustodyTransferApprovalRequest;
+import com.kerosene.common.financial.FinancialLocalFactorApprovalRequest;
+import com.kerosene.common.financial.FinancialTransactionApprovalPort;
+import com.kerosene.common.financial.FinancialWalletOutboundApprovalRequest;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;

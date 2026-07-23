@@ -1,10 +1,10 @@
-package source.common.controller;
+package com.kerosene.common.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
-import source.common.financial.StompUserPublishRequest;
-import source.common.service.StompUserRelayService;
+import com.kerosene.common.financial.StompUserPublishRequest;
+import com.kerosene.common.service.StompUserRelayService;
 
 import java.util.Map;
 

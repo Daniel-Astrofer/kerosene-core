@@ -1,11 +1,11 @@
-package source.auth.application.usecase.devicekey;
+package com.kerosene.auth.application.usecase.devicekey;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import source.auth.application.orchestrator.signup.port.SignupStateStore;
-import source.auth.application.service.devicekey.DeviceKeyService;
-import source.auth.dto.SignupState;
-import source.auth.dto.devicekey.DeviceKeyChallengeResponse;
+import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
+import com.kerosene.auth.application.service.devicekey.DeviceKeyService;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.devicekey.DeviceKeyChallengeResponse;
 
 import java.time.Duration;
 import java.util.Locale;

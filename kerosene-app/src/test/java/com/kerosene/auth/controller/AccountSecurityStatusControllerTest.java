@@ -1,12 +1,12 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import source.auth.application.usecase.security.GetAccountSecurityStatusUseCase;
-import source.auth.dto.AccountSecurityStatusDTO;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.common.dto.ApiResponse;
+import com.kerosene.auth.application.usecase.security.GetAccountSecurityStatusUseCase;
+import com.kerosene.auth.dto.AccountSecurityStatusDTO;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.common.dto.ApiResponse;
 
 import java.util.List;
 

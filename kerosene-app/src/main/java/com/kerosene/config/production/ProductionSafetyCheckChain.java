@@ -1,4 +1,4 @@
-package source.config.production;
+package com.kerosene.config.production;
 
 import java.util.List;
 import org.springframework.beans.factory.ListableBeanFactory;

@@ -1,4 +1,4 @@
-package source.auth.integration;
+package com.kerosene.auth.integration;
 
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;

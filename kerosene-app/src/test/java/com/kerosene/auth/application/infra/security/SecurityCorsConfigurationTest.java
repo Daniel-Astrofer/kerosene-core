@@ -1,4 +1,4 @@
-package source.auth.application.infra.security;
+package com.kerosene.auth.application.infra.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;

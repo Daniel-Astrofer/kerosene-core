@@ -1,9 +1,9 @@
-package source.notification.l10n;
+package com.kerosene.notification.l10n;
 
 import org.junit.jupiter.api.Test;
-import source.notification.model.NotificationKind;
-import source.notification.model.NotificationSeverity;
-import source.notification.model.UserNotificationPayload;
+import com.kerosene.notification.model.NotificationKind;
+import com.kerosene.notification.model.NotificationSeverity;
+import com.kerosene.notification.model.UserNotificationPayload;
 
 import java.util.List;
 import java.util.Map;

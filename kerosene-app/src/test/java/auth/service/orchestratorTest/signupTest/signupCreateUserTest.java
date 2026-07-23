@@ -2,14 +2,14 @@
 
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.application.service.validation.jwt.contracts.JwtServicer;
-import source.auth.application.orchestrator.signup.SignupUseCase;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.device.UserDeviceService;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.application.service.validation.ip_handler.contracts.IP;
-import source.auth.dto.UserDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.service.validation.jwt.contracts.JwtServicer;
+import com.kerosene.auth.application.orchestrator.signup.SignupUseCase;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.device.UserDeviceService;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.application.service.validation.ip_handler.contracts.IP;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,4 +1,4 @@
-package source.auth.model.entity;
+package com.kerosene.auth.model.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,7 +14,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
-import source.auth.model.enums.AdminKeyStatus;
+import com.kerosene.auth.model.enums.AdminKeyStatus;
 
 @Entity
 @Table(schema = "auth", name = "admin_keys")

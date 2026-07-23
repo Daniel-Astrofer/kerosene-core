@@ -1,4 +1,4 @@
-package source.auth.controller;
+package com.kerosene.auth.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -9,14 +9,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import source.auth.AuthExceptions;
-import source.auth.application.usecase.security.GetAccountSecurityProfileUseCase;
-import source.auth.application.usecase.security.UpdateAccountSecurityProfileUseCase;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.AccountSecurityProfileDTO;
-import source.auth.dto.AccountSecurityUpdateRequestDTO;
-import source.auth.model.entity.UserDataBase;
-import source.common.dto.ApiResponse;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.usecase.security.GetAccountSecurityProfileUseCase;
+import com.kerosene.auth.application.usecase.security.UpdateAccountSecurityProfileUseCase;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.AccountSecurityProfileDTO;
+import com.kerosene.auth.dto.AccountSecurityUpdateRequestDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.common.dto.ApiResponse;
 
 @RestController
 @RequestMapping("/auth/security")

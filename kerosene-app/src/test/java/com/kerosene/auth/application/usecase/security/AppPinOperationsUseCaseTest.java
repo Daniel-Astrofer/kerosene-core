@@ -1,17 +1,17 @@
-package source.auth.application.usecase.security;
+package com.kerosene.auth.application.usecase.security;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import source.auth.AuthExceptions;
-import source.auth.application.service.account.AppPinService;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.AppPinStatusDTO;
-import source.auth.dto.ConfigureAppPinRequestDTO;
-import source.auth.dto.VerifyAppPinRequestDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.account.AppPinService;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.AppPinStatusDTO;
+import com.kerosene.auth.dto.ConfigureAppPinRequestDTO;
+import com.kerosene.auth.dto.VerifyAppPinRequestDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.Optional;
 

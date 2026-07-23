@@ -1,4 +1,4 @@
-package source.notification.dto;
+package com.kerosene.notification.dto;
 
 import java.util.Map;
 

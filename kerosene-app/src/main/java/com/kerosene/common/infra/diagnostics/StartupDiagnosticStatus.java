@@ -1,4 +1,4 @@
-package source.common.infra.diagnostics;
+package com.kerosene.common.infra.diagnostics;
 
 public enum StartupDiagnosticStatus {
     OK,

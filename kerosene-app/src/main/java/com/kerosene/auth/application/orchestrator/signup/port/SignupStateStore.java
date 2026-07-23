@@ -1,9 +1,9 @@
-package source.auth.application.orchestrator.signup.port;
+package com.kerosene.auth.application.orchestrator.signup.port;
 
 import java.time.Duration;
 
-import source.auth.dto.SignupState;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.dto.SignupState;
+import com.kerosene.auth.dto.UserDTO;
 
 public interface SignupStateStore {
 

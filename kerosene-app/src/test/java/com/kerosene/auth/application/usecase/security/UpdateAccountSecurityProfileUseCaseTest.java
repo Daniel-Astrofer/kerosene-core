@@ -1,21 +1,21 @@
-package source.auth.application.usecase.security;
+package com.kerosene.auth.application.usecase.security;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import source.auth.AuthExceptions;
-import source.auth.application.service.account.AppPinService;
-import source.auth.application.service.passkey.PasskeyInventoryService;
-import source.auth.application.service.security.profile.AdvancedAccountSecurityAvailability;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.dto.AccountSecurityProfileDTO;
-import source.auth.dto.AccountSecurityUpdateRequestDTO;
-import source.auth.dto.AppPinStatusDTO;
-import source.auth.dto.PasskeyActionRequiredDTO;
-import source.auth.dto.PasskeyInventoryDTO;
-import source.auth.model.entity.UserDataBase;
-import source.auth.model.enums.AccountSecurityType;
-import source.common.exception.ErrorCodes;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.account.AppPinService;
+import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
+import com.kerosene.auth.application.service.security.profile.AdvancedAccountSecurityAvailability;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.dto.AccountSecurityProfileDTO;
+import com.kerosene.auth.dto.AccountSecurityUpdateRequestDTO;
+import com.kerosene.auth.dto.AppPinStatusDTO;
+import com.kerosene.auth.dto.PasskeyActionRequiredDTO;
+import com.kerosene.auth.dto.PasskeyInventoryDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.auth.model.enums.AccountSecurityType;
+import com.kerosene.common.exception.ErrorCodes;
 
 import java.util.List;
 

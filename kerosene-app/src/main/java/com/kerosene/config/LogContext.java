@@ -1,4 +1,4 @@
-package source.config;
+package com.kerosene.config;
 
 import org.slf4j.MDC;
 

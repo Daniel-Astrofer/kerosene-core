@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -18,14 +18,14 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import source.auth.AuthExceptions;
-import source.auth.application.service.authentication.contracts.LoginVerifier;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.cripto.contracts.Hasher;
-import source.auth.application.service.user.contract.UserServiceContract;
-import source.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import source.auth.dto.UserDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.user.contract.UserServiceContract;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 class VerifySecondFactorTest {
 

@@ -1,13 +1,13 @@
-package source.auth.service.orchestratorTest.signupTest;
+package com.kerosene.auth.service.orchestratorTest.signupTest;
 
 
 
 import jakarta.servlet.http.HttpServletRequest;
-import source.auth.application.orchestrator.signup.SignupUseCase;
-import source.auth.application.service.authentication.contracts.SignupVerifier;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
-import source.auth.dto.UserDTO;
+import com.kerosene.auth.application.orchestrator.signup.SignupUseCase;
+import com.kerosene.auth.application.service.authentication.contracts.SignupVerifier;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGenerate;
+import com.kerosene.auth.dto.UserDTO;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

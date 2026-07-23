@@ -35,7 +35,7 @@
             <includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
             <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+                <valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/>
             </jsonGeneratorDecorator>
             <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
                 <maxDepthPerThrowable>20</maxDepthPerThrowable>
@@ -60,7 +60,7 @@
             <includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
             <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+                <valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/>
             </jsonGeneratorDecorator>
             <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
                 <maxDepthPerThrowable>20</maxDepthPerThrowable>
@@ -79,7 +79,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -91,7 +91,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -103,7 +103,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -115,7 +115,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -127,7 +127,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -139,7 +139,7 @@
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <customFields>${COMMON_FIELDS}</customFields><includeMdc>true</includeMdc><includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="source.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator"><valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/></jsonGeneratorDecorator>
         </encoder>
     </appender>
 
@@ -158,7 +158,7 @@
             <includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
             <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+                <valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/>
             </jsonGeneratorDecorator>
             <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
                 <maxDepthPerThrowable>30</maxDepthPerThrowable>
@@ -183,7 +183,7 @@
             <includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
             <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+                <valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/>
             </jsonGeneratorDecorator>
         </encoder>
     </appender>
@@ -196,7 +196,7 @@
             <includeContext>false</includeContext>
             <shortenedLoggerNameLength>64</shortenedLoggerNameLength>
             <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <valueMasker class="source.common.observability.SensitiveDataMasker"/>
+                <valueMasker class="com.kerosene.common.observability.SensitiveDataMasker"/>
             </jsonGeneratorDecorator>
             <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
                 <maxDepthPerThrowable>30</maxDepthPerThrowable>
@@ -284,10 +284,10 @@
          ════════════════════════════════════════════════════════════════ -->
 
     <!-- Security: auth, passkeys, honeypot, JWT -->
-    <logger name="source.auth"                                    level="INFO"  additivity="false">
+    <logger name="com.kerosene.auth"                                    level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_AUTH"/>
     </logger>
-    <logger name="source.security"                                level="INFO"  additivity="false">
+    <logger name="com.kerosene.security"                                level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_SECURITY"/>
     </logger>
     <logger name="kerosene.security"                              level="INFO"  additivity="false">
@@ -300,29 +300,29 @@
     </logger>
 
 
-    <logger name="source.vault"                                   level="INFO"  additivity="false">
+    <logger name="com.kerosene.vault"                                   level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_VAULT"/>
     </logger>
-    <logger name="source.mpc"                                     level="INFO"  additivity="false">
+    <logger name="com.kerosene.mpc"                                     level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_MPC"/>
     </logger>
-    <logger name="source.common.integration"                      level="INFO"  additivity="false">
+    <logger name="com.kerosene.common.integration"                      level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_INTEGRATION"/>
     </logger>
-    <logger name="source.common.startup"                          level="INFO"  additivity="false">
+    <logger name="com.kerosene.common.startup"                          level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_STARTUP"/>
     </logger>
-    <logger name="source.common.frontend"                         level="INFO"  additivity="false">
+    <logger name="com.kerosene.common.frontend"                         level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_FRONTEND_API"/>
     </logger>
 
     <!-- Audit: sovereign (quorum / raft) -->
-    <logger name="source.sovereign"                               level="INFO"  additivity="false">
+    <logger name="com.kerosene.sovereign"                               level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_AUDIT"/>
     </logger>
 
     <!-- HTTP Access: request/response logging -->
-    <logger name="source.common.infra.logging.LoggingFilter"     level="INFO"  additivity="false">
+    <logger name="com.kerosene.common.infra.logging.LoggingFilter"     level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_ACCESS"/>
     </logger>
 

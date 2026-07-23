@@ -1,4 +1,4 @@
-package source.auth.dto;
+package com.kerosene.auth.dto;
 
 /**
  * Typed step-up challenge for a single device-credential factor.

@@ -1,11 +1,11 @@
-package source.config;
+package com.kerosene.config;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import java.util.List;
-import source.config.production.ProductionProfileDetector;
-import source.config.production.ProductionSafetyCheckChain;
+import com.kerosene.config.production.ProductionProfileDetector;
+import com.kerosene.config.production.ProductionSafetyCheckChain;
 
 /**
  * Fails closed when a production profile is started with simulation beans or

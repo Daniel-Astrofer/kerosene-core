@@ -1,4 +1,4 @@
-package source.content.dto;
+package com.kerosene.content.dto;
 
 /**
  * Client acknowledges that the user received/read a Communication Stage piece.

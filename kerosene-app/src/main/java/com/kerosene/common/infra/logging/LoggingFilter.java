@@ -1,4 +1,4 @@
-package source.common.infra.logging;
+package com.kerosene.common.infra.logging;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

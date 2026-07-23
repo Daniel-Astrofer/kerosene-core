@@ -1,19 +1,19 @@
-package source.sovereign.integration;
+package com.kerosene.sovereign.integration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import source.common.financial.FinancialQuorumPort;
-import source.sovereign.quorum.FailStopPolicy;
-import source.sovereign.quorum.QuorumMembership;
-import source.sovereign.quorum.QuorumPeer;
-import source.sovereign.quorum.QuorumPeerResult;
-import source.sovereign.quorum.QuorumPhase;
-import source.sovereign.quorum.QuorumPhaseResult;
-import source.sovereign.quorum.QuorumTopology;
-import source.sovereign.quorum.QuorumTransport;
+import com.kerosene.common.financial.FinancialQuorumPort;
+import com.kerosene.sovereign.quorum.FailStopPolicy;
+import com.kerosene.sovereign.quorum.QuorumMembership;
+import com.kerosene.sovereign.quorum.QuorumPeer;
+import com.kerosene.sovereign.quorum.QuorumPeerResult;
+import com.kerosene.sovereign.quorum.QuorumPhase;
+import com.kerosene.sovereign.quorum.QuorumPhaseResult;
+import com.kerosene.sovereign.quorum.QuorumTopology;
+import com.kerosene.sovereign.quorum.QuorumTransport;
 
 import java.util.List;
 

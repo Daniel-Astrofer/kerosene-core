@@ -1,4 +1,4 @@
-package source.common.financial;
+package com.kerosene.common.financial;
 
 public record FinancialWalletProvisioningRequest(Long userId, String initialAddress) {
 }

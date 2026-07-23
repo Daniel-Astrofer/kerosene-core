@@ -1,4 +1,4 @@
-package source.security;
+package com.kerosene.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -9,11 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import source.security.application.honeypot.HoneypotInspectionCommand;
-import source.security.application.honeypot.HoneypotInspectionUseCase;
-import source.security.domain.honeypot.HoneypotInspectionResult;
-import source.security.infra.honeypot.HoneypotHttpResponseWriter;
-import source.security.infra.honeypot.JacksonRequestJsonBodyParser;
+import com.kerosene.security.application.honeypot.HoneypotInspectionCommand;
+import com.kerosene.security.application.honeypot.HoneypotInspectionUseCase;
+import com.kerosene.security.domain.honeypot.HoneypotInspectionResult;
+import com.kerosene.security.infra.honeypot.HoneypotHttpResponseWriter;
+import com.kerosene.security.infra.honeypot.JacksonRequestJsonBodyParser;
 
 import java.io.IOException;
 

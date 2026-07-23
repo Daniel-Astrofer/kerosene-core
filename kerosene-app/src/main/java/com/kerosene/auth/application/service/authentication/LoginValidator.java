@@ -1,11 +1,11 @@
-package source.auth.application.service.authentication;
+package com.kerosene.auth.application.service.authentication;
 
-import source.auth.application.service.authentication.login.LoginCredentialRules;
-import source.auth.application.service.authentication.login.LoginValidationContext;
-import source.auth.application.service.authentication.login.chain.LoginValidationChain;
-import source.auth.application.service.authentication.contracts.LoginVerifier;
-import source.auth.dto.contracts.UserDTOContract;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.application.service.authentication.login.LoginCredentialRules;
+import com.kerosene.auth.application.service.authentication.login.LoginValidationContext;
+import com.kerosene.auth.application.service.authentication.login.chain.LoginValidationChain;
+import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.model.entity.UserDataBase;
 import org.springframework.stereotype.Service;
 
 /**

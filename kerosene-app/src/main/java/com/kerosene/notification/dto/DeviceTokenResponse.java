@@ -1,6 +1,6 @@
-package source.notification.dto;
+package com.kerosene.notification.dto;
 
-import source.notification.model.entity.NotificationDeviceTokenEntity;
+import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
 
 import java.time.LocalDateTime;
 

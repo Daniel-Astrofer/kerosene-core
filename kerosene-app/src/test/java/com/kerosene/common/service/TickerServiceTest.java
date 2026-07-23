@@ -1,4 +1,4 @@
-package source.common.service;
+package com.kerosene.common.service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;

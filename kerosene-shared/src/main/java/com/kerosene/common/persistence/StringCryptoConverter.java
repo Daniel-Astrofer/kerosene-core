@@ -1,11 +1,11 @@
-package source.common.persistence;
+package com.kerosene.common.persistence;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import source.common.security.StringColumnCryptoPort;
+import com.kerosene.common.security.StringColumnCryptoPort;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;

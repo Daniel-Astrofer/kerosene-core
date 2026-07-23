@@ -1,4 +1,4 @@
-package source.auth.application.orchestrator.login;
+package com.kerosene.auth.application.orchestrator.login;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -7,11 +7,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-import source.auth.AuthExceptions;
-import source.auth.application.service.authentication.contracts.LoginVerifier;
-import source.auth.application.service.cache.contracts.RedisServicer;
-import source.auth.dto.contracts.UserDTOContract;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.AuthExceptions;
+import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
+import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
+import com.kerosene.auth.dto.contracts.UserDTOContract;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 @Component
 public class StartLogin {

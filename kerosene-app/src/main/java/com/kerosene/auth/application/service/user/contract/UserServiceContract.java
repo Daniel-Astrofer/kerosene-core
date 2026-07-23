@@ -1,7 +1,7 @@
-package source.auth.application.service.user.contract;
+package com.kerosene.auth.application.service.user.contract;
 
-import source.auth.dto.UserDTO;
-import source.auth.model.entity.UserDataBase;
+import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.auth.model.entity.UserDataBase;
 
 import java.util.List;
 import java.util.Optional;

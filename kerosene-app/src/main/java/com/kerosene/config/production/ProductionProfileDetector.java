@@ -1,4 +1,4 @@
-package source.config.production;
+package com.kerosene.config.production;
 
 import java.util.Arrays;
 import org.springframework.core.env.Environment;

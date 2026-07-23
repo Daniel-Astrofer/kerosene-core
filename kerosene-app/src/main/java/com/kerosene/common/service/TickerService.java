@@ -1,4 +1,4 @@
-package source.common.service;
+package com.kerosene.common.service;
 
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -12,10 +12,10 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import source.auth.application.infra.persistence.jpa.UserRepository;
-import source.auth.model.entity.UserDataBase;
-import source.notification.service.NotificationService;
-import source.common.financial.FinancialTickerPort;
+import com.kerosene.auth.application.infra.persistence.jpa.UserRepository;
+import com.kerosene.auth.model.entity.UserDataBase;
+import com.kerosene.notification.service.NotificationService;
+import com.kerosene.common.financial.FinancialTickerPort;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

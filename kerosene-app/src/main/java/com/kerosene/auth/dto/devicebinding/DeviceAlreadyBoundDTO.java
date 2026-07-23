@@ -1,4 +1,4 @@
-package source.auth.dto.devicebinding;
+package com.kerosene.auth.dto.devicebinding;
 
 /**
  * Payload returned when a deviceInstallId is already bound to another account.
