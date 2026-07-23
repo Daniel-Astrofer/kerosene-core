@@ -1,42 +1,42 @@
-# Lógica de Negócios do Kerosene
+# Business Logic
 
-## Visão geral
+## Overview
 
-O backend do Kerosene opera em modo **KFE-only** para domínio financeiro. A lógica central de dinheiro, saldo, carteira, transação, recebimento, PSBT, eventos fiscais, reservas e reconciliação pertence ao `source.kfe`.
+Finance is **KFE-only**. Money, balance, wallet, tx, receive, PSBT orchestration, tax events, reserves, reconcile live in `com.kerosene.kfe`.
 
-O backend amplo não deve possuir módulos financeiros paralelos. Qualquer comportamento financeiro novo deve nascer no KFE ou sob rotas administrativas KFE, como `/api/admin/kfe/**`.
+No parallel finance modules outside KFE. New money behavior → KFE or `/api/admin/kfe/**`.
 
-## Motor financeiro oficial
+Treasury signing / share custody lives on the **vault mesh** (`kerosene-vault`): FROST shares, Intent/Receipt, Taproot PSBT, day-advance + reshare, governance rewards. KFE does not hold shares.
 
-### KFE — Kerosene Financial Engine
+## KFE
 
-**Função:** gerenciar o processamento transacional central, execução por trilhos e estado financeiro auditável.
+Transactional core, rail exec, auditable money state.
 
-Responsabilidades:
+- wallets + lifecycle
+- spendable / locked / watched balances
+- internal transfers
+- on-chain withdraw
+- Lightning withdraw
+- tx quote/fee
+- payment + receive requests
+- cold/watch-only PSBT
+- tax events from KFE txs
+- admin reserve view
+- audit, statement, reconcile
+- finance outbox
+- Intent submit to vault mesh (when vaultmesh enabled / mesh-only)
 
-- carteiras e ciclo de vida de carteira;
-- saldos disponíveis, bloqueados e observados;
-- transferências internas;
-- saques on-chain;
-- saques Lightning;
-- quote/fee de transação;
-- payment requests e receive requests;
-- PSBT workflow de cold/watch-only wallet;
-- eventos fiscais derivados de transações KFE;
-- visão administrativa de reservas;
-- auditoria, statement e reconciliação;
-- outbox de execução financeira.
+## Rules
 
-## Regras arquiteturais
+1. No finance domain outside `com.kerosene.kfe`.
+2. Public money routes: `/kfe/**`.
+3. Admin money routes: `/api/admin/kfe/**`.
+4. Removed finance modules blocked by `scripts/verify-kfe-only.sh`.
+5. No flag to restore old finance backend.
+6. No mpc-sidecar / HashiCorp Raft as go-live treasury signer.
 
-1. Nenhum pacote fora de `source.kfe` pode implementar domínio financeiro próprio.
-2. Rotas financeiras públicas devem usar `/kfe/**`.
-3. Rotas financeiras administrativas devem usar `/api/admin/kfe/**`.
-4. O retorno de módulos financeiros removidos é bloqueado por `scripts/verify-kfe-only.sh`.
-5. Não existe feature flag para voltar ao backend financeiro antigo.
+## Removed
 
-## Módulos removidos
+Old finance domains purged. Not SoT. Do not restore.
 
-Os antigos domínios financeiros foram expurgados. Eles não são fonte de verdade, não devem ser restaurados e não devem aparecer em código executável.
-
-Use o documento `docs/backend/KFE_ONLY_FINANCIAL_ARCHITECTURE.md` para a política completa de prevenção de regressão.
+See `docs/backend/KFE_ONLY_FINANCIAL_ARCHITECTURE.md` and `docs/backend/INFRASTRUCTURE.md`.

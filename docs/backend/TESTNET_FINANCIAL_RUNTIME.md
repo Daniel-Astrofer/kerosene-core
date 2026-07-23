@@ -1,8 +1,8 @@
-# KFE Testnet Financial Runtime
+# KFE Testnet Runtime
 
-Use this profile when deposits and withdrawals must run through a Bitcoin test network instead of mocked balance injection.
+Use when deposit/withdraw must hit Bitcoin testnet (not mock credit).
 
-Required runtime values:
+Treasury signing on local-full/testnet beta uses **vault mesh** (`vault-mesh-lab` / `kfe.vaultmesh.*`, mesh-only). mpc-sidecar signing stays off.
 
 ```env
 BITCOIN_NETWORK=testnet
@@ -20,13 +20,16 @@ KFE_BITCOIN_CORE_FUNDS_WALLET=kerosene-funds
 KFE_BITCOIN_CORE_PROFIT_WALLET=kerosene-profit
 ```
 
-Runtime behavior:
+Mesh lab (compose) typically uses `BITCOIN_NETWORK=testnet3` + `kfe-service-vaultmesh-testnet3.properties`. App CM may still say `BITCOIN_NETWORK=testnet` (classic testnet3 / Core `chain=test`). Align before blaming rails.
 
-- Startup fails if Bitcoin Core reports a chain different from `BITCOIN_NETWORK`.
-- KFE loads or creates the configured Bitcoin Core wallets idempotently.
-- KFE creates ledger system wallets for global funds and profit with zero balance.
-- Deposits are credited only after the network monitor observes confirmations.
-- `keroseneFeeSats` is credited to the system profit wallet when a transaction settles.
-- No development balance injection or instant fake deposit credit is available.
+## Behavior
 
-For Android wallet testing, every app in the flow must explicitly support classic testnet (`tb1…` / Electrum testnet). Use `BITCOIN_NETWORK=testnet` (LND chain dir name); Core reports `chain=test`.
+- Boot fails if Core chain ≠ `BITCOIN_NETWORK`.
+- KFE load/create Core wallets (idempotent).
+- Ledger system wallets for funds + profit start at 0.
+- Deposit credit only after monitor sees confirms.
+- Settled tx credits `keroseneFeeSats` to profit wallet.
+- No fake/instant deposit credit.
+- Outbound Taproot settlement (when vaultmesh submit enabled) goes Intent → mesh Receipt, not mpc-sidecar.
+
+Android: apps must support classic testnet (`tb1…` / Electrum testnet). Use `BITCOIN_NETWORK=testnet` (LND dir name); Core reports `chain=test`.

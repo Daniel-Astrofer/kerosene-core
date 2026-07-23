@@ -1,25 +1,28 @@
-# KFE-only financial architecture
+# KFE-only Finance
 
-KFE is the only financial system of record in Kerosene.
+KFE is sole money SoT. Package: **`com.kerosene.kfe`**.
 
-Anything related to money, wallet balances, statements, financial audit, payment requests, on-chain execution, Lightning execution, cold-wallet operations, treasury liquidity, reconciliation, idempotency or financial authorization belongs inside `source.kfe`.
+Money, balances, statements, finance audit, payment requests, on-chain/Lightning exec, cold-wallet ops, treasury liquidity, reconcile, idempotency, finance auth → `com.kerosene.kfe`.
 
-## Removed ownership
+**Custody / signing:** vault mesh (`kerosene-vault`) holds FROST shares. KFE is the bank: emits **Intent**, consumes **Receipt**; Taproot PSBT cosign, day-advance + reshare, and governance rewards run on the mesh. See [`INFRASTRUCTURE.md`](INFRASTRUCTURE.md) and [`VAULT_MESH_PLAN.md`](../../VAULT_MESH_PLAN.md).
 
-The broad backend must not own financial behavior through these legacy domains:
+## Forbidden ownership
+
+Broad backend must not own finance via:
 
 - `source.ledger`
 - `source.payments`
 - `source.wallet`
 - `source.bitcoinaccounts`
-- financial controllers/services under `source.transactions`
-- financial treasury logic outside KFE
+- finance under `source.transactions`
+- treasury outside KFE + mesh (no HashiCorp Raft / mpc-sidecar as treasury SoT)
+- package `source.kfe` (renamed to `com.kerosene.kfe`)
 
-The legacy feature flag `kfe.legacy-financial.enabled` is forbidden. KFE-only means there is no runtime switch back to the old financial backend.
+`kfe.legacy-financial.enabled` forbidden. No runtime switch back.
 
-## Canonical API surface
+Deploy cutover: mesh on, mpc signing off (`kfe.vaultmesh.mesh-only`, `kfe.mpc.signing-enabled=false`). No gradual HashiCorp→mesh treasury dual-run.
 
-The financial API surface must be expressed through KFE routes only:
+## API surface
 
 - `/kfe/dashboard`
 - `/kfe/wallets`
@@ -33,26 +36,24 @@ The financial API surface must be expressed through KFE routes only:
 - `/kfe/users/{receiverIdentifier}/receiving-capabilities`
 - `/api/admin/kfe/audit/*`
 
-New financial endpoints must be added under `/kfe` or `/api/admin/kfe`.
+New finance endpoints only under `/kfe` or `/api/admin/kfe`.
 
-## Expurge gate
+Admin mesh health: `GET /api/admin/operations/vault-mesh` (probes mesh `/v1/health`).
 
-Run this before merging financial backend changes:
+## Gate
 
 ```bash
 scripts/verify-kfe-only.sh
 ```
 
-The script fails while any forbidden package, dependency, route or legacy feature flag remains in executable code.
+Fails if forbidden package/dep/route/legacy flag remains.
 
-Documentation can be checked in strict mode after the legacy docs are archived or deleted:
+Strict docs:
 
 ```bash
 STRICT_DOCS=1 scripts/verify-kfe-only.sh
 ```
 
-## Migration rule
+## Migration
 
-Legacy financial data may be read only by one-off migrations into KFE tables. After migration, KFE tables are the only source of truth.
-
-Migration output must be auditable through KFE records, not through resurrected legacy services.
+Legacy data: one-off migrate into KFE tables only. After that, KFE tables are SoT. Audit via KFE records, not revived legacy services. Treasury key material: greenfield mesh DKG — do not migrate Hashicorp-held wallet keys into Java.

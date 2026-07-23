@@ -1,66 +1,48 @@
-# Backend API Documentation
+# Backend API Docs
 
-Esta pasta contém a **documentação operacional canônica por domínio** da API do backend Kerosene.
+Per-domain ops docs for FE/mobile/QA. Auth, headers, body, responses, removed/replaced routes.
 
-Use estes arquivos para integração de frontend, mobile, QA, automação, suporte e revisão de produto. Cada documento separa a API por serviço e deve responder: para que serve, como autenticar, quais headers enviar, qual body usar, quais responses esperar e quais rotas foram removidas ou substituídas.
+Inventory: `docs/backend/API_REFERENCE.md` (does not replace domain docs).
 
-`docs/backend/API_REFERENCE.md` existe como referência consolidada e inventário full-text. Ele não substitui estes documentos por domínio.
+Source: controllers, DTOs, `EndpointPolicyRegistry`, security under `backend/kerosene/` (`com.kerosene.*`; KFE domain `com.kerosene.kfe`).
 
-Fonte principal: controllers, DTOs, `EndpointPolicyRegistry`, configuração de segurança e anotações de autorização em `backend/kerosene/src/main/java/source/**`.
+## KFE-only
 
-## Regra KFE-only
-
-A documentação financeira ativa deve apontar para KFE. Para novos fluxos, use:
+Active finance:
 
 ```text
 /kfe/**
 /api/admin/kfe/**
 ```
 
-Rotas financeiras antigas só podem aparecer como `STALE`, `CONTROLLER_ABSENT`, `REMOVED` ou orientação de migração. Elas não devem ser apresentadas como contrato ativo para clientes externos.
+Old finance routes only as `STALE` / `CONTROLLER_ABSENT` / `REMOVED` / migrate notes — not live client contracts.
 
-## Status da revisão corporativa
+## Files
 
-Os documentos por serviço foram elevados para um padrão prático de integração, cobrindo:
-
-- finalidade do serviço e de cada endpoint ativo;
-- auth efetiva;
-- headers obrigatórios e opcionais;
-- path/query parameters;
-- request body;
-- exemplos de `curl`;
-- response de sucesso com body completo quando o DTO é inferível;
-- explicação campo a campo;
-- status codes;
-- rotas legadas/stale;
-- ambiguidades quando o código não fixa um contrato fechado.
-
-## Arquivos
-
-| Serviço | Arquivo | Estado atual |
+| Service | File | State |
 | --- | --- | --- |
-| Admin Operations | — | Documentação operacional admin fica fora do repositório público. |
-| Auditoria | [AUDIT.md](AUDIT.md) | `4` endpoints ativos em `/api/admin/kfe/audit/**`; rotas antigas `/audit/**` e `/v1/audit/**` reclassificadas como stale. |
-| Auth e Conta | [AUTH.md](AUTH.md) | Endpoints ativos de autenticação, TOTP, passkey, PIN, device-key, recovery e admin access. |
-| Bitcoin Accounts | [BITCOIN_ACCOUNTS.md](BITCOIN_ACCOUNTS.md) | Controller legado ausente; documento aponta para endpoints KFE ativos de carteira, UTXO e PSBT. |
-| Integrações | [INTEGRATIONS.md](INTEGRATIONS.md) | Policy BTCPay existe, mas controller ausente; rota marcada como stale/controller absent. |
-| KFE | [KFE.md](KFE.md) | Endpoints ativos de wallet, dashboard, receiving, transaction, quote, PSBT e auditoria KFE. |
-| Ledger | [LEDGER.md](LEDGER.md) | Controller legado ausente; documento aponta para dashboard/transações/auditoria KFE. |
-| Mining | [MINING.md](MINING.md) | Endpoints ativos documentados. |
-| Notifications | [NOTIFICATIONS.md](NOTIFICATIONS.md) | Endpoints ativos documentados. |
-| Payments | [PAYMENTS.md](PAYMENTS.md) | Fluxo ativo documentado via KFE receiving + KFE transactions; `REMOVED_LEGACY_FINANCIAL_ROUTE` legado removido. |
-| Public, Health e Web | [PUBLIC_HEALTH_WEB.md](PUBLIC_HEALTH_WEB.md) | Endpoints públicos, health, web e actuator documentados. |
-| Soberania e Quorum | [SOVEREIGNTY.md](SOVEREIGNTY.md) | `7` endpoints ativos documentados com HMAC shard-to-shard e admin token. |
-| Transactions, Network e Economy | [TRANSACTIONS.md](TRANSACTIONS.md) | `2` endpoints ativos de Economy + referência aos endpoints KFE de transação; famílias legadas removidas. |
-| Treasury | [TREASURY.md](TREASURY.md) | Controller ausente; DTO restante documentado como stale. |
-| Wallet | [WALLET.md](WALLET.md) | `/wallet/**` legado removido; endpoints KFE ativos de carteira documentados. |
-| DTO Schema Index | [DTO_SCHEMA_INDEX.md](DTO_SCHEMA_INDEX.md) | Índice auxiliar de DTOs. |
+| Admin ops | — | Outside public repo |
+| Audit | [AUDIT.md](AUDIT.md) | `4` live `/api/admin/kfe/audit/**`; old `/audit/**`, `/v1/audit/**` stale |
+| Auth | [AUTH.md](AUTH.md) | login, TOTP, passkey, PIN, device-key, recovery, admin |
+| Bitcoin accounts | [BITCOIN_ACCOUNTS.md](BITCOIN_ACCOUNTS.md) | no controller; → KFE wallet/UTXO/PSBT |
+| Integrations | [INTEGRATIONS.md](INTEGRATIONS.md) | BTCPay policy; no controller; stale |
+| KFE | [KFE.md](KFE.md) | wallet, dashboard, receive, tx, quote, PSBT, audit |
+| Ledger | [LEDGER.md](LEDGER.md) | no controller; → KFE |
+| Mining | [MINING.md](MINING.md) | live |
+| Notifications | [NOTIFICATIONS.md](NOTIFICATIONS.md) | live |
+| Payments | [PAYMENTS.md](PAYMENTS.md) | via KFE receive+tx; legacy removed |
+| Public/health/web | [PUBLIC_HEALTH_WEB.md](PUBLIC_HEALTH_WEB.md) | public, health, web, actuator |
+| Sovereignty | [SOVEREIGNTY.md](SOVEREIGNTY.md) | `7` live; HMAC + admin token |
+| Transactions/economy | [TRANSACTIONS.md](TRANSACTIONS.md) | `2` Economy + KFE tx refs |
+| Treasury / vault mesh | [PUBLIC_HEALTH_WEB.md](PUBLIC_HEALTH_WEB.md), [INFRASTRUCTURE.md](../INFRASTRUCTURE.md) | no legacy treasury controller; custody = vault mesh (`/api/admin/operations/vault-mesh`, mesh `/v1/health`) |
+| Wallet | [WALLET.md](WALLET.md) | `/wallet/**` gone; use KFE |
+| DTO index | [DTO_SCHEMA_INDEX.md](DTO_SCHEMA_INDEX.md) | aux only |
 
-## Regra de leitura dos documentos
+## Read rules
 
-Quando um arquivo marcar um endpoint como `STALE`, `CONTROLLER_ABSENT` ou `DENIED_BY_DEFAULT`, isso significa que ele **não deve ser usado por clientes externos** até que o backend restaure controller, service e policy de segurança.
+`STALE` / `CONTROLLER_ABSENT` / `DENIED_BY_DEFAULT` → do not call from clients until controller+service+policy exist.
 
-Para desenvolvimento de frontend/mobile, os caminhos preferenciais hoje são:
+Prefer:
 
 ```text
 /auth/**
@@ -74,25 +56,19 @@ Para desenvolvimento de frontend/mobile, os caminhos preferenciais hoje são:
 /quorum/**
 ```
 
-## Regras globais relevantes
+## Global
 
-- `Security` aplica CORS explícito, CSRF desabilitado, headers defensivos e sessão stateless.
-- `EndpointPolicyRegistry` classifica endpoints como `PUBLIC`, `ADMIN` ou `AUTHENTICATED`.
-- O fallback de segurança é `anyRequest().denyAll()`.
-- Rotas sem policy declarada podem nem alcançar o controller.
-- `ParanoidSecurityFilter`, `RateLimitFilter` e `JwtAuthenticationFilter` rodam antes dos handlers REST.
-- `ReleaseAttestationFilter` pode exigir headers de attestation quando habilitado por configuração.
+- `Security`: CORS, CSRF off, defensive headers, stateless session
+- `EndpointPolicyRegistry`: `PUBLIC` / `ADMIN` / `AUTHENTICATED`
+- Fallback `anyRequest().denyAll()`
+- No policy → may never hit controller
+- Filters before REST: `ParanoidSecurityFilter`, `RateLimitFilter`, `JwtAuthenticationFilter`
+- `ReleaseAttestationFilter` may require attestation headers when enabled
 
-## Principais correções desta revisão
+## Notes
 
-- `SOVEREIGNTY.md` foi resolvido e expandido com headers HMAC, nonce, timestamp, assinatura, bodies, responses, status e diagrama Mermaid.
-- `AUDIT.md` agora documenta os endpoints ativos reais de `KfeAuditAdminController`; controllers antigos foram marcados como removidos.
-- `BITCOIN_ACCOUNTS.md`, `LEDGER.md`, `PAYMENTS.md`, `TRANSACTIONS.md`, `TREASURY.md` e `WALLET.md` foram saneados para não apresentar controllers ausentes como APIs ativas.
-- `INTEGRATIONS.md` agora deixa claro que a policy BTCPay existe, mas o controller não existe no build atual.
-- `KFE.md` permanece como documentação canônica para carteiras, dashboard, receiving capabilities, transações, quote, cold wallet/UTXO/PSBT e auditoria financeira ativa.
-
-## Pendências honestas
-
-- `DTO_SCHEMA_INDEX.md` ainda é um índice auxiliar e não substitui a documentação por endpoint.
-- Alguns responses que vêm de `Map<String, Object>` não têm schema fechado no controller; nesses casos, o documento marca os campos como inferidos/representativos.
-- Se algum endpoint legado for restaurado no futuro, será necessário atualizar controller, policy e documentação do respectivo serviço.
+- `DTO_SCHEMA_INDEX.md` does not replace endpoint docs
+- `Map<String,Object>` responses may be inferred
+- Restoring legacy needs controller + policy + docs update
+- Admin treasury health is vault-mesh only (HashiCorp Raft admin routes removed; mpc-sidecar not primary signer)
+- Prefer `/api/admin/operations/vault-mesh` + mesh `GET /v1/health` over any Vault Raft readiness probe

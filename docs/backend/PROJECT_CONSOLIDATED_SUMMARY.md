@@ -1,80 +1,57 @@
-# Kerosene: Resumo Consolidado de Status e Roadmap (Junho 2026)
+# Project Status / Roadmap (Jul 2026)
 
-Este documento consolida as auditorias de documentação e UI, o plano de remoção de mocks e o roadmap de implementação atualizado.
+## Exec
 
-## 1. Sumário Executivo do Projeto
+Solid base; moving prototype → beta. Focus: design governance, finance contracts, **vault-mesh treasury**, kill mocks.
 
-O Kerosene atingiu uma base técnica sólida com identidade visual forte e infraestrutura centralizada. O projeto está em fase de transição de "protótipo avançado" para "pronto para beta", com foco atual em governança de design, integridade de contratos financeiros e remoção de comportamentos simulados (mocks).
+UI maturity note: 7.2/10 (strong brand; token drift + privacy gaps).
 
-**Nota de Maturidade UI:** 7.2 / 10 (Forte identidade, inconsistência em tokens e gaps de privacidade).
+## Custody / signing (current)
 
----
+- **Bank:** `kfe-service` / `com.kerosene.kfe` — Intent/Receipt, no FROST shares
+- **Treasury:** vault mesh (`kerosene-vault`) — FROST, Taproot PSBT, day-advance + reshare, governance rewards
+- **Deploy:** local-full mesh on, mpc signing off; HashiCorp Raft not treasury SoT
+- **Nodes:** domestic PCs first-class; SEV preferred seating; TPM ≠ SEV — see `VAULT_MESH_PLAN.md` §3.1
+- **Ceremony:** over-wire FROST DKG (same path prod vs lab; config differs)
 
-## 2. Auditoria de Documentação (Canônica)
+## Canonical docs (`docs/`)
 
-Toda a documentação de produto foi centralizada na pasta `docs/`. Referências desatualizadas (Hydra v5.0) e duplicatas em subpastas do backend foram removidas.
+- `docs/backend/api/README.md` — domain API
+- `docs/backend/API_REFERENCE.md` — inventory
+- `docs/backend/INFRASTRUCTURE.md` — Compose/K8s/mesh/Spring
+- `docs/backend/BUSINESS_LOGIC.md` — finance rules
+- `docs/backend/KFE_ONLY_FINANCIAL_ARCHITECTURE.md` — KFE ownership
+- `docs/backend/KFE_SEPARATION_PHASED_PLAN.md` — Core/KFE split
+- `docs/backend/TROUBLESHOOTING.md` — ops triage
+- `docs/frontend/APP.md` — Flutter/Tor
+- Repo root: `VAULT_MESH_PLAN.md` — mesh architecture baseline
 
-### Arquivos Canônicos:
-- `docs/backend/api/README.md`: Referência de API separada por domínio, extraída de controllers, DTOs e regras de segurança.
-- `docs/backend/API_REFERENCE.md`: Referência consolidada mantida para auditoria e revisão full-text (162 seções HTTP, 161 pares método/caminho únicos).
-- `docs/backend/INFRASTRUCTURE.md`: Infra baseada em Docker Compose, scripts e Spring.
-- `docs/backend/REPOSITORY_ORGANIZATION.md`: Organização do monorepo e regras de mudança estrutural.
-- `docs/backend/BUSINESS_LOGIC.md`: Domínios financeiros e regras principais do backend.
-- `docs/frontend/APP.md`: Detalhes do app Flutter, rotas e Tor relay.
-- `docs/frontend/FRONTEND_DESIGN_SYSTEM.md`: Tokens, convenções e diretrizes de UI.
+## FE / UI
 
----
+**Ok:** dark-first brand; auth (passkey/TOTP); balance mask + haptics.
 
-## 3. Auditoria de Frontend & UI/UX
+**Gaps:**
+- local color/radius tokens vs design system
+- PT hardcoded outside ARB
+- payments UX (quote without recipient check; error timeline)
+- privacy: no global screenshot block, app-switcher blur, clipboard wipe
 
-### Pontos Fortes:
-- Identidade *dark-first* sofisticada (Inter, IBM Plex Serif/Sans Hebrew).
-- Fluxos de Auth (Passkey, TOTP) com alta sensação de segurança (8.0/10).
-- Mascaramento de saldo e uso de haptics na Home.
+## Mock removal
 
-### Gaps Críticos:
-- **Consistência:** Telas criam tokens locais de cores e raios (radii) em vez de usar o design system global.
-- **Internacionalização:** Alta incidência de strings hardcoded em português fora dos arquivos ARB.
-- **UX de Pagamentos (6.2/10):** Fluxo permite gerar quotes sem validar o destinatário; linha do tempo de status confusa em caso de erro.
-- **Privacidade:** Falta bloqueio global de screenshot, blur no app switcher e limpeza automática de clipboard.
+**Done:** remote Bitcoin accounts; receive-request list; no fake ledger success; no fixed FX; real fee sizing.
 
----
+**Todo:** admin screens handle `FutureProvider` errors.
 
-## 4. Plano de Implementação de Mocks (Status)
+## Roadmap
 
-O objetivo é remover simulações de fluxos reais sem afetar o Storybook.
+**P0:** mesh Production Gate (mTLS, honest attestation-by-tier, anti-nonce); unify `X-Device-Hash` FE/BE where still drifting.
 
-### Progresso:
-- **Contas Bitcoin:** Migrado de `LocalBitcoinAccountsService` para `RemoteBitcoinAccountsService` (API Real).
-- **Histórico de recebimentos Bitcoin:** `GET /bitcoin/accounts/{accountId}/receive-requests` implementado no backend legado para listar solicitações recentes, omitindo itens ocultos.
-- **Transações:** Removido o sucesso fabricado em respostas vazias do ledger; agora falha explicitamente.
-- **Preços:** Removidas cotações fixas (USD 65k, BRL 5.0). O app agora exige dados reais do backend.
-- **Taxas:** Tamanho estimado de transação agora deriva de dados reais de fee.
+**P1:** Redis `Idempotency-Key` rule; contract tests ledger/payments; privacy mode for seeds/xpubs.
 
-### Pendências:
-- Ajustar telas Admin para tratar explicitamente estados de erro de `FutureProvider`.
+**P2:** payments flow Recipient→Capabilities→Quote→Auth; token consolidation; CI ban hardcoded strings.
 
----
+**P3:** DB restore + Tor key rotation runbooks; prod required-env checklist.
 
-## 5. Próximos Passos Priorizados (Roadmap)
+**Planned / gaps (not shipped):** full SNP VCEK, Tor mesh in prod, CHANNELS→LND inject.
 
-### Prioridade 0 (Bloqueantes)
-- **Migrações SQL:** Corrigir duplicidade na numeração `V10` do Flyway.
-- **Contratos:** Unificar o uso do header `X-Device-Hash` entre frontend e backend.
-
-### Prioridade 1 (Financeiro & Segurança)
-- **Idempotência:** Formalizar regra única de `Idempotency-Key` via Redis.
-- **Testes de Contrato:** Cobrir todos os endpoints de ledger e pagamentos externos.
-- **Privacy Mode:** Implementar política visual para seeds, xpubs e modo de ocultação global.
-
-### Prioridade 2 (Flutter & UX)
-- **Redesenho de Pagamentos:** Criar fluxo defensivo (Recipient -> Capabilities -> Quote -> Auth Gate).
-- **Consolidação de Tokens:** Unificar raios, sombras e surfaces em um contrato de design único.
-- **CI de Linguagem:** Adicionar check que impede strings hardcoded no repositório.
-
-### Prioridade 3 (Infra & Operação)
-- **Runbooks:** Criar guias de restore de banco e rotação de Tor keys.
-- **Secrets:** Validar checklist de variáveis obrigatórias para o perfil `prod`.
-
----
-*Atualizado em: 15 de Junho de 2026.*
+Updated: 2026-07-23.
