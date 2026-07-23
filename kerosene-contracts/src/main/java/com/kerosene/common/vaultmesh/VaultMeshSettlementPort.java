@@ -21,4 +21,32 @@ public interface VaultMeshSettlementPort {
                 null,
                 System.currentTimeMillis());
     }
+
+    /**
+     * {@code GET /v1/day/current} — mesh ledger day vs UTC calendar (stale → not up-to-date).
+     */
+    default VaultMeshDayStatus getDayStatus() {
+        return VaultMeshDayStatus.failed("MESH_DAY_UNSUPPORTED");
+    }
+
+    /**
+     * {@code POST /v1/day/vote} — record a governance vote for {@code dayEpoch} ({@code YYYY-MM-DD}).
+     */
+    default VaultMeshDayAdvanceResult voteDay(String voter, String dayEpoch) {
+        return VaultMeshDayAdvanceResult.failed("MESH_DAY_UNSUPPORTED");
+    }
+
+    /**
+     * {@code POST /v1/day/advance} — advance ledger day when quorum is met (triggers daily reshare hook).
+     */
+    default VaultMeshDayAdvanceResult advanceDay() {
+        return VaultMeshDayAdvanceResult.failed("MESH_DAY_UNSUPPORTED");
+    }
+
+    /**
+     * {@code POST /v1/reshare/trigger} — explicit FROST reshare (manual policy or ops).
+     */
+    default VaultMeshReshareResult triggerReshare(String reason) {
+        return VaultMeshReshareResult.failed("MESH_RESHARE_UNSUPPORTED");
+    }
 }
