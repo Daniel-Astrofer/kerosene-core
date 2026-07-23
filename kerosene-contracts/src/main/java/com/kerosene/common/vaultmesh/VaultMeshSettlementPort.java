@@ -49,4 +49,14 @@ public interface VaultMeshSettlementPort {
     default VaultMeshReshareResult triggerReshare(String reason) {
         return VaultMeshReshareResult.failed("MESH_RESHARE_UNSUPPORTED");
     }
+
+    /**
+     * {@code GET /v1/bitcoin/deposit} — shared Taproot deposit address used for USERS deposits.
+     *
+     * <p>Product policy: users must deposit to shared Taproot group key ({@code tb1p} / {@code tr()}),
+     * not to any xpub-derived receive address.
+     */
+    default VaultMeshDepositInfo getUsersDepositAddress() {
+        return null;
+    }
 }
