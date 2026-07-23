@@ -127,15 +127,15 @@ Settlement signing for treasury Taproot PSBT goes through **vault mesh Intent/Re
 | Epoch | day-advance + reshare policy |
 | Rewards | governance rewards to active vault operators |
 | Auth kfe↔mesh | lab: `X-Vault-Token`; go-live: mTLS (`kfe.vaultmesh.tls.*`) |
-| Gaps (planned) | full SNP VCEK verification; CHANNELS→LND inject; deposit xpub vs mesh `tb1p` — see Gap notes / `VAULT_MESH_PLAN.md` |
+| Gaps (planned) | full SNP VCEK verification (fail-closed without HW); CHANNELS→LND inject (fail-closed stub, no fake capital); deposit xpub ≠ mesh `tb1p` (client USERS-only PSBT guard) — see Gap notes / `VAULT_MESH_PLAN.md` |
 
 ### Gaps (honest — not shipped)
 
 | Gap | Status now | Notes |
 | --- | --- | --- |
-| **SNP VCEK / full HW attestation** | planned | Staging stub / fail-closed without HW; do not claim production SNP quotes |
-| **CHANNELS → LND inject** | planned | CHANNELS bucket + LN gateway fail-closed when LND off; no automatic mesh→LND funding inject |
-| **Deposit xpub vs `tb1p`** | planned | Mesh deposit is Taproot `GET /v1/bitcoin/deposit` (`tr()` / `tb1p…`); KFE platform xpub issuance is separate / not derived from mesh group key yet |
+| **SNP VCEK / full HW attestation** | planned (fail-closed) | Staging stub / fail-closed without HW; **do not** claim production SNP quotes |
+| **CHANNELS → LND inject** | planned (fail-closed stub) | `ChannelsMeshInjectGateway` refuses `CHANNELS_MESH_INJECT_NOT_WIRED`; go-live requires inject flag + disables auto-open; LND wallet balance ≠ mesh CHANNELS capital |
+| **Deposit xpub vs `tb1p`** | planned (policy guard) | Mesh deposit is Taproot `GET /v1/bitcoin/deposit` (`tr()` / `tb1p…`); KFE platform xpub issuance is separate; vaultmesh client rejects non-`USERS` shared-Taproot PSBT |
 
 ## Security model
 
@@ -151,7 +151,7 @@ Settlement signing for treasury Taproot PSBT goes through **vault mesh Intent/Re
 | --- | --- |
 | Prices | BTC ticker |
 | Accounting / audit | Merkle audit, history cleanup, reconcile / shadow balance |
-| Security | time drift, attestation probes, sovereignty heartbeat |
+| Security | time drift, attestation probes (legacy HashiCorp heartbeat removed) |
 | Transactions | liquidity / inbound / pending / activation / finance reconcile / provider outbox |
 | Treasury | integrity checks; mesh day-rotation when enabled |
 | Bitcoin accounts | retention, receive/cold monitors, PSBT expiry |

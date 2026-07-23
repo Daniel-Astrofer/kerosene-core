@@ -52,6 +52,6 @@ UI maturity note: 7.2/10 (strong brand; token drift + privacy gaps).
 
 **P3:** DB restore + Tor key rotation runbooks; prod required-env checklist.
 
-**Planned / gaps (not shipped):** full SNP VCEK; CHANNELS→LND inject; deposit xpub vs mesh `tb1p`. Tor ceremony path exists (mTLS); prod deploy still often clearnet lab.
+**Planned / gaps (not shipped):** full SNP VCEK (fail-closed without HW); CHANNELS→LND inject (fail-closed stub — no fake channel capital); deposit xpub ≠ mesh `tb1p` (USERS-only PSBT guard). Tor ceremony path exists (mTLS); Intent consume quorum + cross-node day votes landed; prod deploy still often clearnet lab.
 
 Updated: 2026-07-23.

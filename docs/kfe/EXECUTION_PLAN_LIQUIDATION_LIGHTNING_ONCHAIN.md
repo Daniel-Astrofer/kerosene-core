@@ -228,7 +228,7 @@ controller/dto → application → domain/ledger → ports → adapters → infr
 - *Status fase:** `NOT_STARTED`
 
 ### Phase 6 — Gestão de canais (doc §3)
-- *Trabalho:** domínio `ChannelPolicy`, jobs, integração LND, funding PSBT onchain via **vault mesh** (não mpc-sidecar), auditoria. CHANNELS→LND inject = planned/gap se ainda não wired.
+- *Trabalho:** domínio `ChannelPolicy`, jobs, integração LND, funding PSBT onchain via **vault mesh** (não mpc-sidecar), auditoria. CHANNELS→LND inject = **fail-closed stub** (`ChannelsMeshInjectGateway` / `CHANNELS_MESH_INJECT_NOT_WIRED`); full inject still planned — do not invent channel capital from LND wallet alone.
 - *Status fase:** `PARTIAL` (decisions + LND open/close/ppm + admin API; rebalance execution queued)
 - `application/channel/KfeChannelDecisionService`
 - `service/KfeChannelLifecycleService`
