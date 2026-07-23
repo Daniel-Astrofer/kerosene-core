@@ -5,7 +5,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import source.common.financial.FinancialAuditIntegrityPort;
+import source.sovereign.quorum.QuorumMembership;
 import source.sovereign.quorum.QuorumSyncService;
+import source.sovereign.quorum.QuorumTopology;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -29,8 +31,10 @@ public class SovereigntyStatusController {
 
     private final RemoteAttestationService attestationService;
     private final QuorumSyncService quorumSyncService;
+    private final QuorumMembership quorumMembership;
     private final FinancialAuditIntegrityPort financialAuditIntegrityPort;
     private final TelemetryService telemetryService;
+    private final boolean allowLocalSimulation;
     private static final Instant SERVER_START_TIME = Instant.now();
 
     @Value("${security.admin.attestation-token:}")
@@ -39,12 +43,16 @@ public class SovereigntyStatusController {
     public SovereigntyStatusController(
             RemoteAttestationService attestationService,
             QuorumSyncService quorumSyncService,
+            QuorumMembership quorumMembership,
             FinancialAuditIntegrityPort financialAuditIntegrityPort,
-            TelemetryService telemetryService) {
+            TelemetryService telemetryService,
+            @Value("${quorum.allow-local-simulation:false}") boolean allowLocalSimulation) {
         this.attestationService = attestationService;
         this.quorumSyncService = quorumSyncService;
+        this.quorumMembership = quorumMembership;
         this.financialAuditIntegrityPort = financialAuditIntegrityPort;
         this.telemetryService = telemetryService;
+        this.allowLocalSimulation = allowLocalSimulation;
     }
 
     /**
@@ -60,13 +68,22 @@ public class SovereigntyStatusController {
         long secondsAgo = Duration.between(lastCheck, Instant.now()).getSeconds();
         Map<String, Object> tpm = new LinkedHashMap<>();
 
-        String status = "VERIFIED";
+        boolean simulatedAttestation = attestationService.isSimulated();
+        String status;
         if (!attestationService.isIntegrityOk()) {
             status = "COMPROMISED (STALL MODE)";
+        } else if (simulatedAttestation) {
+            status = "SIMULATED";
+        } else {
+            status = "VERIFIED";
         }
 
         tpm.put("status", status);
-        tpm.put("chip", "TPM 2.0");
+        tpm.put("hardwareBacked", !simulatedAttestation);
+        tpm.put("chip", simulatedAttestation ? "SIMULATED" : "TPM 2.0");
+        if (simulatedAttestation) {
+            tpm.put("message", "TPM quote is simulated — not hardware-verified");
+        }
         tpm.put("lastValidatedSecondsAgo", secondsAgo);
         tpm.put("totalChecks", attestationService.getTotalChecks());
         tpm.put("quoteHash", abbreviate(attestationService.getLastQuoteHash()));
@@ -75,19 +92,31 @@ public class SovereigntyStatusController {
         tpm.put("coldBootRisk", attestationService.isTmeEnabled() ? "MITIGATED" : "WARNING — Enable TME in BIOS");
         response.put("hardwareAttestation", tpm);
 
-        // 2. Quorum Sync
+        // 2. Quorum Sync — never claim healthy quorum when only local simulation
         Map<String, Object> quorum = new LinkedHashMap<>();
         QuorumSyncService.QuorumHealth quorumHealth = quorumSyncService.checkQuorumHealth();
-        quorum.put("status", quorumSyncService.isFailStopMode()
-                ? "FAIL-STOP"
-                : (quorumHealth.quorumAvailable() ? "ACTIVE" : "DEGRADED"));
+        QuorumTopology topology = quorumMembership.current();
+        boolean simulationOnly = topology.remotePeers().isEmpty()
+                && (allowLocalSimulation || quorumHealth.totalNodes() <= 1);
+        if (quorumSyncService.isFailStopMode()) {
+            quorum.put("status", "FAIL-STOP");
+            quorum.put("quorumHealthy", false);
+        } else if (simulationOnly) {
+            quorum.put("status", "SIMULATION");
+            quorum.put("quorumHealthy", false);
+            quorum.put("message", "Local simulation only — not a real multi-node quorum");
+        } else {
+            quorum.put("status", quorumHealth.quorumAvailable() ? "ACTIVE" : "DEGRADED");
+            quorum.put("quorumHealthy", quorumHealth.quorumAvailable());
+        }
         quorum.put("activeNodes", quorumHealth.activeNodes());
         quorum.put("failStopMode", quorumSyncService.isFailStopMode());
         quorum.put("transactionsAccepted", quorumSyncService.getTotalAccepted());
         quorum.put("requiredNodes", quorumHealth.requiredNodes());
         quorum.put("totalNodes", quorumHealth.totalNodes());
-        quorum.put("remotePeers", Math.max(0, quorumHealth.totalNodes() - 1));
+        quorum.put("remotePeers", topology.remotePeers().size());
         quorum.put("consensusAlgorithm", "Raft-2PC");
+        quorum.put("simulationOnly", simulationOnly);
         response.put("networkConsensus", quorum);
 
         // 3. Merkle Audit

@@ -24,22 +24,34 @@ public class TextPropertyProductionSafetyCheck extends AbstractProductionSafetyC
             context.addViolation("webauthn.relying-party-id must be a production host");
         }
 
-        String quorumPeers = context.environment().getProperty("quorum.shard.urls", "");
-        if (quorumPeers.isBlank()) {
-            context.addViolation("quorum.shard.urls must define remote shard peers");
+        boolean meshOnly = context.environment().getProperty("kfe.vaultmesh.mesh-only", Boolean.class, false);
+        boolean meshEnabled = context.environment().getProperty("kfe.vaultmesh.enabled", Boolean.class, false);
+
+        if (meshOnly || meshEnabled) {
+            if (context.environment().getProperty("kfe.vaultmesh.base-url", "").isBlank()) {
+                context.addViolation("kfe.vaultmesh.base-url must be configured");
+            }
+        } else {
+            String quorumPeers = context.environment().getProperty("quorum.shard.urls", "");
+            if (quorumPeers.isBlank()) {
+                context.addViolation("quorum.shard.urls must define remote shard peers");
+            }
         }
 
-        for (String propertyName : java.util.List.of(
+        java.util.List<String> required = new java.util.ArrayList<>(java.util.List.of(
                 "lightning.lnd.host",
                 "lightning.lnd.tls.cert-path",
                 "bitcoin.platform.master-xpub",
-                "quorum.psbt.signer-urls",
-                "quorum.psbt.signer-ids",
-                "shard.attestation.secret",
-                "mpc.sidecar.host",
-                "mpc.sidecar.tls.cert-chain",
-                "mpc.sidecar.tls.private-key",
-                "mpc.sidecar.tls.trust-cert-collection")) {
+                "shard.attestation.secret"));
+        if (!(meshOnly || meshEnabled)) {
+            required.add("quorum.psbt.signer-urls");
+            required.add("quorum.psbt.signer-ids");
+            required.add("mpc.sidecar.host");
+            required.add("mpc.sidecar.tls.cert-chain");
+            required.add("mpc.sidecar.tls.private-key");
+            required.add("mpc.sidecar.tls.trust-cert-collection");
+        }
+        for (String propertyName : required) {
             if (context.environment().getProperty(propertyName, "").isBlank()) {
                 context.addViolation(propertyName + " must be configured");
             }

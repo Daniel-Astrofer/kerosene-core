@@ -10,7 +10,7 @@ import source.common.financial.FinancialOperationsAdminPort;
 import source.common.infra.health.OperationalHealthService;
 import source.common.infra.health.OperationalHealthSnapshot;
 import source.common.release.ReleaseManifestService;
-import source.security.vault.VaultRaftHealthService;
+import source.security.vault.VaultMeshHealthService;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,19 +24,19 @@ public class AdminOperationsController {
 
     private final OperationalHealthService operationalHealthService;
     private final ObjectProvider<FinancialOperationsAdminPort> financialOperationsAdminPort;
-    private final VaultRaftHealthService vaultRaftHealthService;
+    private final VaultMeshHealthService vaultMeshHealthService;
     private final ReleaseManifestService releaseManifestService;
     private final MobileDownloadService mobileDownloadService;
 
     public AdminOperationsController(
             OperationalHealthService operationalHealthService,
             ObjectProvider<FinancialOperationsAdminPort> financialOperationsAdminPort,
-            VaultRaftHealthService vaultRaftHealthService,
+            VaultMeshHealthService vaultMeshHealthService,
             ReleaseManifestService releaseManifestService,
             MobileDownloadService mobileDownloadService) {
         this.operationalHealthService = operationalHealthService;
         this.financialOperationsAdminPort = financialOperationsAdminPort;
-        this.vaultRaftHealthService = vaultRaftHealthService;
+        this.vaultMeshHealthService = vaultMeshHealthService;
         this.releaseManifestService = releaseManifestService;
         this.mobileDownloadService = mobileDownloadService;
     }
@@ -48,7 +48,7 @@ public class AdminOperationsController {
         payload.put("health", operationalHealthService.dependencies());
         payload.put("blockchain", blockchain());
         payload.put("lightning", lightning());
-        payload.put("vaultRaft", vaultRaftHealthService.snapshot());
+        payload.put("vaultMesh", vaultMeshHealthService.snapshot().asMap());
         payload.put("release", releaseManifestService.snapshot());
         payload.put("mobile", mobileDownloadService.releaseInfo());
         return payload;
@@ -77,9 +77,9 @@ public class AdminOperationsController {
         return port.lightning();
     }
 
-    @GetMapping("/vault-raft")
-    public VaultRaftHealthService.VaultRaftSnapshot vaultRaft() {
-        return vaultRaftHealthService.snapshot();
+    @GetMapping("/vault-mesh")
+    public Map<String, Object> vaultMesh() {
+        return vaultMeshHealthService.snapshot().asMap();
     }
 
     @GetMapping("/release")

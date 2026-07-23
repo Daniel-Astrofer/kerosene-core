@@ -12,8 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import source.config.production.ProductionProfileDetector;
 import source.config.production.ProductionSafetyCheckChain;
-import source.security.MasterKeyMemoryStore;
-import source.security.vault.VaultRaftHealthService;
+import source.security.vault.VaultMeshHealthService;
 import source.common.financial.FinancialRailHealthPort;
 
 import java.net.HttpURLConnection;
@@ -37,6 +36,7 @@ public class OperationalHealthService {
     private static final String DOWN = "DOWN";
     private static final String DEGRADED = "DEGRADED";
     private static final String UNKNOWN = "UNKNOWN";
+    private static final String DISABLED = "DISABLED";
 
     private static final List<String> REQUIRED_CONFIG = List.of(
             "spring.datasource.url",
@@ -60,9 +60,8 @@ public class OperationalHealthService {
     private final StringRedisTemplate redisTemplate;
     private final ApplicationAvailability applicationAvailability;
     private final Environment environment;
-    private final MasterKeyMemoryStore masterKeyMemoryStore;
     private final ObjectProvider<TorHealthIndicator> torHealthIndicator;
-    private final ObjectProvider<VaultRaftHealthService> vaultRaftHealthService;
+    private final ObjectProvider<VaultMeshHealthService> vaultMeshHealthService;
     private final ObjectProvider<FinancialRailHealthPort> financialRailHealthPort;
     private final ProductionProfileDetector productionProfileDetector;
     private final ProductionSafetyCheckChain productionSafetyCheckChain;
@@ -74,9 +73,8 @@ public class OperationalHealthService {
             StringRedisTemplate redisTemplate,
             ApplicationAvailability applicationAvailability,
             Environment environment,
-            MasterKeyMemoryStore masterKeyMemoryStore,
             ObjectProvider<TorHealthIndicator> torHealthIndicator,
-            ObjectProvider<VaultRaftHealthService> vaultRaftHealthService,
+            ObjectProvider<VaultMeshHealthService> vaultMeshHealthService,
             ObjectProvider<FinancialRailHealthPort> financialRailHealthPort,
             ProductionProfileDetector productionProfileDetector,
             ProductionSafetyCheckChain productionSafetyCheckChain,
@@ -86,9 +84,8 @@ public class OperationalHealthService {
         this.redisTemplate = redisTemplate;
         this.applicationAvailability = applicationAvailability;
         this.environment = environment;
-        this.masterKeyMemoryStore = masterKeyMemoryStore;
         this.torHealthIndicator = torHealthIndicator;
-        this.vaultRaftHealthService = vaultRaftHealthService;
+        this.vaultMeshHealthService = vaultMeshHealthService;
         this.financialRailHealthPort = financialRailHealthPort;
         this.productionProfileDetector = productionProfileDetector;
         this.productionSafetyCheckChain = productionSafetyCheckChain;
@@ -109,9 +106,7 @@ public class OperationalHealthService {
         checks.put("database", checkDatabase(true));
         checks.put("schema", checkSchema(true));
         checks.put("redis", checkRedis(true));
-        checks.put("vault", checkVault(true));
-        checks.put("vaultRaft", checkVaultRaft(vaultRaftRequired()));
-        checks.put("mpcSidecar", checkMpcSidecar(true));
+        putCustodyChecks(checks);
         checks.put("tor", checkTor(torRequired()));
         checks.put("lightning", checkLightning(lightningRequired()));
         checks.put("storage", checkStorage(storageRequired()));
@@ -128,9 +123,7 @@ public class OperationalHealthService {
         checks.put("schema", checkSchema(true));
         checks.put("redis", checkRedis(true));
         checks.put("configuration", checkConfiguration(true));
-        checks.put("vault", checkVault(vaultEnabled()));
-        checks.put("vaultRaft", checkVaultRaft(vaultRaftRequired()));
-        checks.put("mpcSidecar", checkMpcSidecar(true));
+        putCustodyChecks(checks);
         checks.put("tor", checkTor(torRequired()));
         checks.put("lightning", checkLightning(lightningRequired()));
         checks.put("bitcoinProvider", checkBitcoinProvider(false));
@@ -141,6 +134,16 @@ public class OperationalHealthService {
         checks.put("storage", checkStorage(storageRequired()));
         checks.put("authProvider", checkAuthProvider(true));
         return snapshot(aggregate(checks, false), checks);
+    }
+
+    /**
+     * Custody governance health is vault-mesh only ({@code GET /v1/health}).
+     * HashiCorp Vault / Raft / mpc-sidecar are not part of readiness or admin health aggregation.
+     */
+    private void putCustodyChecks(Map<String, DependencyHealth> checks) {
+        boolean meshEnabled = vaultMeshEnabled();
+        // Optional when mesh is off (lab without vaultmesh); critical when enabled/mesh-only.
+        checks.put("vaultMesh", checkVaultMesh(meshEnabled || vaultMeshOnly()));
     }
 
     private DependencyHealth checkProcess() {
@@ -270,116 +273,61 @@ public class OperationalHealthService {
                 details));
     }
 
-    private DependencyHealth checkVault(boolean critical) {
-        long start = System.nanoTime();
-        boolean enabled = vaultEnabled();
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("enabled", enabled);
-        if (!enabled) {
-            return record(new DependencyHealth(
-                    "vault",
-                    UP,
-                    critical,
-                    elapsedMs(start),
-                    "Vault bootstrap is disabled for this profile",
-                    details));
-        }
 
-        boolean endpointConfigured = hasText(environment.getProperty("vault.url"))
-                || hasText(environment.getProperty("vault.onion.file"));
-        boolean keyReady = masterKeyMemoryStore.isReady();
-        details.put("endpointConfigured", endpointConfigured);
-        details.put("masterKeyReady", keyReady);
-
-        boolean up = endpointConfigured && keyReady;
-        return record(new DependencyHealth(
-                "vault",
-                up ? UP : DOWN,
-                critical,
-                elapsedMs(start),
-                up ? "Vault master key is provisioned in memory" : "Vault bootstrap is not ready",
-                details));
-    }
-
-    private DependencyHealth checkVaultRaft(boolean critical) {
+    private DependencyHealth checkVaultMesh(boolean critical) {
         long start = System.nanoTime();
         try {
-            VaultRaftHealthService service = vaultRaftHealthService.getIfAvailable();
+            VaultMeshHealthService service = vaultMeshHealthService.getIfAvailable();
             if (service == null) {
+                if (!critical) {
+                    return record(new DependencyHealth(
+                            "vaultMesh",
+                            UNKNOWN,
+                            false,
+                            elapsedMs(start),
+                            "Vault mesh health service is not available",
+                            Map.of("required", false)));
+                }
                 return record(new DependencyHealth(
-                        "vaultRaft",
-                        critical ? DOWN : UNKNOWN,
-                        critical,
+                        "vaultMesh",
+                        DOWN,
+                        true,
                         elapsedMs(start),
-                        "Vault Raft health service is not available",
-                        Map.of("required", critical)));
+                        "Vault mesh health service is required but not available",
+                        Map.of("required", true)));
             }
             var snapshot = service.snapshot();
+            String status = snapshot.status();
+            if (DISABLED.equals(status) && !critical) {
+                status = UP;
+            } else if (DISABLED.equals(status) && critical) {
+                status = DOWN;
+            }
+            Map<String, Object> details = new LinkedHashMap<>();
+            if (snapshot.details() != null) {
+                details.putAll(snapshot.details());
+            }
+            details.put("nodeId", snapshot.nodeId() != null ? snapshot.nodeId() : "");
+            details.put("nodeStatus", snapshot.nodeStatus() != null ? snapshot.nodeStatus() : "");
+            details.put("attestationMode", snapshot.attestationMode() != null ? snapshot.attestationMode() : "");
+            details.put("peerCount", snapshot.peerCount());
+            details.put("dayEpoch", snapshot.dayEpoch() != null ? snapshot.dayEpoch() : "");
+            details.put("dayUpToDate", snapshot.dayUpToDate());
+            details.put("meshOnly", snapshot.meshOnly());
             return record(new DependencyHealth(
-                    "vaultRaft",
-                    snapshot.status(),
+                    "vaultMesh",
+                    status,
                     critical,
                     elapsedMs(start),
                     snapshot.message(),
-                    Map.of(
-                            "initialized", snapshot.initialized(),
-                            "sealed", snapshot.sealed(),
-                            "leaderAddress", snapshot.leaderAddress() != null ? snapshot.leaderAddress() : "",
-                            "votingServers", snapshot.votingServers(),
-                            "expectedServers", snapshot.expectedServers(),
-                            "servers", snapshot.servers())));
-        } catch (Exception exception) {
-            return record(down("vaultRaft", critical, start, "Vault Raft quorum probe failed", exception));
-        }
-    }
-
-    private DependencyHealth checkMpcSidecar(boolean critical) {
-        long start = System.nanoTime();
-        String host = environment.getProperty("mpc.sidecar.host", "localhost");
-        int port = environment.getProperty("mpc.sidecar.port", Integer.class, 50051);
-        boolean tlsEnabled = environment.getProperty("mpc.sidecar.tls.enabled", Boolean.class, true);
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("host", host);
-        details.put("port", port);
-        details.put("tlsEnabled", tlsEnabled);
-
-        if (tlsEnabled) {
-            List<String> missingFiles = List.of(
-                            "mpc.sidecar.tls.cert-chain",
-                            "mpc.sidecar.tls.private-key",
-                            "mpc.sidecar.tls.trust-cert-collection")
-                    .stream()
-                    .filter(property -> !isReadableFile(environment.getProperty(property)))
-                    .toList();
-            if (!missingFiles.isEmpty()) {
-                details.put("missingReadableFiles", missingFiles);
-                return record(new DependencyHealth(
-                        "mpcSidecar",
-                        DOWN,
-                        critical,
-                        elapsedMs(start),
-                        "MPC sidecar mTLS files are not readable",
-                        details));
-            }
-        }
-
-        if (!tcpConnects(host, port, Duration.ofSeconds(2))) {
-            return record(new DependencyHealth(
-                    "mpcSidecar",
-                    DOWN,
-                    critical,
-                    elapsedMs(start),
-                    "MPC sidecar TCP endpoint is unreachable",
                     details));
+        } catch (Exception exception) {
+            return record(down("vaultMesh", critical, start, "Vault mesh health probe failed", exception));
         }
-        return record(new DependencyHealth(
-                "mpcSidecar",
-                UP,
-                critical,
-                elapsedMs(start),
-                "MPC sidecar endpoint is reachable",
-                details));
     }
+
+
+
 
     private DependencyHealth checkTor(boolean critical) {
         long start = System.nanoTime();
@@ -780,13 +728,15 @@ public class OperationalHealthService {
         return environment.getProperty("lightning.lnd.enabled", Boolean.class, false);
     }
 
-    private boolean vaultEnabled() {
-        return environment.getProperty("vault.enabled", Boolean.class, false);
+
+    private boolean vaultMeshEnabled() {
+        return environment.getProperty("kfe.vaultmesh.enabled", Boolean.class, false);
     }
 
-    private boolean vaultRaftRequired() {
-        return environment.getProperty("vault.raft.required", Boolean.class, false);
+    private boolean vaultMeshOnly() {
+        return environment.getProperty("kfe.vaultmesh.mesh-only", Boolean.class, false);
     }
+
 
     private boolean externalChecksEnabled() {
         return environment.getProperty("operational.health.external-checks.enabled", Boolean.class, false);

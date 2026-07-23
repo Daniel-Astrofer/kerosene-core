@@ -23,10 +23,22 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
             }
         }
 
-        requireTrue(context, "vault.enabled", false);
-        requireTrue(context, "vault.raft.enabled", false);
-        requireTrue(context, "vault.raft.required", false);
-        requireTrue(context, "mpc.sidecar.tls.enabled", true);
+        boolean meshOnly = context.environment().getProperty("kfe.vaultmesh.mesh-only", Boolean.class, false);
+        boolean meshEnabled = context.environment().getProperty("kfe.vaultmesh.enabled", Boolean.class, false);
+
+        if (meshOnly || meshEnabled) {
+            requireTrue(context, "kfe.vaultmesh.enabled", false);
+            if (meshOnly) {
+                if (context.environment().getProperty("kfe.mpc.signing-enabled", Boolean.class, true)) {
+                    context.addViolation("kfe.mpc.signing-enabled must be false under mesh-only");
+                }
+            }
+            // Mesh owns custody governance — do not require HashiCorp Raft or mpc-sidecar.
+        } else {
+            // Legacy non-mesh profiles still arm HashiCorp vault for ops secrets (not treasury mesh).
+            requireTrue(context, "vault.enabled", false);
+        }
+
         requireTrue(context, "lightning.lnd.enabled", false);
         requireTrue(context, "bitcoin.rpc.enabled", false);
         requireTrue(context, "bitcoin.rpc.required", false);
@@ -34,7 +46,9 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
         requireTrue(context, "tor.health.required", false);
         requireTrue(context, "release.attestation.required", false);
         requireTrue(context, "release.attestation.remote.enabled", false);
-        requireTrue(context, "quorum.psbt.require-signer-identity", true);
+        if (!(meshOnly || meshEnabled)) {
+            requireTrue(context, "quorum.psbt.require-signer-identity", true);
+        }
     }
 
     private void requireTrue(ProductionSafetyContext context, String propertyName, boolean defaultValue) {

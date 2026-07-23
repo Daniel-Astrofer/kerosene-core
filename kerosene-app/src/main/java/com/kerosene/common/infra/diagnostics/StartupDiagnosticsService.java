@@ -21,15 +21,9 @@ public class StartupDiagnosticsService {
     private static final List<String> REQUIRED_REDIS_PROPERTIES = List.of(
             "spring.data.redis.host",
             "spring.data.redis.port");
-    private static final List<String> REQUIRED_VAULT_PROPERTIES = List.of(
-            "vault.enabled",
-            "vault.raft.enabled",
-            "vault.raft.required",
-            "vault.raft.url");
-    private static final List<String> REQUIRED_MPC_PROPERTIES = List.of(
-            "mpc.sidecar.host",
-            "mpc.sidecar.port",
-            "mpc.sidecar.tls.enabled");
+    private static final List<String> REQUIRED_VAULT_MESH_PROPERTIES = List.of(
+            "kfe.vaultmesh.enabled",
+            "kfe.vaultmesh.base-url");
     private static final List<String> REQUIRED_LND_PROPERTIES = List.of(
             "lightning.lnd.enabled",
             "lightning.lnd.host",
@@ -49,27 +43,18 @@ public class StartupDiagnosticsService {
             "bitcoin.rpc.password",
             "bitcoin.platform.master-xpub",
             "shard.attestation.secret",
-            "quorum.shard.urls",
-            "mpc.sidecar.tls.cert-chain",
-            "mpc.sidecar.tls.private-key",
-            "mpc.sidecar.tls.trust-cert-collection",
+            "kfe.vaultmesh.base-url",
             "lightning.lnd.host",
-            "lightning.lnd.tls.cert-path",
-            "quorum.psbt.signer-urls",
-            "quorum.psbt.signer-ids");
+            "lightning.lnd.tls.cert-path");
     private static final List<String> PROD_TRUE_PROPERTIES = List.of(
-            "vault.enabled",
-            "vault.raft.enabled",
-            "vault.raft.required",
-            "mpc.sidecar.tls.enabled",
+            "kfe.vaultmesh.enabled",
             "lightning.lnd.enabled",
             "bitcoin.rpc.enabled",
             "bitcoin.rpc.required",
             "bitcoin.rpc.pruned-required",
             "tor.health.required",
             "release.attestation.required",
-            "release.attestation.remote.enabled",
-            "quorum.psbt.require-signer-identity");
+            "release.attestation.remote.enabled");
     private static final List<String> PROD_FALSE_PROPERTIES = List.of(
             "bitcoin.mock-mode",
             "custody.mock-mode",
@@ -94,8 +79,7 @@ public class StartupDiagnosticsService {
         checks.add(checkProfiles());
         checks.add(requiredProperties("datasource", REQUIRED_DATASOURCE_PROPERTIES));
         checks.add(requiredProperties("redis", REQUIRED_REDIS_PROPERTIES));
-        checks.add(requiredProperties("vault", REQUIRED_VAULT_PROPERTIES));
-        checks.add(requiredProperties("mpc", REQUIRED_MPC_PROPERTIES));
+        checks.add(requiredProperties("vaultMesh", REQUIRED_VAULT_MESH_PROPERTIES));
         checks.add(requiredProperties("lnd", REQUIRED_LND_PROPERTIES));
         checks.add(requiredProperties("kfe", REQUIRED_KFE_PROPERTIES));
         checks.add(checkFlywayBaselineSafety());

@@ -42,6 +42,7 @@ public class RemoteAttestationService {
     private String bootQuoteHash;
     private volatile boolean integrityOk = true;
     private volatile boolean tmeEnabled = false; // Total Memory Encryption (Cold Boot mitigation)
+    private volatile boolean simulated = false;
     private volatile Instant lastCheckedAt = Instant.now();
     private volatile String lastQuoteHash = "";
     private final AtomicLong totalChecks = new AtomicLong();
@@ -69,6 +70,11 @@ public class RemoteAttestationService {
 
     public boolean isTmeEnabled() {
         return tmeEnabled;
+    }
+
+    /** True when TPM quotes are software-simulated (no hardware attestation). */
+    public boolean isSimulated() {
+        return simulated;
     }
 
     public Instant getLastCheckedAt() {
@@ -226,6 +232,7 @@ public class RemoteAttestationService {
             readProc.waitFor();
 
             byte[] quoteHash = digest.digest();
+            simulated = false;
             return HexFormat.of().formatHex(quoteHash);
 
         } catch (IOException | InterruptedException e) {
@@ -246,6 +253,7 @@ public class RemoteAttestationService {
      * prevents the node from booting without real hardware.
      */
     private String simulatedQuote() {
+        simulated = true;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest("TPM_PCR_STATE_OK".getBytes("UTF-8"));
