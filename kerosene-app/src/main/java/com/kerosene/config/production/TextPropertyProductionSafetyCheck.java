@@ -31,6 +31,25 @@ public class TextPropertyProductionSafetyCheck extends AbstractProductionSafetyC
             if (context.environment().getProperty("kfe.vaultmesh.base-url", "").isBlank()) {
                 context.addViolation("kfe.vaultmesh.base-url must be configured");
             }
+            if (context.environment().getProperty("kfe.vaultmesh.require-mtls", Boolean.class, false)) {
+                String apiToken = context.environment().getProperty("kfe.vaultmesh.api-token", "");
+                if (apiToken != null && !apiToken.isBlank()) {
+                    context.addViolation(
+                            "kfe.vaultmesh.api-token must be empty when require-mtls"
+                                    + " (static_token refused in go-live)");
+                }
+                String cert = context.environment().getProperty("kfe.vaultmesh.tls.cert-path", "");
+                String key = context.environment().getProperty("kfe.vaultmesh.tls.key-path", "");
+                String ca = context.environment().getProperty("kfe.vaultmesh.tls.ca-path", "");
+                String keystore = context.environment().getProperty("kfe.vaultmesh.tls.keystore-path", "");
+                String truststore = context.environment().getProperty("kfe.vaultmesh.tls.truststore-path", "");
+                boolean pem = notBlank(cert) && notBlank(key) && notBlank(ca);
+                boolean pkcs12 = notBlank(keystore) && notBlank(truststore);
+                if (!pem && !pkcs12) {
+                    context.addViolation(
+                            "kfe.vaultmesh.tls PEM or PKCS12 materials must be configured when require-mtls");
+                }
+            }
         } else {
             String quorumPeers = context.environment().getProperty("quorum.shard.urls", "");
             if (quorumPeers.isBlank()) {
@@ -58,5 +77,9 @@ public class TextPropertyProductionSafetyCheck extends AbstractProductionSafetyC
         if (macaroon.isBlank() && macaroonPath.isBlank()) {
             context.addViolation("lightning.lnd.macaroon or lightning.lnd.macaroon-path must be configured");
         }
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 }

@@ -27,8 +27,8 @@ Do not call the stack “Hydra”. Use Kerosene backend / shards / vault mesh.
 | **`kfe-service` (`com.kerosene.kfe`)** | Bank: ledger, balances, rules, Intent emit / Receipt handle. No FROST shares. |
 | **Vault mesh (`kerosene-vault`)** | Treasury/signing plane: FROST shares, DKG, day-advance + reshare, Taproot PSBT cosign, governance rewards. |
 | **`kerosene-app` / Core** | Auth, product shell, admin health probes into mesh; ops AES from `AES_SECRET`. |
-| **`mpc-sidecar`** | Removed from tree and local-full/deploy; do not re-wire as primary signer. |
-| **HashiCorp Vault Raft** | Not treasury SoT. Residual overlays (e.g. local-ha) may still mention it; not custody health. |
+| **`mpc-sidecar`** | Removed from tree and local-full/local-ha deploy; do not re-wire as primary signer. |
+| **HashiCorp Vault Raft** | Not treasury SoT. Removed from local-full and local-ha overlays; not custody health. |
 
 Cutover is **clean**: mesh on, mpc signing off (`kfe.vaultmesh.mesh-only=true`, `kfe.mpc.signing-enabled=false`). No gradual HashiCorp→mesh treasury migration.
 
@@ -127,7 +127,15 @@ Settlement signing for treasury Taproot PSBT goes through **vault mesh Intent/Re
 | Epoch | day-advance + reshare policy |
 | Rewards | governance rewards to active vault operators |
 | Auth kfe↔mesh | lab: `X-Vault-Token`; go-live: mTLS (`kfe.vaultmesh.tls.*`) |
-| Gaps (planned) | full SNP VCEK verification, Tor mesh in prod, CHANNELS→LND inject — not claimed shipped |
+| Gaps (planned) | full SNP VCEK verification; CHANNELS→LND inject; deposit xpub vs mesh `tb1p` — see Gap notes / `VAULT_MESH_PLAN.md` |
+
+### Gaps (honest — not shipped)
+
+| Gap | Status now | Notes |
+| --- | --- | --- |
+| **SNP VCEK / full HW attestation** | planned | Staging stub / fail-closed without HW; do not claim production SNP quotes |
+| **CHANNELS → LND inject** | planned | CHANNELS bucket + LN gateway fail-closed when LND off; no automatic mesh→LND funding inject |
+| **Deposit xpub vs `tb1p`** | planned | Mesh deposit is Taproot `GET /v1/bitcoin/deposit` (`tr()` / `tb1p…`); KFE platform xpub issuance is separate / not derived from mesh group key yet |
 
 ## Security model
 

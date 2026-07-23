@@ -34,6 +34,10 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
                 }
             }
             // Mesh owns custody governance — HashiCorp bootstrap / mpc-sidecar removed.
+            // Go-live / staging profile: require-mtls refuses lab static_token.
+            if (context.environment().getProperty("kfe.vaultmesh.require-mtls", Boolean.class, false)) {
+                requireTrue(context, "kfe.vaultmesh.tls.enabled", false);
+            }
         }
 
         requireTrue(context, "lightning.lnd.enabled", false);

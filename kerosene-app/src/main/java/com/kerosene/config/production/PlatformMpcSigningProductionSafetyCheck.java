@@ -13,6 +13,12 @@ public class PlatformMpcSigningProductionSafetyCheck extends AbstractProductionS
 
     @Override
     protected void inspect(ProductionSafetyContext context) {
+        boolean meshOnly = context.environment().getProperty("kfe.vaultmesh.mesh-only", Boolean.class, false);
+        if (meshOnly) {
+            // Mesh-only cutover: vault mesh is the treasury signer; do not require mpc-sidecar.
+            return;
+        }
+
         Map<String, PlatformTransactionSignerPort> signers;
         try {
             signers = context.beanFactory().getBeansOfType(PlatformTransactionSignerPort.class, false, false);
