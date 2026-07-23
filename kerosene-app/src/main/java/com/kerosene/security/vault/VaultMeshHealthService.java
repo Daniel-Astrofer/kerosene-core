@@ -104,12 +104,16 @@ public class VaultMeshHealthService {
             String nodeId = text(health, "node_id");
             String nodeStatus = text(health, "status");
             String attestationMode = text(health, "attestation_mode");
+            String nodeTier = text(health, "node_tier");
+            boolean teeAvailable = health.path("tee_available").asBoolean(false);
             int peerCount = health.path("peer_count").asInt(0);
             details.put("nodeStatus", nodeStatus);
             details.put("raw", Map.of(
                     "node_id", nodeId == null ? "" : nodeId,
                     "status", nodeStatus == null ? "" : nodeStatus,
+                    "node_tier", nodeTier == null ? "" : nodeTier,
                     "attestation_mode", attestationMode == null ? "" : attestationMode,
+                    "tee_available", teeAvailable,
                     "peer_count", peerCount));
 
             boolean labAttestation = attestationMode != null
@@ -119,6 +123,10 @@ public class VaultMeshHealthService {
                 details.put(
                         "attestationHonesty",
                         "attestation_mode=sim — lab visualization only; not hardware TEE quorum");
+            } else if (attestationMode != null && "software".equalsIgnoreCase(attestationMode)) {
+                details.put(
+                        "attestationHonesty",
+                        "attestation_mode=software — domestic measurement (not SEV/SGX); TPM≠TEE");
             }
 
             VaultMeshDayStatus day = probeDayStatus(details);
