@@ -97,4 +97,12 @@ public interface VaultMeshSettlementPort {
     default VaultMeshDepositInfo getUsersDepositAddress() {
         return null;
     }
+
+    /**
+     * {@code GET /v1/bitcoin/deposit?bucket=CHANNELS} — dedicated CHANNELS Taproot deposit
+     * (≠ USERS omnibus key).
+     */
+    default VaultMeshDepositInfo getChannelsDepositAddress() {
+        return null;
+    }
 }

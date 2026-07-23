@@ -134,7 +134,7 @@ Settlement signing for treasury Taproot PSBT goes through **vault mesh Intent/Re
 | Gap | Status now | Notes |
 | --- | --- | --- |
 | **SNP VCEK / full HW attestation** | planned (fail-closed) | Staging stub / fail-closed without HW; **do not** claim production SNP quotes |
-| **CHANNELS → LND inject** | landed (atomicity harden) | Soft-reserve CHANNELS → LND address bind → `openChannel` → commit; pending-channels refuse; durable phase + stable Intent resume; commit-retry reconciler. Gaps: **no mesh on-chain CHANNELS→LND PSBT** yet (LND wallet UTXOs still fund open after ledger bind + underfund check) |
+| **CHANNELS → LND inject** | landed (on-chain fund) | Soft-reserve CHANNELS → CHANNELS Taproot PSBT to LND address (key ≠ USERS omnibus) → `openChannel` → commit; pending-channels refuse; durable phase + stable Intent resume; commit-retry reconciler. Fail-closed without mesh fund txid. Lab: `kfe.channel.mesh-inject-fund-zero-conf-lab` |
 | **Deposit xpub vs `tb1p`** | enforced (policy guard) | Mesh deposit is Taproot `GET /v1/bitcoin/deposit` (`tr()` / `tb1p…`); KFE platform xpub issuance is separate; vaultmesh client/tb1p-only receive address policy is enforced for `WATCH_ONLY` USERS flows |
 
 ## Security model
