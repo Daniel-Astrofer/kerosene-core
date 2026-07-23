@@ -14,8 +14,8 @@ class ProductionConfigurationGuardrailsTest {
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
     private static final Path PROD_PROPERTIES = PROJECT_ROOT.resolve("src/main/resources/application-prod.properties");
     private static final Path DOCKER_PROPERTIES = PROJECT_ROOT.resolve("src/main/resources/application-docker.properties");
-    private static final Path PROD_K8S_DEPLOYMENT = PROJECT_ROOT.resolve("../../infra/kubernetes/base/server/deployment.yaml").normalize();
-    private static final Path PROD_K8S_CONFIG = PROJECT_ROOT.resolve("../../infra/kubernetes/base/server/configmap.yaml").normalize();
+    private static final Path PROD_K8S_DEPLOYMENT = PROJECT_ROOT.resolve("../../../infra/kubernetes/base/server/deployment.yaml").normalize();
+    private static final Path PROD_K8S_CONFIG = PROJECT_ROOT.resolve("../../../infra/kubernetes/base/server/configmap.yaml").normalize();
     private static final Path DESTRUCTIVE_RESET_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V23__drop_legacy_financial_tables.sql");
 
     @Test
@@ -43,8 +43,8 @@ class ProductionConfigurationGuardrailsTest {
         assertTrue(manifest.contains("name: SPRING_DATA_REDIS_PASSWORD"));
         assertTrue(manifest.contains("LIGHTNING_LND_HOST"));
         assertTrue(manifest.contains("name: LIGHTNING_LND_MACAROON"));
-        assertTrue(manifest.contains("VAULT_RAFT_URL"));
-        assertTrue(manifest.contains("MPC_SIDECAR_HOST"));
+        assertFalse(manifest.contains("VAULT_RAFT_URL"));
+        assertFalse(manifest.contains("MPC_SIDECAR_HOST"));
 
         assertFalse(manifest.contains("name: POSTGRES_URL"));
         assertFalse(manifest.contains("name: REDIS_HOST"));

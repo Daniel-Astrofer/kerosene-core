@@ -295,7 +295,7 @@
     </logger>
 
     <!-- KFE: financial engine, lightning, on-chain -->
-    <logger name="source.kfe"                                     level="INFO"  additivity="false">
+    <logger name="com.kerosene.kfe"                                level="INFO"  additivity="false">
         <appender-ref ref="ASYNC_KFE"/>
     </logger>
 

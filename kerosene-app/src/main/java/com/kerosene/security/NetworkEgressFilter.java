@@ -53,10 +53,7 @@ public class NetworkEgressFilter {
             "redis-wvo",
             "redis-iw5",
             "redis-ltv",
-            "mpc-sidecar-wvo",
-            "mpc-sidecar-iw5",
-            "mpc-sidecar-ltv",
-            "tor-wvo", // Tor SOCKS5 proxy (port 9050)
+            "tor-wvo",
             "tor-iw5",
             "tor-ltv");
 

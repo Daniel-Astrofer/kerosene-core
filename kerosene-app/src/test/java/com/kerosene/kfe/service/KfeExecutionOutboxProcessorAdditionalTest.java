@@ -1,9 +1,9 @@
-package source.kfe.service;
+package com.kerosene.kfe.service;
 
 import org.junit.jupiter.api.Test;
-import source.kfe.rail.CustodyGateway;
-import source.kfe.rail.KfeOnchainPaymentGateway;
-import source.kfe.rail.LightningPaymentGateway;
+import com.kerosene.kfe.rail.CustodyGateway;
+import com.kerosene.kfe.rail.KfeOnchainPaymentGateway;
+import com.kerosene.kfe.rail.LightningPaymentGateway;
 
 import java.util.UUID;
 
@@ -39,7 +39,9 @@ class KfeExecutionOutboxProcessorAdditionalTest {
                 25L,
                 null,
                 "idempotency",
-                "proof"));
+                "proof",
+                null,
+                null));
 
         processor.process(outboxId);
 
@@ -64,7 +66,9 @@ class KfeExecutionOutboxProcessorAdditionalTest {
                 15L,
                 "memo",
                 "idempotency",
-                "quorum-proof");
+                "quorum-proof",
+                null,
+                null);
         CustodyGateway.PaymentResult result = new CustodyGateway.PaymentResult(
                 "provider-ref",
                 null,
@@ -108,7 +112,9 @@ class KfeExecutionOutboxProcessorAdditionalTest {
                 15L,
                 null,
                 "idempotency",
-                "quorum-proof"));
+                "quorum-proof",
+                null,
+                null));
 
         processor.process(outboxId);
 
@@ -135,7 +141,9 @@ class KfeExecutionOutboxProcessorAdditionalTest {
                 15L,
                 null,
                 "idempotency",
-                "quorum-proof"));
+                "quorum-proof",
+                null,
+                null));
 
         processor.process(outboxId);
 
@@ -162,7 +170,9 @@ class KfeExecutionOutboxProcessorAdditionalTest {
                 15L,
                 null,
                 "idempotency",
-                "quorum-proof");
+                "quorum-proof",
+                null,
+                null);
         KfeOnchainPaymentGateway.ProviderExecutionAmbiguous ambiguous =
                 new KfeOnchainPaymentGateway.ProviderExecutionAmbiguous(
                         "broadcast result unknown",

@@ -47,31 +47,6 @@ configurations.configureEach {
     exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
 }
 
-// Package-rename WIP: nested mirrors share source.* FQCNs. Exclude duplicates only;
-// keep security/infra/honeypot and security/vault/VaultMeshHealthService.
-sourceSets {
-    main {
-        java {
-            exclude("**/com/kerosene/source/**")
-            exclude("**/com/kerosene/security/filter/**")
-            exclude("**/com/kerosene/security/service/**")
-            exclude("**/com/kerosene/security/controller/**")
-            exclude("**/com/kerosene/security/infra/MasterKeyMemoryStore.java")
-            exclude("**/com/kerosene/security/infra/SecureDnsResolver.java")
-            exclude("**/com/kerosene/security/infra/ShardIdentityManager.java")
-            exclude("**/com/kerosene/security/infra/UdsSocks5Transport.java")
-            exclude("**/com/kerosene/security/infra/VaultAttestationClient.java")
-            exclude("**/com/kerosene/security/infra/VaultAttestationException.java")
-            exclude("**/com/kerosene/security/infra/VaultAttestationSession.java")
-            exclude("**/com/kerosene/security/infra/VaultProvisioningClient.java")
-            exclude("**/com/kerosene/security/vault/VaultBootstrapCoordinator.java")
-            exclude("**/com/kerosene/security/vault/VaultBootstrapSchedulerConfiguration.java")
-            exclude("**/com/kerosene/security/vault/VaultEndpointResolver.java")
-            exclude("**/com/kerosene/security/vault/VaultKeyProvider.java")
-        }
-    }
-}
-
 dependencies {
     implementation(project(":kerosene-contracts"))
     implementation(project(":kerosene-shared"))
@@ -111,7 +86,7 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 
-    // gRPC for MPC Sidecar
+    // gRPC for LND rail protos
     implementation("io.grpc:grpc-netty-shaded:1.82.0")
     implementation("io.grpc:grpc-protobuf:1.82.0")
     implementation("io.grpc:grpc-stub:1.82.0")

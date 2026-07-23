@@ -46,7 +46,6 @@ public class SecureDnsResolver {
             Map.entry("redis-wvo", "172.20.1.30"),
             Map.entry("redis-iw5", "172.20.2.30"),
             Map.entry("redis-ltv", "172.20.3.30"),
-            Map.entry("mpc-sidecar-wvo", "172.20.1.70"),
             // .onion addresses bypass local DNS — they resolve inside Tor circuit.
             // Placeholder only; live vault onions must never be committed.
             Map.entry("vault-placeholder.onion", "127.0.0.1"));

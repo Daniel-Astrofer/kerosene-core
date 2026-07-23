@@ -12,7 +12,7 @@ import source.config.KfeProfileCoreControllerExclusionFilter;
 @ComponentScan(
         basePackages = "source",
         excludeFilters = {
-                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "source\\.kfe\\..*"),
+                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.kerosene\\.kfe\\..*"),
                 @ComponentScan.Filter(type = FilterType.CUSTOM, classes = KfeProfileCoreControllerExclusionFilter.class)
         })
 @EntityScan(basePackages = {

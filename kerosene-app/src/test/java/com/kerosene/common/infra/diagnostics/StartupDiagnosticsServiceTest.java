@@ -20,7 +20,6 @@ class StartupDiagnosticsServiceTest {
         MockEnvironment environment = baseEnvironment()
                 .withProperty("spring.flyway.baseline-on-migrate", "true")
                 .withProperty("app.cors.allowed-origins", "http://localhost:3000")
-                .withProperty("vault.enabled", "false")
                 .withProperty("spring.datasource.password", "super-secret-password");
         environment.setActiveProfiles("prod");
 

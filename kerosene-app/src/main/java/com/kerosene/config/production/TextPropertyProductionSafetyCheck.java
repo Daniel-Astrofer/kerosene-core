@@ -46,10 +46,6 @@ public class TextPropertyProductionSafetyCheck extends AbstractProductionSafetyC
         if (!(meshOnly || meshEnabled)) {
             required.add("quorum.psbt.signer-urls");
             required.add("quorum.psbt.signer-ids");
-            required.add("mpc.sidecar.host");
-            required.add("mpc.sidecar.tls.cert-chain");
-            required.add("mpc.sidecar.tls.private-key");
-            required.add("mpc.sidecar.tls.trust-cert-collection");
         }
         for (String propertyName : required) {
             if (context.environment().getProperty(propertyName, "").isBlank()) {

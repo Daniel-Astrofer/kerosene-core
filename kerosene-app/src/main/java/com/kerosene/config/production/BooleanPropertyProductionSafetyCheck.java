@@ -33,10 +33,7 @@ public class BooleanPropertyProductionSafetyCheck extends AbstractProductionSafe
                     context.addViolation("kfe.mpc.signing-enabled must be false under mesh-only");
                 }
             }
-            // Mesh owns custody governance — do not require HashiCorp Raft or mpc-sidecar.
-        } else {
-            // Legacy non-mesh profiles still arm HashiCorp vault for ops secrets (not treasury mesh).
-            requireTrue(context, "vault.enabled", false);
+            // Mesh owns custody governance — HashiCorp bootstrap / mpc-sidecar removed.
         }
 
         requireTrue(context, "lightning.lnd.enabled", false);
