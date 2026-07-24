@@ -4,11 +4,11 @@ Documentação corporativa dos endpoints de auditoria disponíveis no backend at
 
 Fonte real inspecionada:
 
-- `backend/kerosene/src/main/java/source/kfe/controller/KfeAuditAdminController.java`
-- `backend/kerosene/src/main/java/source/kfe/dto/KfeAuditEventResponse.java`
-- `backend/kerosene/src/main/java/source/kfe/dto/KfeAuditLatestResponse.java`
-- `backend/kerosene/src/main/java/source/kfe/dto/KfeAuditRootResponse.java`
-- `backend/kerosene/src/main/java/source/common/security/EndpointPolicyRegistry.java`
+- `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/controller/KfeAuditAdminController.java`
+- `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/dto/KfeAuditEventResponse.java`
+- `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/dto/KfeAuditLatestResponse.java`
+- `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/dto/KfeAuditRootResponse.java`
+- `backend/kerosene/kerosene-app/src/main/java/com/kerosene/common/security/EndpointPolicyRegistry.java`
 
 ## Estado real do serviço
 

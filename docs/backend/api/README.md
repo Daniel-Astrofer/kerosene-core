@@ -28,7 +28,7 @@ Old finance routes only as `STALE` / `CONTROLLER_ABSENT` / `REMOVED` / migrate n
 | Integrations | [INTEGRATIONS.md](INTEGRATIONS.md) | BTCPay policy; no controller; stale |
 | KFE | [KFE.md](KFE.md) | wallet, dashboard, receive, tx, quote, PSBT, audit |
 | Ledger | [LEDGER.md](LEDGER.md) | no controller; → KFE |
-| Mining | [MINING.md](MINING.md) | live |
+| Mining | [MINING.md](MINING.md) | STALE — controller removed |
 | Notifications | [NOTIFICATIONS.md](NOTIFICATIONS.md) | live |
 | Payments | [PAYMENTS.md](PAYMENTS.md) | via KFE receive+tx; legacy removed |
 | Public/health/web | [PUBLIC_HEALTH_WEB.md](PUBLIC_HEALTH_WEB.md) | public, health, web, actuator |
