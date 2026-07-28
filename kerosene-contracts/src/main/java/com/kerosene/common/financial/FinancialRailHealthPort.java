@@ -6,8 +6,15 @@ import java.util.Map;
 
 public interface FinancialRailHealthPort {
 
-    ProviderHealth custodyProvider();
-    List<ProviderHealth> activeRailProviders();
+    default ProviderHealth custodyProviderHealth() {
+        return fromLegacy(custodyProvider());
+    }
+
+    default List<ProviderHealth> activeRailProviderHealth() {
+        return activeRailProviders().values().stream()
+                .map(FinancialRailHealthPort::fromLegacy)
+                .toList();
+    }
 
     enum HealthState {
         DISABLED,
@@ -42,20 +49,16 @@ public interface FinancialRailHealthPort {
     // --- Deprecated: old method and record kept for backward compatibility ---
 
     /**
-     * @deprecated Use {@link #custodyProvider()} returning {@link ProviderHealth} instead.
+     * @deprecated Use {@link #custodyProviderHealth()}.
      */
     @Deprecated(forRemoval = true)
-    default ProviderStatus custodyProviderLegacy() {
-        throw new UnsupportedOperationException("Use custodyProvider() returning ProviderHealth instead.");
-    }
+    ProviderStatus custodyProvider();
 
     /**
-     * @deprecated Use {@link #activeRailProviders()} returning {@code List<ProviderHealth>} instead.
+     * @deprecated Use {@link #activeRailProviderHealth()}.
      */
     @Deprecated(forRemoval = true)
-    default Map<String, ProviderStatus> activeRailProvidersLegacy() {
-        throw new UnsupportedOperationException("Use activeRailProviders() returning List<ProviderHealth> instead.");
-    }
+    Map<String, ProviderStatus> activeRailProviders();
 
     /**
      * @deprecated Replaced by {@link ProviderHealth} with typed {@link HealthState} enum
@@ -64,5 +67,17 @@ public interface FinancialRailHealthPort {
     @Deprecated(forRemoval = true)
     record ProviderStatus(String providerName, boolean live, String implementation) {
         // kept for backward compatibility only
+    }
+
+    private static ProviderHealth fromLegacy(ProviderStatus status) {
+        if (status == null) {
+            return new ProviderHealth("unknown", "unknown", HealthState.UNAVAILABLE,
+                    false, false, false, false, "unknown", 0L, null,
+                    "LEGACY_STATUS_MISSING");
+        }
+        return new ProviderHealth(status.providerName(), status.implementation(),
+                status.live() ? HealthState.DEGRADED : HealthState.UNAVAILABLE,
+                status.live(), status.live(), false, status.live(),
+                "unknown", 0L, null, "LEGACY_STATUS_ADAPTER");
     }
 }

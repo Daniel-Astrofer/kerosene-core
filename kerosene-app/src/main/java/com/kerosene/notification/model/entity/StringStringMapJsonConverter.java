@@ -2,6 +2,7 @@ package com.kerosene.notification.model.entity;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 
@@ -12,7 +13,7 @@ import java.util.Map;
 @Converter
 public class StringStringMapJsonConverter implements AttributeConverter<Map<String, String>, String> {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JsonMapper.builder().build();
     private static final TypeReference<Map<String, String>> TYPE = new TypeReference<>() {};
 
     @Override

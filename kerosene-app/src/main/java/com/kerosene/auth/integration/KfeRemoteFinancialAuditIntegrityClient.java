@@ -24,7 +24,7 @@ public class KfeRemoteFinancialAuditIntegrityClient extends KfeRemoteClientSuppo
     }
 
     @Override
-    public AuditRoot root() {
+    public AuditRoot currentRoot() {
         ResponseEntity<AuditRoot> response = restTemplate.exchange(
                 baseUrl + "/internal/kfe/audit-integrity/root",
                 HttpMethod.GET,

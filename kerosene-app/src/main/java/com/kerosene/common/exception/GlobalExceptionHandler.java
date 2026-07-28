@@ -256,7 +256,7 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiResponse<Void>> handleDataAccess(DataAccessException ex) {
         log.error("[GlobalExceptionHandler] Data store unavailable: {} - {}",
-                ex.getClass().getSimpleName(), ex.getMessage());
+                ex.getClass().getSimpleName(), ex.getMessage(), ex);
         return buildErrorResponse(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Service temporarily unavailable. Please try again in a moment.",

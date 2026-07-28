@@ -28,10 +28,13 @@ class KfeRemoteFinancialAuditIntegrityClientTest {
         server.expect(requestTo("http://kfe.test/internal/kfe/audit-integrity/root"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(
-                        "{\"merkleRoot\":\"abc123\",\"eventCount\":7,\"fromSequence\":1,\"toSequence\":7,\"generatedAt\":\"2026-06-24T10:15:30\"}",
+                        "{\"rootVersion\":1,\"hashAlgorithm\":\"SHA-256\",\"merkleRoot\":\"abc123\","
+                                + "\"eventCount\":7,\"fromSequence\":1,\"toSequence\":7,\"previousRoot\":null,"
+                                + "\"generatedAt\":\"2026-06-24T10:15:30Z\",\"signerKeyId\":\"test-signer\","
+                                + "\"signature\":\"test-signature\",\"checkpointId\":\"checkpoint-7\"}",
                         MediaType.APPLICATION_JSON));
 
-        var root = client.root();
+        var root = client.currentRoot();
 
         assertEquals("abc123", root.merkleRoot());
         assertEquals(7L, root.eventCount());

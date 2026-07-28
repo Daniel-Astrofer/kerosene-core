@@ -5,9 +5,17 @@ import java.time.LocalDateTime;
 
 public interface FinancialAuditIntegrityPort {
 
-    AuditRoot currentRoot();
-    InclusionProof inclusionProof(long sequenceNumber);
-    ConsistencyProof consistencyProof(AuditRoot fromRoot, AuditRoot toRoot);
+    default AuditRoot currentRoot() {
+        throw new UnsupportedOperationException("Signed audit roots are not implemented by this adapter");
+    }
+
+    default InclusionProof inclusionProof(long sequenceNumber) {
+        throw new UnsupportedOperationException("Audit inclusion proofs are not implemented by this adapter");
+    }
+
+    default ConsistencyProof consistencyProof(AuditRoot fromRoot, AuditRoot toRoot) {
+        throw new UnsupportedOperationException("Audit consistency proofs are not implemented by this adapter");
+    }
 
     record AuditRoot(
         int rootVersion,          // schema version

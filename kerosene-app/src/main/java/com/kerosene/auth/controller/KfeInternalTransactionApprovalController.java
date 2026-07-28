@@ -63,9 +63,9 @@ public class KfeInternalTransactionApprovalController {
         approvalPort.approveWalletOutbound(
                 request.actorUserId(),
                 request.ownerUserId(),
-                request.factorA(),
-                request.factorB(),
-                request.factorC());
+                request.passkeyAssertion(),
+                request.recoveryApproval(),
+                request.deviceProof());
         return ResponseEntity.ok(ApiResponse.success("KFE wallet outbound approved.", null));
     }
 

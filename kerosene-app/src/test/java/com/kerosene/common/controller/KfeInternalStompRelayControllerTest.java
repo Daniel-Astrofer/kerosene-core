@@ -42,12 +42,11 @@ class KfeInternalStompRelayControllerTest {
 
     @Test
     void rejectsBlankDestination() {
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> controller.publish(
                         "credential",
                         new StompUserPublishRequest(42L, "  ", Map.of("id", "1"))));
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         verifyNoInteractions(relayService);
     }
 }

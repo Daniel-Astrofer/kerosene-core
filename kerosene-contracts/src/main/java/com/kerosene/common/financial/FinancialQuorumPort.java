@@ -13,7 +13,9 @@ public interface FinancialQuorumPort {
      * Request threshold-based quorum consensus.
      * @return QuorumDecision with full attribution and proof
      */
-    QuorumDecision requireThresholdConsensus(Proposal proposal);
+    default QuorumDecision requireThresholdConsensus(Proposal proposal) {
+        throw new UnsupportedOperationException("Constitutional threshold quorum is not implemented by this adapter");
+    }
 
     /**
      * A proposal submitted for quorum voting.
@@ -107,11 +109,7 @@ public interface FinancialQuorumPort {
     }
 
     @Deprecated(forRemoval = true)
-    default Result requireHealthyUnanimousConsensus(String proposalHash) {
-        throw new UnsupportedOperationException(
-            "requireHealthyUnanimousConsensus is deprecated and unsafe. Use requireThresholdConsensus(Proposal) instead."
-        );
-    }
+    Result requireHealthyUnanimousConsensus(String proposalHash);
 
     @Deprecated(forRemoval = true)
     record Result(int acceptedNodes, int totalHealthyNodes) {

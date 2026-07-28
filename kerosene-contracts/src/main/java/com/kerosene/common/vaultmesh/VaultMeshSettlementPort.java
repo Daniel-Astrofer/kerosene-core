@@ -16,67 +16,71 @@ public interface VaultMeshSettlementPort {
 
     /** @deprecated Use {@link VaultIntentPort#submitIntent(VaultMeshIntentV2)}. */
     @Deprecated
-    default VaultMeshReceipt submitIntent(VaultMeshIntent intent) {
-        throw new UnsupportedOperationException("Use VaultIntentPort");
-    }
+    VaultMeshReceipt submitIntent(VaultMeshIntent intent);
 
     /** @deprecated Use {@link VaultReservationPort#reserveIntent(VaultMeshIntentV2)}. */
     @Deprecated
     default VaultMeshReceipt reserveIntent(VaultMeshIntent intent) {
-        throw new UnsupportedOperationException("Use VaultReservationPort");
+        return new VaultMeshReceipt(intent == null ? "unknown" : intent.intentId(),
+                VaultMeshReceipt.Status.REJECTED, "MESH_INTENT_RESERVE_UNSUPPORTED",
+                null, java.time.Instant.now());
     }
 
     /** @deprecated Use {@link VaultReservationPort#releaseIntent(String, String)}. */
     @Deprecated
     default VaultMeshReceipt releaseIntent(String intentId, String bucket, long amountSats) {
-        throw new UnsupportedOperationException("Use VaultReservationPort");
+        return new VaultMeshReceipt(intentId, VaultMeshReceipt.Status.REJECTED,
+                "MESH_INTENT_RELEASE_UNSUPPORTED", null, java.time.Instant.now());
     }
 
     /** @deprecated Use {@link VaultReservationPort#commitIntent(String, String)}. */
     @Deprecated
     default VaultMeshReceipt commitIntent(String intentId) {
-        throw new UnsupportedOperationException("Use VaultReservationPort");
+        return new VaultMeshReceipt(intentId, VaultMeshReceipt.Status.REJECTED,
+                "MESH_INTENT_COMMIT_UNSUPPORTED", null, java.time.Instant.now());
     }
 
     /** @deprecated Use {@link VaultPsbtSigningPort#signPsbt(VaultMeshPsbtRequestV2)}. */
     @Deprecated
     default VaultMeshPsbtReceipt signPsbt(VaultMeshPsbtRequest request) {
-        throw new UnsupportedOperationException("Use VaultPsbtSigningPort");
+        return new VaultMeshPsbtReceipt(request == null ? "unknown" : request.intentId(),
+                VaultMeshReceipt.Status.REJECTED, "MESH_PSBT_UNSUPPORTED",
+                null, null, java.time.Instant.now());
     }
 
     /** @deprecated Use {@link VaultGovernancePort#getDayStatus()}. */
     @Deprecated
     default VaultMeshDayStatus getDayStatus() {
-        throw new UnsupportedOperationException("Use VaultGovernancePort");
+        return VaultMeshDayStatus.failed("MESH_DAY_UNSUPPORTED");
     }
 
     /** @deprecated Use {@link VaultGovernancePort#voteDay(String, String)}. */
     @Deprecated
     default VaultMeshDayAdvanceResult voteDay(String voter, String dayEpoch) {
-        throw new UnsupportedOperationException("Use VaultGovernancePort");
+        return VaultMeshDayAdvanceResult.failed("MESH_DAY_UNSUPPORTED");
     }
 
     /** @deprecated Use {@link VaultGovernancePort#advanceDay()}. */
     @Deprecated
     default VaultMeshDayAdvanceResult advanceDay() {
-        throw new UnsupportedOperationException("Use VaultGovernancePort");
+        return VaultMeshDayAdvanceResult.failed("MESH_DAY_UNSUPPORTED");
     }
 
     /** @deprecated Use {@link VaultGovernancePort#triggerReshare(String)}. */
     @Deprecated
     default VaultMeshReshareResult triggerReshare(String reason) {
-        throw new UnsupportedOperationException("Use VaultGovernancePort");
+        return VaultMeshReshareResult.failed("MESH_RESHARE_UNSUPPORTED");
     }
 
     /** @deprecated Use {@link VaultDepositDescriptorPort#getUsersDepositAddress()}. */
     @Deprecated
     default VaultMeshDepositInfo getUsersDepositAddress() {
-        throw new UnsupportedOperationException("Use VaultDepositDescriptorPort");
+        return null;
     }
 
     /** @deprecated Use {@link VaultDepositDescriptorPort#getChannelsDepositAddress()}. */
     @Deprecated
     default VaultMeshDepositInfo getChannelsDepositAddress() {
-        throw new UnsupportedOperationException("Use VaultDepositDescriptorPort");
+        return null;
     }
 }

@@ -122,7 +122,7 @@ public class SovereigntyStatusController {
         // 3. Merkle Audit
         Map<String, Object> merkle = new LinkedHashMap<>();
         try {
-            FinancialAuditIntegrityPort.AuditRoot root = financialAuditIntegrityPort.root();
+            FinancialAuditIntegrityPort.AuditRoot root = financialAuditIntegrityPort.currentRoot();
             if (root.eventCount() > 0) {
                 merkle.put("status", "VALID");
                 merkle.put("lastRootHash", abbreviate(root.merkleRoot()));

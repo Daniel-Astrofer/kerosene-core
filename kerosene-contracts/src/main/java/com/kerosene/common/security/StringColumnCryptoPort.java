@@ -24,7 +24,9 @@ public interface StringColumnCryptoPort {
      * @param associatedData additional authenticated data (table+column+entityId+tenantId)
      * @return sealed encrypted container
      */
-    EncryptedValue encrypt(CryptoPurpose purpose, byte[] plaintext, byte[] associatedData);
+    default EncryptedValue encrypt(CryptoPurpose purpose, byte[] plaintext, byte[] associatedData) {
+        throw new UnsupportedOperationException("Purpose-bound encryption is not implemented by this adapter");
+    }
 
     /**
      * Decrypts an {@link EncryptedValue} with AAD context binding.
@@ -34,7 +36,9 @@ public interface StringColumnCryptoPort {
      * @param associatedData must match the AAD used at encryption time
      * @return original plaintext
      */
-    byte[] decrypt(CryptoPurpose purpose, EncryptedValue encrypted, byte[] associatedData);
+    default byte[] decrypt(CryptoPurpose purpose, EncryptedValue encrypted, byte[] associatedData) {
+        throw new UnsupportedOperationException("Purpose-bound decryption is not implemented by this adapter");
+    }
 
     /**
      * Re-wraps (rotates) the encrypted value without exposing plaintext.
@@ -43,7 +47,9 @@ public interface StringColumnCryptoPort {
      * @param value the currently sealed value
      * @return a new EncryptedValue sealed under the current KMS key version
      */
-    EncryptedValue rewrap(EncryptedValue value);
+    default EncryptedValue rewrap(EncryptedValue value) {
+        throw new UnsupportedOperationException("Ciphertext rewrap is not implemented by this adapter");
+    }
 
     /**
      * Checks whether the encrypted value should be rotated.
@@ -51,7 +57,9 @@ public interface StringColumnCryptoPort {
      * @param value the currently sealed value
      * @return true if the KMS key version or algorithm is stale
      */
-    boolean needsRotation(EncryptedValue value);
+    default boolean needsRotation(EncryptedValue value) {
+        throw new UnsupportedOperationException("Key rotation check is not implemented by this adapter");
+    }
 
     // ── Legacy API (deprecated — migrate to purpose-bound methods) ────────
 

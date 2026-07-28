@@ -12,7 +12,30 @@ public interface FinancialTransactionApprovalPort {
     /**
      * Approve an outbound transaction with full binding to the proposal.
      */
-    ApprovalReceipt approveOutbound(OutboundApprovalChallenge challenge);
+    default ApprovalReceipt approveOutbound(OutboundApprovalChallenge challenge) {
+        throw new UnsupportedOperationException("Typed outbound approval is not implemented by this adapter");
+    }
+
+    default void approveLocalFactor(Long userId, String deviceRef, DeviceProof factor) {
+        throw new UnsupportedOperationException("Typed local-factor approval is not implemented");
+    }
+
+    default void approveCustodyTransfer(Long userId, PasskeyAssertion assertion) {
+        throw new UnsupportedOperationException("Typed custody approval is not implemented");
+    }
+
+    default void approveWalletOutbound(
+            Long actorUserId,
+            Long ownerUserId,
+            PasskeyAssertion passkeyAssertion,
+            RecoveryApproval recoveryApproval,
+            DeviceProof deviceProof) {
+        throw new UnsupportedOperationException("Typed wallet approval is not implemented");
+    }
+
+    default void approveColdWalletPsbt(Long userId, DeviceProof factor) {
+        throw new UnsupportedOperationException("Typed cold-wallet approval is not implemented");
+    }
 
     /**
      * Challenge that binds approval factors to a specific transaction.

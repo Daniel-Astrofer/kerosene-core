@@ -5,7 +5,9 @@ import java.util.UUID;
 
 public interface FinancialMpcKeyPort {
 
-    MpcWalletKeyReceipt provisionWalletKey(MpcWalletKeyRequest request);
+    default MpcWalletKeyReceipt provisionWalletKey(MpcWalletKeyRequest request) {
+        throw new UnsupportedOperationException("Typed MPC wallet provisioning is not implemented by this adapter");
+    }
 
     record MpcWalletKeyRequest(
         UUID walletId,
@@ -54,7 +56,5 @@ public interface FinancialMpcKeyPort {
      *             Use {@link #provisionWalletKey(MpcWalletKeyRequest)} instead.
      */
     @Deprecated(forRemoval = true)
-    default String keygenWallet(UUID walletId, Long userId) {
-        throw new UnsupportedOperationException("Use provisionWalletKey(MpcWalletKeyRequest) instead.");
-    }
+    String keygenWallet(UUID walletId, Long userId);
 }

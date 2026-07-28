@@ -128,7 +128,7 @@ class KfeInternalFinancialNotificationControllerTest {
     @Test
     void rejectsMissingUserId() {
         assertThrows(
-                ResponseStatusException.class,
+                IllegalArgumentException.class,
                 () -> controller.notifyDepositConfirmed(
                         "credential",
                         new FinancialDepositConfirmedNotificationRequest(

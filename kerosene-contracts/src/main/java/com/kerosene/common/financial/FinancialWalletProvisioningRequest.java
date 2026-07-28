@@ -4,6 +4,8 @@ public record FinancialWalletProvisioningRequest(Long userId, String initialAddr
 
     public FinancialWalletProvisioningRequest {
         if (userId == null) throw new IllegalArgumentException("userId required");
-        if (initialAddress == null || initialAddress.isBlank()) throw new IllegalArgumentException("initialAddress required");
+        if (initialAddress != null && initialAddress.isBlank()) {
+            throw new IllegalArgumentException("initialAddress must be null or non-blank");
+        }
     }
 }
