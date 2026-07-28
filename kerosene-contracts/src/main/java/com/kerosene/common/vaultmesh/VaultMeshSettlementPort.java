@@ -3,106 +3,80 @@ package com.kerosene.common.vaultmesh;
 /**
  * Port for {@code kfe-service} to submit settlement intents to the vault mesh.
  * Implementations live in adapters only (Clean Architecture / DIP).
+ *
+ * @deprecated Split into focused interfaces:
+ *             {@link VaultIntentPort},
+ *             {@link VaultPsbtSigningPort},
+ *             {@link VaultReservationPort},
+ *             {@link VaultDepositDescriptorPort},
+ *             {@link VaultGovernancePort}.
  */
+@Deprecated
 public interface VaultMeshSettlementPort {
 
-    VaultMeshReceipt submitIntent(VaultMeshIntent intent);
+    /** @deprecated Use {@link VaultIntentPort#submitIntent(VaultMeshIntentV2)}. */
+    @Deprecated
+    default VaultMeshReceipt submitIntent(VaultMeshIntent intent) {
+        throw new UnsupportedOperationException("Use VaultIntentPort");
+    }
 
-    /**
-     * Soft-reserve Intent capital ({@code POST /v1/intent/reserve}). Prefer for paths that
-     * may fail after debit (e.g. CHANNELS→LND open): {@link #releaseIntent} on failure,
-     * {@link #commitIntent} after success. Default rejects so non-mesh adapters stay fail-closed.
-     */
+    /** @deprecated Use {@link VaultReservationPort#reserveIntent(VaultMeshIntentV2)}. */
+    @Deprecated
     default VaultMeshReceipt reserveIntent(VaultMeshIntent intent) {
-        return new VaultMeshReceipt(
-                intent == null ? null : intent.intentId(),
-                VaultMeshReceipt.Status.REJECTED,
-                "MESH_INTENT_RESERVE_UNSUPPORTED",
-                null,
-                System.currentTimeMillis());
+        throw new UnsupportedOperationException("Use VaultReservationPort");
     }
 
-    /**
-     * Roll back a soft reservation ({@code POST /v1/intent/release}).
-     */
+    /** @deprecated Use {@link VaultReservationPort#releaseIntent(String, String)}. */
+    @Deprecated
     default VaultMeshReceipt releaseIntent(String intentId, String bucket, long amountSats) {
-        return new VaultMeshReceipt(
-                intentId,
-                VaultMeshReceipt.Status.REJECTED,
-                "MESH_INTENT_RELEASE_UNSUPPORTED",
-                null,
-                System.currentTimeMillis());
+        throw new UnsupportedOperationException("Use VaultReservationPort");
     }
 
-    /**
-     * Promote reservation → durable consume ({@code POST /v1/intent/commit}).
-     */
+    /** @deprecated Use {@link VaultReservationPort#commitIntent(String, String)}. */
+    @Deprecated
     default VaultMeshReceipt commitIntent(String intentId) {
-        return new VaultMeshReceipt(
-                intentId,
-                VaultMeshReceipt.Status.REJECTED,
-                "MESH_INTENT_COMMIT_UNSUPPORTED",
-                null,
-                System.currentTimeMillis());
+        throw new UnsupportedOperationException("Use VaultReservationPort");
     }
 
-    /**
-     * Intent-gated Bitcoin PSBT signing (Taproot key-path via frost-secp256k1-tr).
-     * Default rejects so non-mesh adapters stay fail-closed.
-     */
+    /** @deprecated Use {@link VaultPsbtSigningPort#signPsbt(VaultMeshPsbtRequestV2)}. */
+    @Deprecated
     default VaultMeshPsbtReceipt signPsbt(VaultMeshPsbtRequest request) {
-        return new VaultMeshPsbtReceipt(
-                request == null ? null : request.intentId(),
-                VaultMeshReceipt.Status.REJECTED,
-                "MESH_PSBT_UNSUPPORTED",
-                null,
-                null,
-                System.currentTimeMillis());
+        throw new UnsupportedOperationException("Use VaultPsbtSigningPort");
     }
 
-    /**
-     * {@code GET /v1/day/current} — mesh ledger day vs UTC calendar (stale → not up-to-date).
-     */
+    /** @deprecated Use {@link VaultGovernancePort#getDayStatus()}. */
+    @Deprecated
     default VaultMeshDayStatus getDayStatus() {
-        return VaultMeshDayStatus.failed("MESH_DAY_UNSUPPORTED");
+        throw new UnsupportedOperationException("Use VaultGovernancePort");
     }
 
-    /**
-     * {@code POST /v1/day/vote} — record a governance vote for {@code dayEpoch} ({@code YYYY-MM-DD}).
-     */
+    /** @deprecated Use {@link VaultGovernancePort#voteDay(String, String)}. */
+    @Deprecated
     default VaultMeshDayAdvanceResult voteDay(String voter, String dayEpoch) {
-        return VaultMeshDayAdvanceResult.failed("MESH_DAY_UNSUPPORTED");
+        throw new UnsupportedOperationException("Use VaultGovernancePort");
     }
 
-    /**
-     * {@code POST /v1/day/advance} — advance ledger day when quorum is met (triggers daily reshare hook).
-     */
+    /** @deprecated Use {@link VaultGovernancePort#advanceDay()}. */
+    @Deprecated
     default VaultMeshDayAdvanceResult advanceDay() {
-        return VaultMeshDayAdvanceResult.failed("MESH_DAY_UNSUPPORTED");
+        throw new UnsupportedOperationException("Use VaultGovernancePort");
     }
 
-    /**
-     * {@code POST /v1/reshare/trigger} — explicit FROST reshare (manual policy or ops).
-     */
+    /** @deprecated Use {@link VaultGovernancePort#triggerReshare(String)}. */
+    @Deprecated
     default VaultMeshReshareResult triggerReshare(String reason) {
-        return VaultMeshReshareResult.failed("MESH_RESHARE_UNSUPPORTED");
+        throw new UnsupportedOperationException("Use VaultGovernancePort");
     }
 
-    /**
-     * {@code GET /v1/bitcoin/deposit} — shared Taproot deposit address used for USERS deposits.
-     *
-     * <p>Product policy: users must deposit to shared Taproot group key ({@code tb1p} / {@code tr()}),
-     * not to any xpub-derived receive address.
-     */
+    /** @deprecated Use {@link VaultDepositDescriptorPort#getUsersDepositAddress()}. */
+    @Deprecated
     default VaultMeshDepositInfo getUsersDepositAddress() {
-        return null;
+        throw new UnsupportedOperationException("Use VaultDepositDescriptorPort");
     }
 
-    /**
-     * {@code GET /v1/bitcoin/deposit?bucket=CHANNELS} — dedicated CHANNELS Taproot deposit
-     * (≠ USERS omnibus key).
-     */
+    /** @deprecated Use {@link VaultDepositDescriptorPort#getChannelsDepositAddress()}. */
+    @Deprecated
     default VaultMeshDepositInfo getChannelsDepositAddress() {
-        return null;
+        throw new UnsupportedOperationException("Use VaultDepositDescriptorPort");
     }
 }

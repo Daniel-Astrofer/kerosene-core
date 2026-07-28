@@ -11,5 +11,13 @@ public record VaultMeshDepositInfo(
         String scheme,
         String outputPubkeyHex,
         String xonlyPubkeyHex,
-        String network) {}
+        String network) {
 
+    public VaultMeshDepositInfo {
+        if (address == null || address.isBlank()) throw new IllegalArgumentException("address required");
+        if (scheme == null || scheme.isBlank()) throw new IllegalArgumentException("scheme required");
+        if (outputPubkeyHex == null || outputPubkeyHex.isBlank()) throw new IllegalArgumentException("outputPubkeyHex required");
+        if (xonlyPubkeyHex == null || xonlyPubkeyHex.isBlank()) throw new IllegalArgumentException("xonlyPubkeyHex required");
+        if (network == null || network.isBlank()) throw new IllegalArgumentException("network required");
+    }
+}
