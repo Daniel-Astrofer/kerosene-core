@@ -26,7 +26,7 @@ Do not call the stack “Hydra”. Use Kerosene backend / shards / vault mesh.
 | --- | --- |
 | **`kfe-service` (`com.kerosene.kfe`)** | Bank: ledger, balances, rules, Intent emit / Receipt handle. No FROST shares. |
 | **Vault mesh (`kerosene-vault`)** | Treasury/signing plane: FROST shares, DKG, day-advance + reshare, Taproot PSBT cosign, governance rewards. |
-| **`kerosene-app` / Core** | Auth, product shell, admin health probes into mesh; ops AES from `AES_SECRET`. |
+| **`auth-service` / Core** | Auth, product shell, admin health probes into mesh; ops AES from `AES_SECRET`. |
 | **`mpc-sidecar`** | Removed from tree and local-full/local-ha deploy; do not re-wire as primary signer. |
 | **HashiCorp Vault Raft** | Not treasury SoT. Removed from local-full and local-ha overlays; not custody health. |
 
