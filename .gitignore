@@ -1,0 +1,13 @@
+.gradle/
+**/build/
+*.class
+*.log
+.idea/
+*.iml
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+*.pyc
+.smart_build_state.json
