@@ -4,7 +4,7 @@ Java/Spring core for the Kerosene financial platform.
 
 ## Modules
 
-- `kerosene-app`: Auth, sessions, notifications and public API.
+- `auth-service`: Auth, sessions, notifications and public API.
 - `kfe-service`: ledger, wallets, reconciliation and financial execution.
 - `kerosene-shared`: shared Java infrastructure.
 - `kerosene-contracts`: temporary in-repository contracts compatibility module.

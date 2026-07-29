@@ -60,7 +60,7 @@ Core ↔ KFE via HTTP/event/ports only. KFE ↔ mesh via vaultmesh adapter (toke
 
 ## Phase 3 — Split runtime/infra
 - goal: rodar KFE como serviço próprio, ainda no mesmo cluster local/prod.
-- Criar imagem/container `kfe-service` separado de `kerosene-app-*`. Caminho canônico: `infra/docker/images/kfe-service/Dockerfile`.
+- Criar imagem/container `kfe-service` separado de `auth-service-*`. Caminho canônico: `infra/docker/images/kfe-service/Dockerfile`.
 - Adicionar `kfe-service` ao compose/k8s. Iniciado com manifests Kubernetes…
 - Variáveis próprias: banco, Redis/outbox, Bitcoin Core, LND, **vault mesh** (`kfe.vaultmesh.*`), políticas de release — **não** mpc-sidecar no path local-full/deploy.
 - Colocar Core → KFE atrás de cliente HTTP interno ou mensageria confiável. Iniciado…

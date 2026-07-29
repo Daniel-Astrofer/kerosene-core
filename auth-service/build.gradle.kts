@@ -121,10 +121,9 @@ tasks.jacocoTestReport {
 }
 
 tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
-    val webAdminBuild = listOf(
-        file("web-admin-build"),
-        file("../../frontend/build/web"),
-    ).firstOrNull { it.resolve("index.html").exists() }
+    val webAdminBuild = file("web-admin-build").takeIf {
+        it.resolve("index.html").exists()
+    }
 
     if (webAdminBuild != null) {
         from(webAdminBuild) {

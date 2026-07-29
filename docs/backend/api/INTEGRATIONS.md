@@ -4,7 +4,7 @@ Documentação corporativa dos endpoints de integração externa.
 
 Fonte real inspecionada:
 
-- `backend/kerosene/kerosene-app/src/main/java/com/kerosene/common/security/EndpointPolicyRegistry.java`
+- `backend/kerosene/auth-service/src/main/java/com/kerosene/common/security/EndpointPolicyRegistry.java`
 - Lista atual de controllers em `backend/kerosene/src/main/java/**`.
 
 ## Estado real do serviço

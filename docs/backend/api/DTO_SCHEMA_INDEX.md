@@ -4,13 +4,13 @@
 
 Este arquivo não é a documentação operacional de API. Para entender um endpoint, consulte primeiro o documento do domínio em [`docs/backend/api/`](README.md), especialmente [`KFE.md`](KFE.md) para fluxos financeiros.
 
-Fonte técnica: DTOs Java em `backend/kerosene/kerosene-app/src/main/java/com/kerosene/**` e `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/**`, controllers ativos, `EndpointPolicyRegistry`, configuração de segurança e anotações `@PreAuthorize`.
+Fonte técnica: DTOs Java em `backend/kerosene/auth-service/src/main/java/com/kerosene/**` e `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/**`, controllers ativos, `EndpointPolicyRegistry`, configuração de segurança e anotações `@PreAuthorize`.
 
 Regra KFE-only: DTOs financeiros legados removidos não devem aparecer neste índice como schemas ativos.
 
 ## `AccountActivationStatusDTO`
 
-Fonte: [AccountActivationStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AccountActivationStatusDTO.java)
+Fonte: [AccountActivationStatusDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AccountActivationStatusDTO.java)
 
 - `boolean activated`
 - `boolean canReceiveInbound`
@@ -24,7 +24,7 @@ Fonte: [AccountActivationStatusDTO.java](../../../backend/kerosene/kerosene-app/
 
 ## `AccountSecurityProfileDTO`
 
-Fonte: [AccountSecurityProfileDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AccountSecurityProfileDTO.java)
+Fonte: [AccountSecurityProfileDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AccountSecurityProfileDTO.java)
 
 - `AccountSecurityType accountSecurity`
 - `Integer shamirTotalShares`
@@ -38,7 +38,7 @@ Fonte: [AccountSecurityProfileDTO.java](../../../backend/kerosene/kerosene-app/s
 
 ## `AccountSecurityStatusDTO`
 
-Fonte: [AccountSecurityStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AccountSecurityStatusDTO.java)
+Fonte: [AccountSecurityStatusDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AccountSecurityStatusDTO.java)
 
 - `boolean passwordConfigured`
 - `boolean passkeyRegistered`
@@ -52,7 +52,7 @@ Fonte: [AccountSecurityStatusDTO.java](../../../backend/kerosene/kerosene-app/sr
 
 ## `AccountSecurityUpdateRequestDTO`
 
-Fonte: [AccountSecurityUpdateRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AccountSecurityUpdateRequestDTO.java)
+Fonte: [AccountSecurityUpdateRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AccountSecurityUpdateRequestDTO.java)
 
 - `accountSecurity: AccountSecurityType`
 - `shamirTotalShares: Integer`
@@ -61,7 +61,7 @@ Fonte: [AccountSecurityUpdateRequestDTO.java](../../../backend/kerosene/kerosene
 
 ## `AdminAccessAttemptDTO`
 
-Fonte: [AdminAccessAttemptDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminAccessAttemptDTO.java)
+Fonte: [AdminAccessAttemptDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminAccessAttemptDTO.java)
 
 - `UUID attemptId`
 - `String status`
@@ -75,13 +75,13 @@ Fonte: [AdminAccessAttemptDTO.java](../../../backend/kerosene/kerosene-app/src/m
 
 ## `AdminAccessDecisionRequestDTO`
 
-Fonte: [AdminAccessDecisionRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminAccessDecisionRequestDTO.java)
+Fonte: [AdminAccessDecisionRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminAccessDecisionRequestDTO.java)
 
 - `decision: String`
 
 ## `AdminAuthenticatedDeviceDTO`
 
-Fonte: [AdminAuthenticatedDeviceDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminAuthenticatedDeviceDTO.java)
+Fonte: [AdminAuthenticatedDeviceDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminAuthenticatedDeviceDTO.java)
 
 - `String deviceId`
 - `String deviceName`
@@ -93,14 +93,14 @@ Fonte: [AdminAuthenticatedDeviceDTO.java](../../../backend/kerosene/kerosene-app
 
 ## `AdminKeyCreateRequestDTO`
 
-Fonte: [AdminKeyCreateRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminKeyCreateRequestDTO.java)
+Fonte: [AdminKeyCreateRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminKeyCreateRequestDTO.java)
 
 - `keyMaterialHash: String`
 - `deviceInstallId: String`
 
 ## `AdminKeyStatusDTO`
 
-Fonte: [AdminKeyStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminKeyStatusDTO.java)
+Fonte: [AdminKeyStatusDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminKeyStatusDTO.java)
 
 - `boolean configured`
 - `String status`
@@ -110,7 +110,7 @@ Fonte: [AdminKeyStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/
 
 ## `AdminLoginRequestDTO`
 
-Fonte: [AdminLoginRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminLoginRequestDTO.java)
+Fonte: [AdminLoginRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminLoginRequestDTO.java)
 
 - `username: String`
 - `adminKeyProof: String`
@@ -122,7 +122,7 @@ Fonte: [AdminLoginRequestDTO.java](../../../backend/kerosene/kerosene-app/src/ma
 
 ## `AdminLoginResponseDTO`
 
-Fonte: [AdminLoginResponseDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AdminLoginResponseDTO.java)
+Fonte: [AdminLoginResponseDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AdminLoginResponseDTO.java)
 
 - `String status`
 - `boolean requiresMobileApproval`
@@ -133,7 +133,7 @@ Fonte: [AdminLoginResponseDTO.java](../../../backend/kerosene/kerosene-app/src/m
 
 ## `AppPinStatusDTO`
 
-Fonte: [AppPinStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/AppPinStatusDTO.java)
+Fonte: [AppPinStatusDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/AppPinStatusDTO.java)
 
 - `boolean enabled`
 - `boolean configured`
@@ -151,7 +151,7 @@ Fonte: [AppPinStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/ja
 
 ## `BackupCodesStatusDTO`
 
-Fonte: [BackupCodesStatusDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/BackupCodesStatusDTO.java)
+Fonte: [BackupCodesStatusDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/BackupCodesStatusDTO.java)
 
 - `boolean enabled`
 - `int remainingCodes`
@@ -159,7 +159,7 @@ Fonte: [BackupCodesStatusDTO.java](../../../backend/kerosene/kerosene-app/src/ma
 
 ## `ConfigureAppPinRequestDTO`
 
-Fonte: [ConfigureAppPinRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/ConfigureAppPinRequestDTO.java)
+Fonte: [ConfigureAppPinRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/ConfigureAppPinRequestDTO.java)
 
 - `enabled: Boolean`
 - `pin: String`
@@ -168,7 +168,7 @@ Fonte: [ConfigureAppPinRequestDTO.java](../../../backend/kerosene/kerosene-app/s
 
 ## `DeviceKeyChallengeResponse`
 
-Fonte: [DeviceKeyChallengeResponse.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyChallengeResponse.java)
+Fonte: [DeviceKeyChallengeResponse.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyChallengeResponse.java)
 
 - `String challengeId`
 - `String challenge`
@@ -179,7 +179,7 @@ Fonte: [DeviceKeyChallengeResponse.java](../../../backend/kerosene/kerosene-app/
 
 ## `DeviceKeyDeviceDTO`
 
-Fonte: [DeviceKeyDeviceDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyDeviceDTO.java)
+Fonte: [DeviceKeyDeviceDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyDeviceDTO.java)
 
 - `String credentialId`
 - `String deviceName`
@@ -197,7 +197,7 @@ Fonte: [DeviceKeyDeviceDTO.java](../../../backend/kerosene/kerosene-app/src/main
 
 ## `DeviceKeyRegistrationRequest`
 
-Fonte: [DeviceKeyRegistrationRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyRegistrationRequest.java)
+Fonte: [DeviceKeyRegistrationRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyRegistrationRequest.java)
 
 - `publicKey: String`
 - `publicKeySha256: String`
@@ -216,7 +216,7 @@ Fonte: [DeviceKeyRegistrationRequest.java](../../../backend/kerosene/kerosene-ap
 
 ## `DeviceKeyVerifyRequest`
 
-Fonte: [DeviceKeyVerifyRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyVerifyRequest.java)
+Fonte: [DeviceKeyVerifyRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/devicekey/DeviceKeyVerifyRequest.java)
 
 - `username: String`
 - `credentialId: String`
@@ -226,7 +226,7 @@ Fonte: [DeviceKeyVerifyRequest.java](../../../backend/kerosene/kerosene-app/src/
 
 ## `DeviceTokenRegisterRequest`
 
-Fonte: [DeviceTokenRegisterRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/notification/dto/DeviceTokenRegisterRequest.java)
+Fonte: [DeviceTokenRegisterRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/notification/dto/DeviceTokenRegisterRequest.java)
 
 - `String platform`
 - `String token`
@@ -235,7 +235,7 @@ Fonte: [DeviceTokenRegisterRequest.java](../../../backend/kerosene/kerosene-app/
 
 ## `DeviceTokenResponse`
 
-Fonte: [DeviceTokenResponse.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/notification/dto/DeviceTokenResponse.java)
+Fonte: [DeviceTokenResponse.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/notification/dto/DeviceTokenResponse.java)
 
 - `Long id`
 - `String platform`
@@ -249,7 +249,7 @@ Fonte: [DeviceTokenResponse.java](../../../backend/kerosene/kerosene-app/src/mai
 
 ## `EmergencyRecoveryFinishRequest`
 
-Fonte: [EmergencyRecoveryFinishRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryFinishRequest.java)
+Fonte: [EmergencyRecoveryFinishRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryFinishRequest.java)
 
 - `recoverySessionId: String`
 - `totpCode: String`
@@ -264,14 +264,14 @@ Fonte: [EmergencyRecoveryFinishRequest.java](../../../backend/kerosene/kerosene-
 
 ## `EmergencyRecoveryFinishResponse`
 
-Fonte: [EmergencyRecoveryFinishResponse.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryFinishResponse.java)
+Fonte: [EmergencyRecoveryFinishResponse.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryFinishResponse.java)
 
 - `username: String`
 - `newBackupCodes: List<String>`
 
 ## `EmergencyRecoveryStartRequest`
 
-Fonte: [EmergencyRecoveryStartRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryStartRequest.java)
+Fonte: [EmergencyRecoveryStartRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryStartRequest.java)
 
 - `username: String`
 - `recoveryCodes: List<String>`
@@ -280,7 +280,7 @@ Fonte: [EmergencyRecoveryStartRequest.java](../../../backend/kerosene/kerosene-a
 
 ## `EmergencyRecoveryStartResponse`
 
-Fonte: [EmergencyRecoveryStartResponse.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryStartResponse.java)
+Fonte: [EmergencyRecoveryStartResponse.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/EmergencyRecoveryStartResponse.java)
 
 - `recoverySessionId: String`
 - `otpUri: String`
@@ -484,7 +484,7 @@ Fonte: [KfeWalletResponse.java](../../../backend/kerosene/kfe-service/src/main/j
 
 ## `PasskeyInventoryDTO`
 
-Fonte: [PasskeyInventoryDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/PasskeyInventoryDTO.java)
+Fonte: [PasskeyInventoryDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/PasskeyInventoryDTO.java)
 
 - `boolean passkeyRegistered`
 - `boolean compatibleForCurrentLogin`
@@ -495,7 +495,7 @@ Fonte: [PasskeyInventoryDTO.java](../../../backend/kerosene/kerosene-app/src/mai
 
 ## `PasskeyRegistrationRequest`
 
-Fonte: [PasskeyRegistrationRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/passkey/PasskeyRegistrationRequest.java)
+Fonte: [PasskeyRegistrationRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/passkey/PasskeyRegistrationRequest.java)
 
 - `publicKey: String`
 - `deviceName: String`
@@ -515,7 +515,7 @@ Fonte: [PasskeyRegistrationRequest.java](../../../backend/kerosene/kerosene-app/
 
 ## `PasskeyVerifyRequest`
 
-Fonte: [PasskeyVerifyRequest.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/passkey/PasskeyVerifyRequest.java)
+Fonte: [PasskeyVerifyRequest.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/passkey/PasskeyVerifyRequest.java)
 
 - `username: String`
 - `signature: String`
@@ -525,7 +525,7 @@ Fonte: [PasskeyVerifyRequest.java](../../../backend/kerosene/kerosene-app/src/ma
 
 ## `SignupResponseDTO`
 
-Fonte: [SignupResponseDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/SignupResponseDTO.java)
+Fonte: [SignupResponseDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/SignupResponseDTO.java)
 
 - `sessionId: String`
 - `otpUri: String`
@@ -534,14 +534,14 @@ Fonte: [SignupResponseDTO.java](../../../backend/kerosene/kerosene-app/src/main/
 
 ## `SignupTotpVerifyRequestDTO`
 
-Fonte: [SignupTotpVerifyRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/SignupTotpVerifyRequestDTO.java)
+Fonte: [SignupTotpVerifyRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/SignupTotpVerifyRequestDTO.java)
 
 - `sessionId: String`
 - `totpCode: String`
 
 ## `TotpSetupResponseDTO`
 
-Fonte: [TotpSetupResponseDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/TotpSetupResponseDTO.java)
+Fonte: [TotpSetupResponseDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/TotpSetupResponseDTO.java)
 
 - `String otpUri`
 - `String secret`
@@ -563,7 +563,7 @@ Fonte: [KfeReserveOverviewResponse.java](../../../backend/kerosene/kfe-service/s
 
 ## `UserDTO`
 
-Fonte: [UserDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/UserDTO.java)
+Fonte: [UserDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/UserDTO.java)
 
 - `username: String`
 - `totpSecret: String`
@@ -581,6 +581,6 @@ Fonte: [UserDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/k
 
 ## `VerifyAppPinRequestDTO`
 
-Fonte: [VerifyAppPinRequestDTO.java](../../../backend/kerosene/kerosene-app/src/main/java/com/kerosene/auth/dto/VerifyAppPinRequestDTO.java)
+Fonte: [VerifyAppPinRequestDTO.java](../../../backend/kerosene/auth-service/src/main/java/com/kerosene/auth/dto/VerifyAppPinRequestDTO.java)
 
 - `pin: String`

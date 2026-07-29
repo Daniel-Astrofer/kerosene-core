@@ -8,7 +8,7 @@ Fonte real inspecionada:
 - `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/dto/KfeAuditEventResponse.java`
 - `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/dto/KfeAuditLatestResponse.java`
 - `backend/kerosene/kfe-service/src/main/java/com/kerosene/kfe/dto/KfeAuditRootResponse.java`
-- `backend/kerosene/kerosene-app/src/main/java/com/kerosene/common/security/EndpointPolicyRegistry.java`
+- `backend/kerosene/auth-service/src/main/java/com/kerosene/common/security/EndpointPolicyRegistry.java`
 
 ## Estado real do serviço
 
