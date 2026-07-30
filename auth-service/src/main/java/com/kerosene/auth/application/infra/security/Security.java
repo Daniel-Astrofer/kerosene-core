@@ -55,7 +55,7 @@ public class Security {
                                                 .requestMatchers(endpointPolicyRegistry.publicEndpoints())
                                                 .permitAll()
                                                 .requestMatchers(endpointPolicyRegistry.adminEndpoints())
-                                                .hasRole("ADMIN")
+                                                .authenticated()
                                                 .requestMatchers(endpointPolicyRegistry.authenticatedEndpoints())
                                                 .authenticated()
                                                 .anyRequest().denyAll())

@@ -1,6 +1,7 @@
 package com.kerosene.common.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
  * @param <T> Type of the data payload.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonPropertyOrder(alphabetic = true)
 public class ApiResponse<T> {
 
     private boolean success;

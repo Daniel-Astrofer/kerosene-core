@@ -10,6 +10,7 @@ import com.kerosene.common.financial.FinancialOperationsAdminPort;
 import com.kerosene.common.infra.health.OperationalHealthService;
 import com.kerosene.common.infra.health.OperationalHealthSnapshot;
 import com.kerosene.common.release.ReleaseManifestService;
+import com.kerosene.common.security.AdminRoles;
 import com.kerosene.security.vault.VaultMeshHealthService;
 
 import java.time.Instant;
@@ -19,7 +20,7 @@ import java.util.LinkedHashMap;
 
 @RestController
 @RequestMapping("/api/admin/operations")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize(AdminRoles.HAS_ADMIN_OR_OPERATOR)
 public class AdminOperationsController {
 
     private final OperationalHealthService operationalHealthService;
