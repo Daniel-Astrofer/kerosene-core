@@ -20,5 +20,11 @@ jobs:
     with:
       gradle-arguments: test
 
+  jctl:
+    uses: Daniel-Astrofer/.github/.github/workflows/admin-cli-ci.yml@829c04ccb3ba3d171695e848fadadca6a13bf20e
+    with:
+      language: java
+      package: kerosene-jctl
+
   security:
     uses: Daniel-Astrofer/.github/.github/workflows/security-scan.yml@2552ff2125c2d72accebe93804b8e139a52ded13
