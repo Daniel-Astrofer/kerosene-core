@@ -46,10 +46,10 @@ public class KfeGatewayController {
             forwardHeaders.set("X-KFE-Internal-Secret", internalSecret);
             forwardHeaders.setContentType(MediaType.APPLICATION_JSON);
 
-            // Copy useful client headers
+            // Copy client headers including Authorization (KFE validates JWT)
             for (String name : Collections.list(request.getHeaderNames())) {
                 String lower = name.toLowerCase();
-                if (lower.equals("authorization") || lower.equals("host")) continue;
+                if (lower.equals("host")) continue;
                 String value = request.getHeader(name);
                 if (value != null && !value.isEmpty()) {
                     forwardHeaders.set(name, value);

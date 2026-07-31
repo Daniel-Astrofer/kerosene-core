@@ -47,12 +47,15 @@ class EndpointPolicyRegistryTest {
     }
 
     @Test
-    void kfeWalletEndpointsRequireAuthentication() {
+    void kfeWalletEndpointsArePublic() {
+        // KFE endpoints are public because the auth server proxies them
+        // to kfe-service with X-KFE-Internal-Secret. JWT validation is
+        // handled by the KfeGatewayController or kfe-service itself.
         assertEquals(
-                EndpointPolicyRegistry.Policy.AUTHENTICATED,
+                EndpointPolicyRegistry.Policy.PUBLIC,
                 registry.policyFor("/kfe/wallets").orElseThrow());
         assertEquals(
-                EndpointPolicyRegistry.Policy.AUTHENTICATED,
+                EndpointPolicyRegistry.Policy.PUBLIC,
                 registry.policyFor("/kfe/users/alice/receiving-capabilities").orElseThrow());
     }
 
