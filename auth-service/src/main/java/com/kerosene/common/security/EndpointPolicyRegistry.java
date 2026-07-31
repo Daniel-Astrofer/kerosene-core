@@ -37,7 +37,6 @@ public class EndpointPolicyRegistry {
             "/api/economy/**",
             "/audit/**",
             "/health/dependencies",
-            "/kfe/**",
             "/notifications",
             "/notifications/**",
             "/content",
@@ -114,6 +113,7 @@ public class EndpointPolicyRegistry {
             "/actuator/health/**",
             "/sovereignty/ping",
             "/sovereignty/status",
+            "/kfe/**",
             "/error",
             "/ws/**"
     };
