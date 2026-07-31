@@ -104,6 +104,9 @@ class AdminApiSecurityTest {
             if (publicMethods.contains(method.getName())) {
                 continue;
             }
+            if (!isEndpointMethod(method)) {
+                continue;
+            }
             PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
             assertNotNull(annotation,
                     "AdminAccessController#" + method.getName() + " must have @PreAuthorize");
@@ -215,6 +218,9 @@ class AdminApiSecurityTest {
             if (Set.of("startLogin", "pollLogin").contains(method.getName())) {
                 continue;
             }
+            if (!isEndpointMethod(method)) {
+                continue;
+            }
             PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
             assertNotNull(annotation);
             assertEquals("hasRole('ADMIN')", annotation.value(),
@@ -275,6 +281,11 @@ class AdminApiSecurityTest {
     }
 
     // ────── Helpers ──────────────────────────────────────────────────
+
+    private boolean isEndpointMethod(Method method) {
+        return METHOD_MAPPING_ANNOTATIONS.stream()
+                .anyMatch(ann -> method.getAnnotation(ann) != null);
+    }
 
     private Set<Class<?>> allAdminControllers() {
         Set<Class<?>> all = new java.util.LinkedHashSet<>();

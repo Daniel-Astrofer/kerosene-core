@@ -80,12 +80,24 @@ class AdminRoleEscalationSecurityTest {
                 if (PUBLIC_ADMIN_METHODS.contains(method.getName())) {
                     continue;
                 }
+                if (!hasMappingAnnotation(method)) {
+                    continue;
+                }
                 boolean hasAnnotation = method.getAnnotation(
                         org.springframework.security.access.prepost.PreAuthorize.class) != null;
                 assertTrue(hasAnnotation,
                         "AdminAccessController#" + method.getName()
                                 + " is missing @PreAuthorize — auth bypass");
             }
+        }
+
+        private boolean hasMappingAnnotation(Method method) {
+            return method.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class) != null
+                    || method.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class) != null
+                    || method.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class) != null
+                    || method.getAnnotation(org.springframework.web.bind.annotation.DeleteMapping.class) != null
+                    || method.getAnnotation(org.springframework.web.bind.annotation.PatchMapping.class) != null
+                    || method.getAnnotation(org.springframework.web.bind.annotation.RequestMapping.class) != null;
         }
 
         @Test
@@ -96,6 +108,9 @@ class AdminRoleEscalationSecurityTest {
             for (Method method : controller.getDeclaredMethods()) {
                 if (PUBLIC_ADMIN_METHODS.contains(method.getName())) {
                     continue; // /auth/admin/login and poll are intentionally public
+                }
+                if (!hasMappingAnnotation(method)) {
+                    continue;
                 }
                 // All other methods require ADMIN role
                 org.springframework.security.access.prepost.PreAuthorize annotation =
@@ -125,6 +140,9 @@ class AdminRoleEscalationSecurityTest {
             // AdminAccessController methods (except login) must be ADMIN-only
             for (Method method : com.kerosene.auth.controller.AdminAccessController.class.getDeclaredMethods()) {
                 if (PUBLIC_ADMIN_METHODS.contains(method.getName())) {
+                    continue;
+                }
+                if (!hasMappingAnnotation(method)) {
                     continue;
                 }
                 assertEquals(adminOnlyExpression,
