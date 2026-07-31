@@ -71,7 +71,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new RouteLimit("/kfe/transactions/quote", "kfe-transaction-quote", 20),
             new RouteLimit("/kfe/transactions", "kfe-transaction-submit", 6),
             new RouteLimit("/kfe/wallets", "kfe-wallets", 20),
-            new RouteLimit("/kfe/users/", "kfe-receiving-capabilities", 20));
+            new RouteLimit("/kfe/users/", "kfe-receiving-capabilities", 20),
+            // Admin API rate limits — stricter to protect against abuse
+            new RouteLimit("/api/admin/ledger", "admin-ledger", 30),
+            new RouteLimit("/api/admin/p2p", "admin-p2p", 30),
+            new RouteLimit("/api/admin/onramp", "admin-onramp", 30),
+            new RouteLimit("/api/admin/reconciliation", "admin-reconciliation", 20),
+            new RouteLimit("/api/admin/providers", "admin-providers", 30),
+            new RouteLimit("/api/admin/operations", "admin-operations", 60));
 
     private final RedisServicer redisService;
     private final ObjectMapper objectMapper;
