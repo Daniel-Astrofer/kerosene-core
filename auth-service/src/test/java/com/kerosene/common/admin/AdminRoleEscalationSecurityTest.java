@@ -59,6 +59,15 @@ class AdminRoleEscalationSecurityTest {
 
     // ────── Auth Bypass ────────────────────────────────────────────────
 
+    static boolean hasMappingAnnotation(Method method) {
+        return method.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class) != null
+                || method.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class) != null
+                || method.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class) != null
+                || method.getAnnotation(org.springframework.web.bind.annotation.DeleteMapping.class) != null
+                || method.getAnnotation(org.springframework.web.bind.annotation.PatchMapping.class) != null
+                || method.getAnnotation(org.springframework.web.bind.annotation.RequestMapping.class) != null;
+    }
+
     @Nested
     @DisplayName("Auth bypass prevention")
     class AuthBypassPrevention {
@@ -89,15 +98,6 @@ class AdminRoleEscalationSecurityTest {
                         "AdminAccessController#" + method.getName()
                                 + " is missing @PreAuthorize — auth bypass");
             }
-        }
-
-        private boolean hasMappingAnnotation(Method method) {
-            return method.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class) != null
-                    || method.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class) != null
-                    || method.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class) != null
-                    || method.getAnnotation(org.springframework.web.bind.annotation.DeleteMapping.class) != null
-                    || method.getAnnotation(org.springframework.web.bind.annotation.PatchMapping.class) != null
-                    || method.getAnnotation(org.springframework.web.bind.annotation.RequestMapping.class) != null;
         }
 
         @Test
