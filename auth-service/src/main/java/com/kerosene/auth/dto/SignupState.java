@@ -16,9 +16,10 @@ public class SignupState implements Serializable {
     private String username;
 
     /**
-     * Hashed account password.
+     * Hashed account password. Stored as String for Jackson/Redis compatibility.
+     * char[] causes serialization ambiguity across Jackson versions.
      */
-    private char[] passphrase;
+    private String passphrase;
 
     /**
      * Raw TOTP seed — secret key for QR code scanning.
@@ -93,11 +94,11 @@ public class SignupState implements Serializable {
         this.username = username;
     }
 
-    public char[] getPassphrase() {
+    public String getPassphrase() {
         return passphrase;
     }
 
-    public void setPassphrase(char[] passphrase) {
+    public void setPassphrase(String passphrase) {
         this.passphrase = passphrase;
     }
 

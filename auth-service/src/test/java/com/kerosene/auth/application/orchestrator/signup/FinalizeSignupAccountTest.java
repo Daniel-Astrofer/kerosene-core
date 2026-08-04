@@ -165,7 +165,7 @@ class FinalizeSignupAccountTest {
         SignupState state = new SignupState();
         state.setSessionId("session-1");
         state.setUsername("alice");
-        state.setPassphrase("hashed-password".toCharArray());
+        state.setPassphrase("hashed-password");
         state.setTotpSecret("BASE32SECRET");
         state.setBackupCodes(List.of("hash-a", "hash-b"));
         state.setTotpVerified(totpVerified);
