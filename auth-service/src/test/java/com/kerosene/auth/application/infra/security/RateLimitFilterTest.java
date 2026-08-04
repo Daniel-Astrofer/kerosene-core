@@ -10,6 +10,7 @@ import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -18,7 +19,7 @@ class RateLimitFilterTest {
     @Test
     void shouldBucketPublicAuthRequestsByUsernameInsteadOfRemoteAddressAlone() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(1L);
+        when(redisServicer.incrementWithExpire(anyString(), anyLong())).thenReturn(1L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);
@@ -31,7 +32,7 @@ class RateLimitFilterTest {
         filter.doFilter(bobRequest, response, chain);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(redisServicer, times(2)).increment(captor.capture());
+        verify(redisServicer, times(2)).incrementWithExpire(captor.capture(), anyLong());
 
         assertEquals(2, captor.getAllValues().size());
         assertNotEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
@@ -41,7 +42,7 @@ class RateLimitFilterTest {
     @Test
     void shouldNotLetSpoofedAuthorizationHeaderBypassPublicAuthIdentityBucket() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(1L);
+        when(redisServicer.incrementWithExpire(anyString(), anyLong())).thenReturn(1L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);
@@ -55,7 +56,7 @@ class RateLimitFilterTest {
         filter.doFilter(secondRequest, new MockHttpServletResponse(), chain);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(redisServicer, times(2)).increment(captor.capture());
+        verify(redisServicer, times(2)).incrementWithExpire(captor.capture(), anyLong());
 
         assertEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
         verify(chain, times(2)).doFilter(any(), any());
@@ -64,7 +65,7 @@ class RateLimitFilterTest {
     @Test
     void shouldBucketAuthenticatedFundRequestsByAuthorizationBeforeIdempotencyKey() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(1L);
+        when(redisServicer.incrementWithExpire(anyString(), anyLong())).thenReturn(1L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);
@@ -82,7 +83,7 @@ class RateLimitFilterTest {
         filter.doFilter(secondRequest, new MockHttpServletResponse(), chain);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(redisServicer, times(2)).increment(captor.capture());
+        verify(redisServicer, times(2)).incrementWithExpire(captor.capture(), anyLong());
 
         assertEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
         verify(chain, times(2)).doFilter(any(), any());
@@ -91,7 +92,7 @@ class RateLimitFilterTest {
     @Test
     void shouldBucketPublicAuthRequestsWithoutIdentityByNetwork() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(1L);
+        when(redisServicer.incrementWithExpire(anyString(), anyLong())).thenReturn(1L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);
@@ -105,7 +106,7 @@ class RateLimitFilterTest {
         filter.doFilter(secondRequest, new MockHttpServletResponse(), chain);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(redisServicer, times(2)).increment(captor.capture());
+        verify(redisServicer, times(2)).incrementWithExpire(captor.capture(), anyLong());
 
         assertEquals(captor.getAllValues().get(0), captor.getAllValues().get(1));
         verify(chain, times(2)).doFilter(any(), any());
@@ -114,7 +115,7 @@ class RateLimitFilterTest {
     @Test
     void shouldRejectWhenPublicRouteExceedsLimit() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(11L);
+        when(redisServicer.incrementWithExpire(anyString(), anyLong())).thenReturn(11L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);
@@ -129,7 +130,7 @@ class RateLimitFilterTest {
     @Test
     void shouldApplyGranularLimitToFundMovementRoutes() throws Exception {
         RedisServicer redisServicer = mock(RedisServicer.class);
-        when(redisServicer.increment(anyString())).thenReturn(7L);
+        when(redisServicer.incrementWithExpire(anyString(), anyLong())).thenReturn(7L);
 
         RateLimitFilter filter = new RateLimitFilter(redisServicer, new ObjectMapper());
         FilterChain chain = mock(FilterChain.class);

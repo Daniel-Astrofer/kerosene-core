@@ -226,6 +226,11 @@ class TransactionalAuthenticationPasskeyIntegrationTest {
         }
 
         @Override
+        public Long incrementWithExpire(String key, long timeoutSeconds) {
+            return 1L;
+        }
+
+        @Override
         public String getValue(String key) {
             return values.get(key);
         }
