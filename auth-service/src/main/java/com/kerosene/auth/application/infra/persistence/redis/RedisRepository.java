@@ -177,6 +177,26 @@ public class RedisRepository implements RedisContract {
     }
 
     @Override
+    public Long incrementWithExpire(String key, long timeoutSeconds) {
+        try {
+            // Atomic Lua: INCR + conditional EXPIRE on first increment
+            String script = "local n = redis.call('INCR', KEYS[1]) "
+                    + "if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end "
+                    + "return n";
+            Long value = redis.execute(
+                    org.springframework.data.redis.core.script.DefaultRedisScript.of(script, Long.class),
+                    java.util.List.of(key),
+                    String.valueOf(timeoutSeconds));
+            return value;
+        } catch (RuntimeException exception) {
+            log.warn("[Redis] incrementWithExpire failed for keyRef={}: {}",
+                    key == null ? "null" : Integer.toHexString(key.hashCode()),
+                    exception.getMessage());
+            return null;
+        }
+    }
+
+    @Override
     public void expire(String key, long timeoutSeconds) {
         try {
             redis.expire(key, timeoutSeconds, TimeUnit.SECONDS);

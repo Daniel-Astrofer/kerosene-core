@@ -117,7 +117,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         Long requests;
         try {
-            requests = redisService.increment(key);
+            // Atomic INCR + EXPIRE via Lua — TTL is always set on first increment
+            requests = redisService.incrementWithExpire(key, 60);
         } catch (RuntimeException exception) {
             // Fail-open: never block legitimate traffic when Redis is unavailable/degraded.
             log.warn("Rate limit skipped because Redis increment failed: {}", exception.getMessage());
@@ -130,14 +131,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             log.warn("Rate limit skipped because Redis increment returned null for bucket={}", routeLimit.bucket());
             filterChain.doFilter(effectiveRequest, response);
             return;
-        }
-
-        if (requests == 1) {
-            try {
-                redisService.expire(key, 60);
-            } catch (RuntimeException exception) {
-                log.warn("Rate limit expire failed (non-fatal): {}", exception.getMessage());
-            }
         }
 
         if (requests > limit) {

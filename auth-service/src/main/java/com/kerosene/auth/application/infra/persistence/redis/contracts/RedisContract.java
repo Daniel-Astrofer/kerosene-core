@@ -36,6 +36,8 @@ public interface RedisContract {
     // Generic methods for security features
     Long increment(String key);
 
+    Long incrementWithExpire(String key, long timeoutSeconds);
+
     void expire(String key, long timeoutSeconds);
 
     String getValue(String key);

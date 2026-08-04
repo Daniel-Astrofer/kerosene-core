@@ -13,6 +13,12 @@ public interface RedisServicer {
     // Generic methods
     Long increment(String key);
 
+    /**
+     * Atomically increments and conditionally sets expiry.
+     * Uses Lua EVAL to guarantee the TTL is always set on the first INCR.
+     */
+    Long incrementWithExpire(String key, long timeoutSeconds);
+
     void expire(String key, long timeoutSeconds);
 
     String getValue(String key);

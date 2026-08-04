@@ -74,6 +74,11 @@ public class RedisService implements RedisServicer {
     }
 
     @Override
+    public Long incrementWithExpire(String key, long timeoutSeconds) {
+        return repository.incrementWithExpire(key, timeoutSeconds);
+    }
+
+    @Override
     public void expire(String key, long timeoutSeconds) {
         repository.expire(key, timeoutSeconds);
     }
