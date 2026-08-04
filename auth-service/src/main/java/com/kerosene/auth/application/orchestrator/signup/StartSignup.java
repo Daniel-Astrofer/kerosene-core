@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -22,10 +24,12 @@ import com.kerosene.auth.application.service.validation.totp.contracts.TOTPKeyGe
 import com.kerosene.auth.dto.SignupState;
 import com.kerosene.auth.dto.SignupResponseDTO;
 import com.kerosene.auth.dto.UserDTO;
+import com.kerosene.common.infra.logging.LogSanitizer;
 
 @Component
 public class StartSignup {
 
+    private static final Logger log = LoggerFactory.getLogger(StartSignup.class);
     private static final int BACKUP_CODE_COUNT = 10;
     private static final int BACKUP_CODE_BOUND = 100_000_000;
     private static final Duration SIGNUP_STATE_TTL = Duration.ofHours(24);
@@ -53,7 +57,10 @@ public class StartSignup {
     }
 
     public SignupResponseDTO execute(UserDTO dto) {
-        if (!powService.verifyChallenge(dto.getChallenge(), dto.getNonce())) {
+        if (!powService.isEnabled()) {
+            log.warn("PoW is disabled — skipping challenge verification for signup userRef={}",
+                    LogSanitizer.fingerprint(dto.getUsername()));
+        } else if (!powService.verifyChallenge(dto.getChallenge(), dto.getNonce())) {
             throw new AuthExceptions.InvalidCredentials(
                     "Invalid or expired Proof of Work. Please request a new challenge and calculate the correct nonce.");
         }
