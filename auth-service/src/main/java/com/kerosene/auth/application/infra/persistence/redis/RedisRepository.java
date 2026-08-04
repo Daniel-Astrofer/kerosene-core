@@ -184,8 +184,9 @@ public class RedisRepository implements RedisContract {
             String script = "local n = redis.call('INCR', KEYS[1]) "
                     + "if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end "
                     + "return n";
+            DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>(script, Long.class);
             Long value = redis.execute(
-                    org.springframework.data.redis.core.script.DefaultRedisScript.of(script, Long.class),
+                    redisScript,
                     java.util.List.of(key),
                     String.valueOf(timeoutSeconds));
             return value;
