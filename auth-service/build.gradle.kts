@@ -50,7 +50,10 @@ configurations.configureEach {
 dependencies {
     implementation(project(":kerosene-contracts"))
     implementation(project(":kerosene-shared"))
-    // Test-only: kfe-service migrations and entities are referenced by architecture/migration tests
+    // Runtime: auth-service depends on kfe-service beans (AdminLedgerService, etc.)
+    // Flyway ownership is separate: auth migrations live in db/migration/auth/
+    implementation(project(":kfe-service"))
+    // Additional kfe classes needed by migration/architecture tests
     testImplementation(project(":kfe-service"))
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 
