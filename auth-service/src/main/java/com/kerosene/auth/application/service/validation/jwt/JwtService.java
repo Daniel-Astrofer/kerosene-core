@@ -21,6 +21,12 @@ public class JwtService implements JwtServicer {
     @Value("${api.secret.token.secret}")
     private String secretKey;
 
+    @Value("${kfe.auth.jwt.issuer:Kerosene-Auth}")
+    private String jwtIssuer;
+
+    @Value("${kfe.auth.jwt.audience:kerosene-app}")
+    private String jwtAudience;
+
     @Autowired(required = false)
     private RedisServicer redisService;
 
@@ -44,6 +50,8 @@ public class JwtService implements JwtServicer {
         return Jwts.builder()
                 .subject(String.valueOf(id))
                 .id(String.valueOf(id))
+                .issuer(jwtIssuer)
+                .audience().add(jwtAudience).and()
                 .claim("sessionId", normalizeSessionId(sessionId))
                 .claim("roles", normalizeRoles(roles))
                 .issuedAt(new Date())

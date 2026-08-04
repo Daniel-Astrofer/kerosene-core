@@ -8,6 +8,7 @@ import com.kerosene.auth.dto.EmergencyRecoveryState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
 import java.util.concurrent.TimeUnit;
@@ -170,6 +171,27 @@ public class RedisRepository implements RedisContract {
             // Rate-limit and counters must not 500 the whole request when Redis is degraded
             // (e.g. MISCONF / stop-writes after disk-full bgsave). Callers may treat null as fail-open.
             log.warn("[Redis] increment failed for keyRef={}: {}",
+                    key == null ? "null" : Integer.toHexString(key.hashCode()),
+                    exception.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public Long incrementWithExpire(String key, long timeoutSeconds) {
+        try {
+            // Atomic Lua: INCR + conditional EXPIRE on first increment
+            String script = "local n = redis.call('INCR', KEYS[1]) "
+                    + "if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end "
+                    + "return n";
+            DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>(script, Long.class);
+            Long value = redis.execute(
+                    redisScript,
+                    java.util.List.of(key),
+                    String.valueOf(timeoutSeconds));
+            return value;
+        } catch (RuntimeException exception) {
+            log.warn("[Redis] incrementWithExpire failed for keyRef={}: {}",
                     key == null ? "null" : Integer.toHexString(key.hashCode()),
                     exception.getMessage());
             return null;
