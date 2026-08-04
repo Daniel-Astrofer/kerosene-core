@@ -89,6 +89,14 @@ public class FinalizeSignupAccount {
             log.warn("Concurrent signup finalization detected for sessionRef={}",
                     LogSanitizer.fingerprint(sessionId), e);
             throw e;
+        } catch (RuntimeException e) {
+            log.error("[FINALIZE] Failed to finalize signup for sessionRef={} userRef={}: {} - {}",
+                    LogSanitizer.fingerprint(sessionId),
+                    LogSanitizer.fingerprint(state.getUsername()),
+                    e.getClass().getSimpleName(),
+                    e.getMessage(),
+                    e);
+            throw e;
         }
     }
 
