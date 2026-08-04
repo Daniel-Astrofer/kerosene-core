@@ -576,13 +576,21 @@ public class PasskeyOrchestrator {
                     LogSanitizer.fingerprint(sessionId),
                     LogSanitizer.fingerprint(state.getUsername()),
                     exception.getMessage());
-            throw exception;
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error(
+                            "Account creation is temporarily unavailable. " + exception.getMessage(),
+                            ErrorCodes.SYS_INTERNAL_ERROR));
         } catch (RuntimeException exception) {
-            log.error("Passkey onboarding finalization failed for sessionRef={} userRef={}",
+            log.error("Passkey onboarding finalization failed for sessionRef={} userRef={}: {} - {}",
                     LogSanitizer.fingerprint(sessionId),
                     LogSanitizer.fingerprint(state.getUsername()),
+                    exception.getClass().getSimpleName(),
+                    exception.getMessage(),
                     exception);
-            throw exception;
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error(
+                            "Account creation failed: " + exception.getMessage(),
+                            ErrorCodes.SYS_INTERNAL_ERROR));
         }
         String token = user.getId() + " " + jwtServicer.generateToken(user.getId());
         return ResponseEntity.ok(ApiResponse.success(

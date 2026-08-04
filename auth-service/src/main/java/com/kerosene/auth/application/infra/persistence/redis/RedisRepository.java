@@ -64,10 +64,17 @@ public class RedisRepository implements RedisContract {
     public void saveSignupState(String sessionId, SignupState state, long expirationInMinutes) {
         try {
             String json = mapper.writeValueAsString(state);
+            log.info("[Redis] Saving signup state key=signup:{} ttl={}min jsonLen={}",
+                    sessionId, expirationInMinutes, json.length());
             redis.opsForValue().set("signup:" + sessionId, json, expirationInMinutes, TimeUnit.MINUTES);
+            log.info("[Redis] Saved signup state key=signup:{}", sessionId);
         } catch (JsonProcessingException e) {
+            log.error("[Redis] Failed to serialise SignupState for session '{}': {}", sessionId, e.getMessage(), e);
             throw new IllegalStateException(
                     "[Redis] Failed to serialise SignupState for session '" + sessionId + "': " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error("[Redis] Failed to save SignupState for session '{}': {}", sessionId, e.getMessage(), e);
+            throw e;
         }
     }
 

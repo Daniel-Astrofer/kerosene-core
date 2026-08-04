@@ -2,6 +2,7 @@ package com.kerosene.auth.application.service.pow;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 
@@ -19,13 +20,20 @@ public class PowService {
 
     private final RedisServicer redisServicer;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final boolean enabled;
 
     private static final String POW_PREFIX = "pow_challenge:";
     private static final int POW_EXPIRATION_SECONDS = 300; // 5 minutes
     private static final String DIFFICULTY_PREFIX = "0000"; // 4 leading hex zeros
 
-    public PowService(RedisServicer redisServicer) {
+    public PowService(RedisServicer redisServicer,
+                      @Value("${kfe.auth.pow.enabled:true}") boolean enabled) {
         this.redisServicer = redisServicer;
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
     }
 
     /**
