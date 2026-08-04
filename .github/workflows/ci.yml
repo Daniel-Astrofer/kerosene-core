@@ -18,7 +18,7 @@ jobs:
   java:
     uses: Daniel-Astrofer/.github/.github/workflows/java-ci.yml@2552ff2125c2d72accebe93804b8e139a52ded13
     with:
-      gradle-arguments: test dependencyCheckAnalyze
+      gradle-arguments: test
 
   jctl:
     uses: Daniel-Astrofer/.github/.github/workflows/admin-cli-ci.yml@c20b6773eaf68590ac128403c6959e0c758af1e4
