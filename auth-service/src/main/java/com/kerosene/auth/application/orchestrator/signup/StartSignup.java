@@ -85,7 +85,7 @@ public class StartSignup {
         SignupState state = new SignupState();
         state.setSessionId(sessionId);
         state.setUsername(normalizedUsername);
-        state.setPassphrase(hashedPassphrase.toCharArray());
+        state.setPassphrase(hashedPassphrase);
         state.setTotpSecret(totpKey);
         state.setTotpVerified(false);
         state.setPasskeyRegistered(false);
