@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OperationalHardeningMigrationTest {
 
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
-    private static final Path V2_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V2__operational_hardening.sql");
+    private static final Path V2_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V2__operational_hardening.sql");
 
     @Test
     void v2MigrationMaterializesItsBaseTablesBeforeAlteringThem() throws IOException {
