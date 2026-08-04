@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class FinancialIntegrityMigrationTest {
 
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
-    private static final Path V17_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V17__financial_integrity_constraints.sql");
+    private static final Path V17_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V17__financial_integrity_constraints.sql");
 
     @Test
     void legacyLedgerEntryConstraintsAreSkippedWhenTableIsMissing() throws IOException {

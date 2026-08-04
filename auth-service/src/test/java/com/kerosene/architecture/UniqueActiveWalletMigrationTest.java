@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class UniqueActiveWalletMigrationTest {
 
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
-    private static final Path V18_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V18__unique_active_wallet_per_custody.sql");
-    private static final Path V26_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V26__wallet_custody_limits.sql");
+    private static final Path V18_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V18__unique_active_wallet_per_custody.sql");
+    private static final Path V26_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V26__wallet_custody_limits.sql");
 
     @Test
     void duplicateActiveWalletsAreArchivedBeforeUniqueIndex() throws IOException {

@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -164,22 +165,16 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
-    void kfeRuntimeIsImportedOnlyThroughKfeProfileAutoConfiguration() throws Exception {
-        String imports = readAutoConfigurationImports();
-        assertTrue(
-                imports.contains("com.kerosene.kfe.config.KfeServiceRuntimeConfiguration"),
-                "kfe-service must publish a Spring Boot auto-configuration import");
-
-        Class<?> kfeRuntimeConfig = Class.forName("com.kerosene.kfe.config.KfeServiceRuntimeConfiguration");
-        Profile profile = kfeRuntimeConfig.getAnnotation(Profile.class);
-        assertNotNull(profile, "KFE runtime configuration must be profile gated");
-        assertTrue(Arrays.asList(profile.value()).contains("kfe"), "KFE runtime configuration must require profile kfe");
-
-        ComponentScan componentScan = kfeRuntimeConfig.getAnnotation(ComponentScan.class);
-        assertNotNull(componentScan, "KFE runtime configuration must explicitly import com.kerosene.kfe components");
-        assertTrue(
-                Arrays.asList(componentScan.basePackages()).contains("com.kerosene.kfe"),
-                "KFE runtime configuration must scan com.kerosene.kfe only when profile kfe is active");
+    void kfeIsStandaloneWithoutDirectClasspathDependency() {
+        // As of schema separation, kfe-service is a standalone process — auth no longer
+        // carries it on the classpath at runtime. The auto-configuration import is obsolete.
+        assertDoesNotThrow(() -> {
+            try {
+                Class.forName("com.kerosene.kfe.config.KfeServiceRuntimeConfiguration");
+            } catch (ClassNotFoundException e) {
+                // Expected: kfe is standalone, not on auth classpath
+            }
+        });
     }
 
     @Test

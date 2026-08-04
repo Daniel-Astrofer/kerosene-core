@@ -14,7 +14,7 @@ class ProductionConfigurationGuardrailsTest {
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
     private static final Path PROD_PROPERTIES = PROJECT_ROOT.resolve("src/main/resources/application-prod.properties");
     private static final Path DOCKER_PROPERTIES = PROJECT_ROOT.resolve("src/main/resources/application-docker.properties");
-    private static final Path DESTRUCTIVE_RESET_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V23__drop_legacy_financial_tables.sql");
+    private static final Path DESTRUCTIVE_RESET_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V23__drop_legacy_financial_tables.sql");
 
     @Test
     void productionAndDockerFlywayBaselineDefaultsAreFailClosed() throws IOException {

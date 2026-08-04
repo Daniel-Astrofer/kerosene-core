@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class KfeCoreMigrationTest {
 
     private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath();
-    private static final Path V12_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V12__kfe_core.sql");
-    private static final Path V30_MIGRATION = PROJECT_ROOT.resolve("src/main/resources/db/migration/V30__decouple_kfe_user_identity.sql");
+    private static final Path V12_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V12__kfe_core.sql");
+    private static final Path V30_MIGRATION = PROJECT_ROOT.resolveSibling("kfe-service/src/main/resources/db/migration/V30__decouple_kfe_user_identity.sql");
 
     @Test
     void appendOnlyAuditTriggerIsReRunnable() throws IOException {
