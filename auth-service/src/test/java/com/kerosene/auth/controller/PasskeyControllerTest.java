@@ -450,11 +450,13 @@ class PasskeyControllerTest {
         when(finalizeSignupAccount.execute("session-1"))
                 .thenThrow(new FinancialProviderUnavailableException("custody unavailable"));
 
-        assertThrows(
-                FinancialProviderUnavailableException.class,
-                () -> controller.finishOnboardingRegistration(
-                    "session-1",
-                    registrationRequest("android-client-data")));
+        ResponseEntity<ApiResponse<?>> result = controller.finishOnboardingRegistration(
+                "session-1",
+                registrationRequest("android-client-data"));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertTrue(result.getBody().getMessage().contains("temporarily unavailable"));
 
         verify(passkeyService).consumeChallengeFromRedis("alice");
         verify(passkeyService, never()).deleteChallengeFromRedis("alice");
