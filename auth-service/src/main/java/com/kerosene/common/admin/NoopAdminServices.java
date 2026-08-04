@@ -46,12 +46,15 @@ public class NoopAdminServices {
         return new AdminLedgerService() {
             @Override
             public LedgerAccountDetail findAccount(String id) {
-                throw new UnsupportedOperationException("Admin ledger not available in auth-service");
+                return new LedgerAccountDetail(id, "unknown", "BTC", "0",
+                        "UNAVAILABLE", 0L, 0L, java.util.List.of());
             }
 
             @Override
             public LedgerJournalDetail findJournal(String id) {
-                throw new UnsupportedOperationException("Admin ledger not available in auth-service");
+                return new LedgerJournalDetail(id, "unknown", "unknown", "0",
+                        "BTC", "ledger unavailable in auth-service standalone",
+                        "unknown", 0L, "UNAVAILABLE");
             }
         };
     }
