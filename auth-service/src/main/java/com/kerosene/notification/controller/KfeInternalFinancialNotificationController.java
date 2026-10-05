@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import com.kerosene.common.dto.ApiResponse;
-import com.kerosene.common.financial.FinancialDepositConfirmedNotificationRequest;
-import com.kerosene.common.financial.FinancialNotificationPort;
-import com.kerosene.common.financial.FinancialOutboundNotificationRequest;
-import com.kerosene.common.financial.FinancialPaymentRequestDepositConfirmedNotificationRequest;
-import com.kerosene.common.financial.FinancialInternalTransferNotificationRequest;
-import com.kerosene.common.financial.FinancialExternalPaymentNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialDepositConfirmedNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialNotificationPort;
+import com.kerosene.common.financial.notification.FinancialOutboundNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialPaymentRequestDepositConfirmedNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialInternalTransferNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialExternalPaymentNotificationRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

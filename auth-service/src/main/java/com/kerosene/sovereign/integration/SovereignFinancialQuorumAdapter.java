@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import com.kerosene.common.financial.FinancialQuorumPort;
+import com.kerosene.common.financial.operations.FinancialQuorumPort;
 import com.kerosene.sovereign.quorum.FailStopPolicy;
 import com.kerosene.sovereign.quorum.QuorumMembership;
 import com.kerosene.sovereign.quorum.QuorumPeer;

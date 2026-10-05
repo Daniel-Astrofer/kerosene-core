@@ -93,4 +93,32 @@ public class NotificationEntity {
                 ? Collections.emptyMap()
                 : Map.copyOf(metadata);
     }
+
+    /** Structured communication fields exposed alongside legacy metadata. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getAmount() {
+        return getMetadata().getOrDefault("amount",
+                getMetadata().getOrDefault("amountBtc",
+                        getMetadata().get("amountSats")));
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getCurrency() {
+        return getMetadata().getOrDefault("currency", getMetadata().get("ticker"));
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getStatus() {
+        return getMetadata().get("status");
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getExpiresAt() {
+        return getMetadata().get("expiresAt");
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public String getPresentationPolicy() {
+        return getMetadata().get("presentationPolicy");
+    }
 }

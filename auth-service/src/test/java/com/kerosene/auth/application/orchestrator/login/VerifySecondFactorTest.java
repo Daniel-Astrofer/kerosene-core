@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.application.service.user.contract.UserServiceContract;
 import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import com.kerosene.auth.dto.UserDTO;

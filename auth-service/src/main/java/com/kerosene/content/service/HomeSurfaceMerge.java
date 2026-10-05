@@ -11,13 +11,16 @@ import com.kerosene.content.dto.HomeSurfaceResponseDTO;
  */
 final class HomeSurfaceMerge {
 
+    /** Prevents instantiation of this stateless JSON conversion utility. */
     private HomeSurfaceMerge() {
     }
 
+    /** Serializes a typed surface into a mutable Jackson object tree for overlay application. */
     static ObjectNode toObjectNode(ObjectMapper mapper, HomeSurfaceResponseDTO surface) {
         return mapper.valueToTree(surface);
     }
 
+    /** Converts the merged JSON tree back to the typed surface response contract. */
     static HomeSurfaceResponseDTO fromObjectNode(ObjectMapper mapper, ObjectNode node) {
         return mapper.convertValue(node, HomeSurfaceResponseDTO.class);
     }
@@ -48,10 +51,12 @@ final class HomeSurfaceMerge {
         return base;
     }
 
+    /** Creates an empty JSON object using the configured mapper's node factory. */
     static ObjectNode emptyObject(ObjectMapper mapper) {
         return mapper.createObjectNode();
     }
 
+    /** Creates an empty JSON array using the configured mapper's node factory. */
     static ArrayNode emptyArray(ObjectMapper mapper) {
         return mapper.createArrayNode();
     }

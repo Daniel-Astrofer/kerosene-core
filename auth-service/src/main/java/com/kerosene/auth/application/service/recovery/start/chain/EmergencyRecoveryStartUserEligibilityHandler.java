@@ -6,21 +6,31 @@ import org.springframework.stereotype.Component;
 
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.port.out.AuthUserGateway;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
 import com.kerosene.auth.application.service.recovery.RecoveryRateLimitService;
 import com.kerosene.auth.application.service.recovery.start.EmergencyRecoveryStartContext;
 import com.kerosene.auth.model.entity.UserDataBase;
 
+/** Fourth recovery-start step: resolves eligible accounts and prevents reusing the current passphrase. */
 @Component
 @Order(40)
 public class EmergencyRecoveryStartUserEligibilityHandler extends AbstractEmergencyRecoveryStartHandler {
 
+    /** Outbound account lookup boundary. */
     private final AuthUserGateway userGateway;
+    /** Argon2-qualified verifier for comparing the proposed passphrase with the current hash. */
     private final Hasher hasher;
+    /** Burns candidate checks and normalizes recovery-code lists. */
     private final RecoveryCodeService recoveryCodeService;
+    /** Records failed recovery attempts scoped to username and client fingerprint. */
     private final RecoveryRateLimitService rateLimitService;
 
+    /** Creates the eligibility step with identity, secret, and abuse-control boundaries. */
+    /** @param userGateway account lookup */
+    /** @param hasher Argon2 passphrase verifier */
+    /** @param recoveryCodeService recovery code utilities */
+    /** @param rateLimitService recovery attempt tracking */
     public EmergencyRecoveryStartUserEligibilityHandler(AuthUserGateway userGateway,
             @Qualifier("Argon2Hasher") Hasher hasher,
             RecoveryCodeService recoveryCodeService,
@@ -31,6 +41,8 @@ public class EmergencyRecoveryStartUserEligibilityHandler extends AbstractEmerge
         this.rateLimitService = rateLimitService;
     }
 
+    /** Loads the owner, applies generic rejection for absent/insufficient accounts, and rejects reused passphrases. */
+    /** @param context validated request and normalized user identity */
     @Override
     public void handle(EmergencyRecoveryStartContext context) {
         UserDataBase user = userGateway.findByUsername(context.normalizedUsername());
@@ -58,6 +70,9 @@ public class EmergencyRecoveryStartUserEligibilityHandler extends AbstractEmerge
         handleNext(context);
     }
 
+    /** Copies a passphrase into a temporary mutable buffer for verification and later zeroing. */
+    /** @param input request passphrase */
+    /** @return independent copy or null */
     private char[] copyCharArray(char[] input) {
         if (input == null) {
             return null;

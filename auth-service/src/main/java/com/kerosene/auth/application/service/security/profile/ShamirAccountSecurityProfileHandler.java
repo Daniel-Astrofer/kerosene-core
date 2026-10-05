@@ -6,10 +6,14 @@ import org.springframework.stereotype.Component;
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.model.enums.AccountSecurityType;
 
+/** Validates Shamir share and reconstruction threshold settings. */
 @Component
 @Order(10)
 public class ShamirAccountSecurityProfileHandler extends AbstractAccountSecurityProfileHandler {
 
+    /** Requires 2..8 shares and a threshold from 2 through the share count, then clears multisig data. */
+    /** @param context current account profile */
+    /** @throws AuthExceptions.InvalidCredentials when the Shamir configuration is incomplete or invalid */
     @Override
     public void handle(AccountSecurityProfileContext context) {
         if (context.getSecurityType() != AccountSecurityType.SHAMIR) {

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import com.kerosene.auth.model.entity.AdminAccessEventEntity;
 
+/** Standard persistence access for immutable administrator access audit events. */
 @Repository
 public interface AdminAccessEventRepository extends JpaRepository<AdminAccessEventEntity, UUID> {
 }

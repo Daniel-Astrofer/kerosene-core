@@ -1,8 +1,6 @@
 package com.kerosene.content.controller;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,13 +14,18 @@ import com.kerosene.content.dto.HomeSurfaceResponseDTO;
 import com.kerosene.content.service.HomeStageImpressionService;
 import com.kerosene.content.service.HomeSurfaceComposer;
 
+/** HTTP endpoints for composing the home surface and acknowledging one-shot stages. */
 @RestController
 @RequestMapping("/content")
 public class HomeSurfaceController {
 
+    /** Application service that builds the full response surface. */
     private final HomeSurfaceComposer homeSurfaceComposer;
+    /** Records authenticated client acknowledgements for one-shot content. */
     private final HomeStageImpressionService impressionService;
 
+    /** Creates the controller with surface composition and acknowledgement services. */
+    /** @param homeSurfaceComposer home response assembler @param impressionService stage acknowledgement service */
     public HomeSurfaceController(
             HomeSurfaceComposer homeSurfaceComposer,
             HomeStageImpressionService impressionService) {
@@ -40,9 +43,10 @@ public class HomeSurfaceController {
             @RequestParam(name = "timeZone", required = false) String timeZone,
             @RequestHeader(name = "X-Timezone", required = false) String timeZoneHeader,
             @RequestHeader(name = "Accept-Language", required = false) String acceptLanguage) {
-        Long userId = currentUserId();
-        String resolvedLocale = firstNonBlank(locale, languageFromAccept(acceptLanguage), "pt");
-        String resolvedTimeZone = firstNonBlank(timeZone, timeZoneHeader, "UTC");
+        Long userId = HomeRequestSupport.currentUserId();
+        String resolvedLocale = HomeRequestSupport.firstNonBlank(
+                locale, HomeRequestSupport.languageFromAccept(acceptLanguage), "pt");
+        String resolvedTimeZone = HomeRequestSupport.firstNonBlank(timeZone, timeZoneHeader, "UTC");
         HomeSurfaceResponseDTO surface = homeSurfaceComposer.compose(
                 userId, balanceView, resolvedLocale, resolvedTimeZone);
         return ResponseEntity.ok(ApiResponse.success("Home surface composed.", surface));
@@ -53,7 +57,7 @@ public class HomeSurfaceController {
      */
     @PostMapping("/home-stage/ack")
     public ResponseEntity<ApiResponse<Void>> ackStage(@RequestBody HomeStageAckRequestDTO body) {
-        Long userId = currentUserId();
+        Long userId = HomeRequestSupport.currentUserId();
         if (userId == null) {
             return ResponseEntity.status(401)
                     .body(ApiResponse.error("Authentication required.", "UNAUTHORIZED"));
@@ -67,43 +71,4 @@ public class HomeSurfaceController {
         }
     }
 
-    private static String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
-        return null;
-    }
-
-    private static String languageFromAccept(String acceptLanguage) {
-        if (acceptLanguage == null || acceptLanguage.isBlank()) {
-            return null;
-        }
-        String primary = acceptLanguage.split(",")[0].trim();
-        int dash = primary.indexOf('-');
-        if (dash > 0) {
-            primary = primary.substring(0, dash);
-        }
-        int semi = primary.indexOf(';');
-        if (semi > 0) {
-            primary = primary.substring(0, semi);
-        }
-        return primary.isBlank() ? null : primary.toLowerCase();
-    }
-
-    private Long currentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
-            return null;
-        }
-        try {
-            return Long.parseLong(auth.getName());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
 }

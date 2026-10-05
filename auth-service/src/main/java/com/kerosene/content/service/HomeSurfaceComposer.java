@@ -27,14 +27,22 @@ import java.util.List;
 @Service
 public class HomeSurfaceComposer {
 
+    /** Wire-contract version emitted for composed home surfaces. */
     public static final int SCHEMA_VERSION = 2;
+    /** Client cache lifetime for a composed snapshot, in seconds. */
     private static final int TTL_SECONDS = 120;
 
+    /** Builds personalized feed items before surface assembly. */
     private final HomeFeedComposer homeFeedComposer;
+    /** Builds market communication stages and their resting header. */
     private final HomeStageComposer homeStageComposer;
+    /** Applies active server-managed partial surface overlays. */
     private final HomeUiOverrideService overrideService;
+    /** Suppresses ONCE stages that the user has already acknowledged. */
     private final HomeStageImpressionService impressionService;
 
+    /** Creates the surface composer with its feed, stage, override, and impression collaborators. */
+    /** @param homeFeedComposer source of personalized feed and normalized request context @param homeStageComposer source of stage content @param overrideService applies matching configured overlays @param impressionService filters acknowledged one-shot stages */
     public HomeSurfaceComposer(
             HomeFeedComposer homeFeedComposer,
             HomeStageComposer homeStageComposer,
@@ -46,6 +54,15 @@ public class HomeSurfaceComposer {
         this.impressionService = impressionService;
     }
 
+    /**
+     * Composes a feed, wraps it as a versioned surface, applies matching overrides,
+     * then removes an already-read ONCE stage.
+     * @param userId account identifier used for personalization and targeting
+     * @param balanceViewRaw requested balance mode
+     * @param localeRaw requested locale
+     * @param timeZoneRaw requested time zone
+     * @return final surface after overrides and impression suppression
+     */
     public HomeSurfaceResponseDTO compose(
             Long userId,
             String balanceViewRaw,
@@ -59,6 +76,7 @@ public class HomeSurfaceComposer {
         return impressionService.suppressIfAlreadyRead(userId, withOverrides);
     }
 
+    /** Creates the base wire envelope and legacy header adapter from a composed feed. */
     private HomeSurfaceResponseDTO build(HomeFeedResponseDTO feed) {
         HomeStageDTO stage = homeStageComposer.compose(feed.locale(), feed.balanceView());
         HomeRestingHeaderDTO resting = homeStageComposer.restingHeader();

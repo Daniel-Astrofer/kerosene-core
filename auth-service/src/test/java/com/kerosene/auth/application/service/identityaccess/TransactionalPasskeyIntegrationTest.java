@@ -6,7 +6,7 @@ import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.application.service.passkey.PasskeyInventoryService;
 import com.kerosene.auth.application.service.passkey.PasskeyService;
 import com.kerosene.auth.application.service.user.contract.UserServiceContract;

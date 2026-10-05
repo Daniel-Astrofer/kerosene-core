@@ -12,7 +12,7 @@ import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.infra.persistence.jpa.DeviceKeyCredentialRepository;
 import com.kerosene.auth.application.infra.persistence.jpa.PasskeyCredentialRepository;
 import com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.application.service.devicebinding.DeviceCredentialReplayGuard;
 import com.kerosene.auth.application.service.devicekey.DeviceKeyService;
 import com.kerosene.auth.application.service.devicekey.DeviceKeyReplayException;
@@ -26,29 +26,55 @@ import com.kerosene.auth.model.entity.UserDataBase;
 import com.kerosene.auth.model.enums.AccountSecurityType;
 import com.kerosene.common.exception.ErrorCodes;
 import com.kerosene.common.infra.logging.LogDomain;
-import com.kerosene.common.infra.logging.LogSanitizer;
-import com.kerosene.common.util.CryptoUtils;
+import com.kerosene.platform.util.CryptoUtils;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/** Authorizes sensitive operations against account mode, transaction scope, and enrolled factors. */
 @Service
 public class TransactionalAuthenticationService implements TransactionalAuthenticationPort {
 
+    /** Operational and security diagnostics for step-up authorization. */
     private static final Logger log = LoggerFactory.getLogger(TransactionalAuthenticationService.class);
 
+    /** Verifies WebAuthn assertions and consumes username-scoped challenges. */
     private final PasskeyService passkeyService;
+    /** Supplies compatibility checks, challenge recovery payloads, and replay guidance. */
     private final PasskeyInventoryService passkeyInventoryService;
+    /** Looks up WebAuthn credentials and advances monotonic signature counters. */
     private final PasskeyCredentialRepository passkeyCredentialRepository;
+    /** Looks up device-key credentials and atomically advances their counters. */
     private final DeviceKeyCredentialRepository deviceKeyCredentialRepository;
+    /** Validates device-key Ed25519 proof and challenge state. */
     private final DeviceKeyService deviceKeyService;
+    /** Tracks replay conflicts and applies temporary locks to credentials. */
     private final DeviceCredentialReplayGuard deviceCredentialReplayGuard;
+    /** Verifies TOTP factors when required by scope or account mode. */
     private final TOTPVerifier totpVerifier;
+    /** Argon2-qualified verifier for transaction passphrase confirmation. */
     private final Hasher hasher;
+    /** Resolves account data when the request carries only a principal ID. */
     private final UserServiceContract userService;
+    /** Optional platform co-signer used by advanced account modes. */
     private final PlatformTransactionSignerPort platformTransactionSigner;
+    /** Parses client assertion JSON and device-key assertion discriminators. */
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates the authorization service from passkey, device-key, factor, persistence, and signing boundaries.
+     * @param passkeyService WebAuthn assertion verifier
+     * @param passkeyInventoryService compatibility/guidance service
+     * @param passkeyCredentialRepository WebAuthn lookup and counter updates
+     * @param deviceKeyCredentialRepository device-key lookup and counter updates
+     * @param deviceKeyService device-key protocol verifier
+     * @param deviceCredentialReplayGuard replay counter failure policy
+     * @param totpVerifier TOTP verifier
+     * @param hasher Argon2-qualified passphrase verifier
+     * @param userService account lookup/persistence service
+     * @param platformTransactionSigner platform co-signing port
+     * @param objectMapper JSON parser for assertion payloads
+     */
     public TransactionalAuthenticationService(
             PasskeyService passkeyService,
             PasskeyInventoryService passkeyInventoryService,
@@ -74,6 +100,14 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Resolves the acting user, checks resource ownership, verifies presented factors, enforces the
+     * account-mode policy and optionally requests a platform signature for eligible scopes.
+     *
+     * @param request scoped authorization data and submitted factors
+     * @return authorized account and optional platform signature
+     * @throws AuthExceptions.AuthValidationException or structured factor errors when policy fails
+     */
     @Override
     @Transactional
     public TransactionalAuthenticationResult authorize(TransactionalAuthenticationRequest request) {
@@ -142,6 +176,9 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return new TransactionalAuthenticationResult(user, platformSignature);
     }
 
+    /** Resolves the supplied entity or loads the account referenced by the authenticated principal. */
+    /** @param request authorization request */
+    /** @return account acting on the protected operation */
     private UserDataBase resolveUser(TransactionalAuthenticationRequest request) {
         if (request.user() != null) {
             return request.user();
@@ -153,6 +190,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                 .orElseThrow(() -> new AuthExceptions.UserNotFoundException("Usuário não encontrado."));
     }
 
+    /** Ensures an outbound resource owner matches both the resolved account and authenticated principal. */
+    /** @param request authorization scope and ownership identifiers */
+    /** @param user resolved actor */
+    /** @throws IllegalArgumentException when owner identity is absent or mismatched */
     private void validateResourceOwnership(TransactionalAuthenticationRequest request, UserDataBase user) {
         if (request.scope() == TransactionalAuthenticationScope.WALLET_OUTBOUND
                 && request.resourceOwnerUserId() == null) {
@@ -169,10 +210,17 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         }
     }
 
+    /** Defaults missing legacy account security settings to STANDARD mode. */
+    /** @param user account */
+    /** @return persisted mode or STANDARD */
     private AccountSecurityType resolveAccountSecurity(UserDataBase user) {
         return user.getAccountSecurity() != null ? user.getAccountSecurity() : AccountSecurityType.STANDARD;
     }
 
+    /** Verifies a submitted confirmation passphrase, returning false when no passphrase is provided. */
+    /** @param user account whose stored hash is checked */
+    /** @param confirmationPassphrase optional submitted secret */
+    /** @return true when a presented passphrase matches */
     private boolean verifyPassphraseIfPresented(UserDataBase user, String confirmationPassphrase) {
         if (!hasText(confirmationPassphrase)) {
             return false;
@@ -184,6 +232,11 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return true;
     }
 
+    /** Applies scope/account TOTP requirements, selects the supplied or account secret, and verifies the code. */
+    /** @param user resolved actor */
+    /** @param request submitted factor data and scope */
+    /** @param accountSecurity resolved account mode */
+    /** @return true when TOTP was required/present and verified */
     private boolean verifyTotpIfRequiredOrPresented(
             UserDataBase user,
             TransactionalAuthenticationRequest request,
@@ -212,6 +265,11 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return true;
     }
 
+    /** Requires and verifies a TOTP code for operations with unconditional TOTP requirements. */
+    /** @param user resolved actor */
+    /** @param request submitted factors and optional explicit secret */
+    /** @param missingMessage caller-specific message when code is missing */
+    /** @return true after successful verification */
     private boolean verifyRequiredTotp(
             UserDataBase user,
             TransactionalAuthenticationRequest request,
@@ -232,6 +290,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return true;
     }
 
+    /** Creates the scope/mode-specific error used when a policy-required TOTP code was omitted. */
+    /** @param scope protected operation scope */
+    /** @param accountSecurity selected account mode */
+    /** @return specific missing-factor exception */
     private AuthExceptions.IncorrectTotpException missingTotpException(
             TransactionalAuthenticationScope scope,
             AccountSecurityType accountSecurity) {
@@ -246,6 +308,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                 "A valid TOTP code is required for multisig vault transactions.");
     }
 
+    /** Verifies a WebAuthn assertion, ownership/status/origin, one-time challenge, and atomic counter advancement. */
+    /** @param user resolved account requiring step-up */
+    /** @param assertionJson optional JSON-encoded WebAuthn assertion */
+    /** @return true when a passkey assertion was presented and accepted */
     private boolean verifyPasskeyIfPresented(UserDataBase user, String assertionJson) {
         if (!hasText(assertionJson)) {
             return false;
@@ -371,6 +437,12 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         }
     }
 
+    /** Applies the account mode's exact factor threshold after factor checks have completed. */
+    /** @param user resolved account */
+    /** @param accountSecurity selected mode */
+    /** @param passphraseValid whether passphrase was verified */
+    /** @param totpValid whether TOTP was verified */
+    /** @param passkeyValid whether passkey/device key was verified */
     private void enforceSecurityPolicy(
             UserDataBase user,
             AccountSecurityType accountSecurity,
@@ -406,16 +478,25 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         }
     }
 
+    /** Identifies modes whose transaction policy requires TOTP. */
+    /** @param accountSecurity account mode */
+    /** @return true for SHAMIR and MULTISIG_2FA */
     private boolean requiresTotp(AccountSecurityType accountSecurity) {
         return accountSecurity == AccountSecurityType.SHAMIR
                 || accountSecurity == AccountSecurityType.MULTISIG_2FA;
     }
 
+    /** Identifies account modes that require a platform co-signature when the scope requests it. */
+    /** @param accountSecurity account mode */
+    /** @return true for SHAMIR and MULTISIG_2FA */
     private boolean requiresPlatformSignature(AccountSecurityType accountSecurity) {
         return accountSecurity == AccountSecurityType.SHAMIR
                 || accountSecurity == AccountSecurityType.MULTISIG_2FA;
     }
 
+    /** Rejects when a policy requires a passkey/device-key assertion but none verified. */
+    /** @param user account requiring the factor */
+    /** @param passkeyValid assertion verification result */
     private void requirePasskey(UserDataBase user, boolean passkeyValid) {
         if (passkeyValid) {
             return;
@@ -431,6 +512,9 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                         "Uma passkey compativel com este login e obrigatoria para concluir a operacao."));
     }
 
+    /** Detects device-key assertion JSON so it is routed away from WebAuthn parsing. */
+    /** @param assertionJson optional factor JSON */
+    /** @return true for DEVICE_KEY or AUTH_DEVICE_KEY type discriminator */
     private boolean looksLikeDeviceKeyAssertion(String assertionJson) {
         if (!hasText(assertionJson)) {
             return false;
@@ -456,6 +540,9 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
      *   "signedPayload": "{...canonical AUTH_DEVICE_KEY...}",
      *   "signature": "..."
      * }
+     * @param user resolved account
+     * @param assertionJson optional device-key assertion
+     * @return true when a device-key assertion is present and accepted
      */
     private boolean verifyDeviceKeyIfPresented(UserDataBase user, String assertionJson) {
         if (!hasText(assertionJson)) {
@@ -528,6 +615,9 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         }
     }
 
+    /** Rejects a credential already within its replay soft-lock window. */
+    /** @param user credential owner */
+    /** @param credentialRef stable credential fingerprint */
     private void rejectIfReplayLocked(UserDataBase user, String credentialRef) {
         if (!deviceCredentialReplayGuard.isLocked(user.getId(), credentialRef)) {
             return;
@@ -541,6 +631,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                         deviceCredentialReplayGuard.lockSeconds()));
     }
 
+    /** Records a replay failure and raises either a soft-lock or retryable counter-conflict error. */
+    /** @param user credential owner */
+    /** @param credentialRef stable credential fingerprint */
+    /** @param factorKind PASSKEY or DEVICE_KEY */
     private void throwReplayOrLock(UserDataBase user, String credentialRef, String factorKind) {
         boolean locked = deviceCredentialReplayGuard.recordReplayFailure(
                 user.getId(),
@@ -565,6 +659,10 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
                                 + "nao e necessario vincular outra chave neste passo."));
     }
 
+    /** Extracts a required nonblank string field from assertion JSON. */
+    /** @param node parsed JSON object */
+    /** @param fieldName required property name */
+    /** @return property text */
     private String requiredText(JsonNode node, String fieldName) {
         String value = node.path(fieldName).asText(null);
         if (!hasText(value)) {
@@ -573,10 +671,16 @@ public class TransactionalAuthenticationService implements TransactionalAuthenti
         return value;
     }
 
+    /** Checks whether a value contains non-whitespace text. */
+    /** @param value candidate text */
+    /** @return true for non-null and nonblank input */
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
 
+    /** Treats missing legacy status as active and accepts explicit ACTIVE case-insensitively. */
+    /** @param status stored credential status */
+    /** @return whether authentication may proceed for this credential */
     private boolean isActiveCredential(String status) {
         return status == null || status.isBlank() || "ACTIVE".equalsIgnoreCase(status);
     }

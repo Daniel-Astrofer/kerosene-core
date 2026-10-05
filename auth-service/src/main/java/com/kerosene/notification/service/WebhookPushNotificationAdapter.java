@@ -62,8 +62,8 @@ public class WebhookPushNotificationAdapter implements PushNotificationPort {
         this.webhookUrl = webhookUrl == null ? "" : webhookUrl.trim();
         this.webhookSecret = webhookSecret == null ? "" : webhookSecret.trim();
         this.restTemplate = restTemplateBuilder
-                .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
-                .setReadTimeout(Duration.ofMillis(readTimeoutMs))
+                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                .readTimeout(Duration.ofMillis(readTimeoutMs))
                 .build();
     }
 

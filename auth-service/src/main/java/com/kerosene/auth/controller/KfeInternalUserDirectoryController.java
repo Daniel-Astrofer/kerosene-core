@@ -12,8 +12,8 @@ import org.springframework.web.server.ResponseStatusException;
 import com.kerosene.auth.AuthConstants;
 import com.kerosene.common.dto.ApiResponse;
 import com.kerosene.common.exception.ErrorCodes;
-import com.kerosene.common.financial.FinancialUserDirectoryLookupRequest;
-import com.kerosene.common.financial.FinancialUserDirectoryPort;
+import com.kerosene.common.financial.operations.FinancialUserDirectoryLookupRequest;
+import com.kerosene.common.financial.operations.FinancialUserDirectoryPort;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

@@ -31,8 +31,8 @@ class WebhookPushNotificationAdapterTest {
 
     @BeforeEach
     void setUp() {
-        when(restTemplateBuilder.setConnectTimeout(any(java.time.Duration.class))).thenReturn(restTemplateBuilder);
-        when(restTemplateBuilder.setReadTimeout(any(java.time.Duration.class))).thenReturn(restTemplateBuilder);
+        when(restTemplateBuilder.connectTimeout(any(java.time.Duration.class))).thenReturn(restTemplateBuilder);
+        when(restTemplateBuilder.readTimeout(any(java.time.Duration.class))).thenReturn(restTemplateBuilder);
         when(restTemplateBuilder.build()).thenReturn(restTemplate);
 
         adapter = new WebhookPushNotificationAdapter(

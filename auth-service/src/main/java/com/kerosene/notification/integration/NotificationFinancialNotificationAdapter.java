@@ -2,7 +2,7 @@ package com.kerosene.notification.integration;
 
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
-import com.kerosene.common.financial.FinancialNotificationPort;
+import com.kerosene.common.financial.notification.FinancialNotificationPort;
 import com.kerosene.notification.l10n.NotificationMessageKey;
 import com.kerosene.notification.l10n.NotificationMessages;
 import com.kerosene.notification.model.NotificationKind;

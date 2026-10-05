@@ -3,7 +3,7 @@ package com.kerosene.notification.service;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import com.kerosene.auth.application.service.security.CosignerSecretService;
-import com.kerosene.common.financial.FinancialNotificationAuditPort;
+import com.kerosene.common.financial.notification.FinancialNotificationAuditPort;
 import com.kerosene.notification.dto.DeviceTokenRegisterRequest;
 import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;
 import com.kerosene.notification.repository.NotificationDeviceTokenRepository;

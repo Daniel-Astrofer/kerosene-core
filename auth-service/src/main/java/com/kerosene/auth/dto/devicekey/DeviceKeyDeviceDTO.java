@@ -4,6 +4,22 @@ import com.kerosene.auth.model.entity.DeviceKeyCredential;
 
 import java.time.LocalDateTime;
 
+/**
+ * Safe client projection of a registered device credential and its lifecycle metadata.
+ * @param credentialId stable credential identifier
+ * @param deviceName user-assigned device label
+ * @param deviceInstallId installation identity used for device-scoped management
+ * @param keyStorage declared hardware or software key storage class
+ * @param platform operating system or platform family
+ * @param browser client browser when provided
+ * @param onionServiceId onion service identity associated with registration
+ * @param status credential lifecycle status
+ * @param counter last accepted anti-replay counter
+ * @param createdAt credential creation time
+ * @param lastUsedAt most recent successful verification time
+ * @param revokedAt revocation time, or null while active
+ * @param protocolVersion payload protocol used by this credential
+ */
 public record DeviceKeyDeviceDTO(
         String credentialId,
         String deviceName,
@@ -19,6 +35,9 @@ public record DeviceKeyDeviceDTO(
         LocalDateTime revokedAt,
         int protocolVersion) {
 
+    /** Projects persisted credential metadata into the public device listing without exposing key bytes. */
+    /** @param credential persisted credential entity */
+    /** @return public device DTO containing identity, status, timestamps, and replay counter */
     public static DeviceKeyDeviceDTO from(DeviceKeyCredential credential) {
         return new DeviceKeyDeviceDTO(
                 credential.getCredentialId(),

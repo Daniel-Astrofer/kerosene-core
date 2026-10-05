@@ -12,7 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
-import com.kerosene.security.CachedBodyHttpServletRequest;
+import com.kerosene.security.infra.CachedBodyHttpServletRequest;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

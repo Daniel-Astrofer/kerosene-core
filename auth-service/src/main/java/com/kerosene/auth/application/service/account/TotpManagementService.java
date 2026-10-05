@@ -12,17 +12,30 @@ import com.kerosene.auth.dto.BackupCodesStatusDTO;
 import com.kerosene.auth.dto.TotpSetupResponseDTO;
 import com.kerosene.auth.model.entity.UserDataBase;
 
+/** Manages TOTP enrollment using expiring setup secrets and backup-code rotation. */
 @Service
 public class TotpManagementService {
 
+    /** TTL for an unconfirmed TOTP secret held in temporary storage. */
     private static final long SETUP_TTL_SECONDS = 600L;
 
+    /** Account lookup and persistence boundary. */
     private final UserServiceContract userService;
+    /** Generates new random TOTP secrets. */
     private final TOTPKeyGenerate totpKeyGenerate;
+    /** Verifies enrollment codes against temporary secrets. */
     private final TOTPVerifier totpVerifier;
+    /** Temporary storage for the pending enrollment secret. */
     private final RedisServicer redisService;
+    /** Replaces backup codes after enrollment completes. */
     private final BackupCodeService backupCodeService;
 
+    /** Creates the TOTP management service. */
+    /** @param userService account lookup and persistence */
+    /** @param totpKeyGenerate secret generator */
+    /** @param totpVerifier enrollment verifier */
+    /** @param redisService temporary secret storage */
+    /** @param backupCodeService backup-code rotation service */
     public TotpManagementService(
             UserServiceContract userService,
             TOTPKeyGenerate totpKeyGenerate,
@@ -36,6 +49,9 @@ public class TotpManagementService {
         this.backupCodeService = backupCodeService;
     }
 
+    /** Generates a temporary secret, stores it for ten minutes, and returns an authenticator URI. */
+    /** @param userId account identifier */
+    /** @return enrollment URI and secret for authenticator setup */
     public TotpSetupResponseDTO beginSetup(Long userId) {
         UserDataBase user = requireUser(userId);
         String secret = totpKeyGenerate.keyGenerator();
@@ -49,6 +65,12 @@ public class TotpManagementService {
         return new TotpSetupResponseDTO(otpUri, secret);
     }
 
+    /** Verifies the temporary setup code, persists the secret, clears temporary state, and rotates backup codes. */
+    /** @param userId account identifier */
+    /** @param code submitted authenticator code */
+    /** @return backup-code status and newly issued codes */
+    /** @throws AuthExceptions.TotpTimeExceededException when the setup TTL has elapsed */
+    /** @throws AuthExceptions.IncorrectTotpException when the code is missing */
     @Transactional
     public BackupCodesStatusDTO verifySetup(Long userId, String code) {
         String secret = redisService.getValue(tempSetupKey(userId));
@@ -67,6 +89,8 @@ public class TotpManagementService {
         return backupCodeService.regenerate(userId);
     }
 
+    /** Clears the persisted TOTP secret and backup codes, and removes any pending setup secret. */
+    /** @param userId account identifier */
     @Transactional
     public void disable(Long userId) {
         UserDataBase user = requireUser(userId);
@@ -76,11 +100,18 @@ public class TotpManagementService {
         redisService.deleteValue(tempSetupKey(userId));
     }
 
+    /** Loads the account or fails because the authenticated account is unavailable. */
+    /** @param userId account identifier */
+    /** @return persisted account */
+    /** @throws IllegalStateException when account lookup fails */
     private UserDataBase requireUser(Long userId) {
         return userService.buscarPorId(userId)
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found."));
     }
 
+    /** Builds the Redis key that scopes a pending setup secret to the account. */
+    /** @param userId account identifier */
+    /** @return namespaced temporary key */
     private String tempSetupKey(Long userId) {
         return "totp:setup:" + userId;
     }

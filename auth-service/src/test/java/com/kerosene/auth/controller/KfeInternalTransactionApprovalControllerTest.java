@@ -2,14 +2,14 @@ package com.kerosene.auth.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
-import com.kerosene.common.financial.FinancialColdWalletPsbtApprovalRequest;
-import com.kerosene.common.financial.FinancialCustodyTransferApprovalRequest;
-import com.kerosene.common.financial.FinancialLocalFactorApprovalRequest;
-import com.kerosene.common.financial.FinancialTransactionApprovalPort;
-import com.kerosene.common.financial.FinancialWalletOutboundApprovalRequest;
-import com.kerosene.common.financial.DeviceProof;
-import com.kerosene.common.financial.PasskeyAssertion;
-import com.kerosene.common.financial.RecoveryApproval;
+import com.kerosene.common.financial.approval.FinancialColdWalletPsbtApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialCustodyTransferApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialLocalFactorApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialTransactionApprovalPort;
+import com.kerosene.common.financial.approval.FinancialWalletOutboundApprovalRequest;
+import com.kerosene.common.financial.approval.DeviceProof;
+import com.kerosene.common.financial.approval.PasskeyAssertion;
+import com.kerosene.common.financial.approval.RecoveryApproval;
 
 import java.time.Instant;
 

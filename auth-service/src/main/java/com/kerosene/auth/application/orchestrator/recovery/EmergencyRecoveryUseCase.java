@@ -25,19 +25,31 @@ import com.kerosene.auth.dto.EmergencyRecoveryStartResponse;
 import com.kerosene.auth.dto.EmergencyRecoveryState;
 import com.kerosene.common.infra.logging.LogSanitizer;
 
+/** Coordinates emergency credential recovery from initial proof checks through credential rotation. */
 @Component
 public class EmergencyRecoveryUseCase {
 
+    /** Logger for recovery lifecycle events; user identifiers are fingerprinted. */
     private static final Logger log = LoggerFactory.getLogger(EmergencyRecoveryUseCase.class);
 
+    /** Validates the ordered set of recovery proofs and constructs a start context. */
     private final EmergencyRecoveryStartChain recoveryStartChain;
+    /** Protects replacement passphrase/TOTP material and recovers it during completion. */
     private final RecoverySecretProtector secretProtector;
+    /** Persists and consumes expiring emergency recovery sessions. */
     private final RecoveryStateStore stateStore;
+    /** Validates completion data and rotates existing authentication credentials. */
     private final RecoveryCredentialRotator credentialRotator;
 
+    /** Minimum number of backup recovery-code hashes required by the configured start chain. */
     @Value("${auth.recovery.required-backup-codes:3}")
     private int requiredRecoveryCodes;
 
+    /** Creates the emergency recovery coordinator. */
+    /** @param recoveryStartChain proof-validation chain for recovery initiation */
+    /** @param secretProtector replacement secret protection service */
+    /** @param stateStore recovery session persistence boundary */
+    /** @param credentialRotator credential replacement operation */
     public EmergencyRecoveryUseCase(EmergencyRecoveryStartChain recoveryStartChain,
             RecoverySecretProtector secretProtector,
             RecoveryStateStore stateStore,
@@ -48,6 +60,14 @@ public class EmergencyRecoveryUseCase {
         this.credentialRotator = credentialRotator;
     }
 
+    /**
+     * Validates recovery proofs, protects replacement secrets, persists an expiring recovery
+     * session, and returns its passkey challenge and TOTP setup material.
+     *
+     * @param request user-submitted recovery proofs and replacement passphrase
+     * @param clientFingerprint stable client/device reference for risk policy
+     * @return session ID, enrollment URI, challenge, expiry, and required recovery-code count
+     */
     public EmergencyRecoveryStartResponse start(EmergencyRecoveryStartRequest request, String clientFingerprint) {
         EmergencyRecoveryStartContext context = recoveryStartChain.handle(request, clientFingerprint);
         PreparedRecoverySecrets secrets = secretProtector.prepare(context.normalizedUsername(), request.getNewPassphrase());
@@ -67,6 +87,13 @@ public class EmergencyRecoveryUseCase {
                 requiredRecoveryCodes);
     }
 
+    /**
+     * Validates completion input, consumes the required one-time recovery session, and rotates
+     * credentials within a database transaction.
+     *
+     * @param request session identifier and final recovery proof
+     * @return account name and newly issued backup codes
+     */
     @Transactional
     public EmergencyRecoveryFinishResponse finish(EmergencyRecoveryFinishRequest request) {
         credentialRotator.validateFinishRequest(request);
@@ -80,6 +107,13 @@ public class EmergencyRecoveryUseCase {
         return new EmergencyRecoveryFinishResponse(result.username(), result.newBackupCodes());
     }
 
+    /**
+     * Derives a deterministic opaque fingerprint from the first forwarded address (when supplied),
+     * remote address, and user agent. If SHA-256 is unavailable, returns a sanitized raw composite.
+     *
+     * @param request servlet request used to derive client metadata
+     * @return URL-safe Base64 fingerprint or sanitized fallback
+     */
     public static String buildClientFingerprint(jakarta.servlet.http.HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         String clientIp = forwarded != null && !forwarded.isBlank()

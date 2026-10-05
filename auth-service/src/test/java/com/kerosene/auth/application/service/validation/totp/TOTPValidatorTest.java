@@ -4,8 +4,8 @@ import org.apache.commons.codec.binary.Base32;
 import org.junit.jupiter.api.Test;
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
-import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
-import com.kerosene.security.VaultKeyProvider;
+import com.kerosene.auth.application.service.crypto.contracts.Cryptography;
+import com.kerosene.security.infra.VaultKeyProvider;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;

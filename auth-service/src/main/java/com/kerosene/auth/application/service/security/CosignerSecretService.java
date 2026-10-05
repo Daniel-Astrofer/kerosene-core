@@ -4,8 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import com.kerosene.common.security.StringColumnCryptoPort;
-import com.kerosene.auth.application.service.cripto.encrypter.AES256;
-import com.kerosene.security.VaultKeyProvider;
+import com.kerosene.auth.application.service.crypto.encrypter.AES256;
+import com.kerosene.security.infra.VaultKeyProvider;
 
 import java.util.Arrays;
 import java.util.Base64;
@@ -41,9 +41,12 @@ import java.util.Base64;
 @Service
 public class CosignerSecretService implements StringColumnCryptoPort {
 
+    /** Logger for lifecycle and failures; secret bytes must never be included in log messages. */
     private static final Logger log = LoggerFactory.getLogger(CosignerSecretService.class);
 
+    /** AES-GCM implementation used to encrypt secret bytes and database columns. */
     private final AES256 aes;
+    /** RAM-only master-key provider initialized after platform attestation. */
     private final VaultKeyProvider vaultKeyProvider;
 
     /**
@@ -106,6 +109,9 @@ public class CosignerSecretService implements StringColumnCryptoPort {
 
     /** Typed exception for encryption/decryption failures. */
     public static class CosignerEncryptionException extends RuntimeException {
+        /** Wraps the cryptographic cause without exposing secret material. */
+        /** @param message safe operation-level failure description */
+        /** @param cause underlying encoding, key, or cipher failure */
         public CosignerEncryptionException(String message, Throwable cause) {
             super(message, cause);
         }

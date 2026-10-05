@@ -1,6 +1,6 @@
-package com.kerosene.auth.application.service.cripto.encrypter;
+package com.kerosene.auth.application.service.crypto.encrypter;
 
-import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.auth.application.service.crypto.contracts.Cryptography;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -9,10 +9,16 @@ import javax.crypto.spec.GCMParameterSpec;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
+/** Encrypts secret bytes with AES-GCM and stores the 12-byte nonce before the authenticated ciphertext. */
 @Component("aes256")
 public class AES256 implements Cryptography {
 
 
+    /** Encrypts bytes with AES/GCM/NoPadding using a fresh random 96-bit nonce. */
+    /** @param totpSecret plaintext bytes, commonly a TOTP secret */
+    /** @param key AES key supplied by the secure key provider */
+    /** @return concatenation of nonce and authenticated ciphertext */
+    /** @throws Exception if the cipher cannot initialize or encrypt */
     public byte[] encrypt(byte[] totpSecret, SecretKey key) throws Exception {
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -32,6 +38,11 @@ public class AES256 implements Cryptography {
 
     }
 
+    /** Splits the nonce prefix from ciphertext and authenticates/decrypts the payload. */
+    /** @param hash concatenated nonce and AES-GCM ciphertext */
+    /** @param key AES key used for encryption */
+    /** @return recovered plaintext bytes */
+    /** @throws Exception for truncated, tampered, or otherwise invalid ciphertext */
     public byte[] decrypt(byte[] hash, SecretKey key) throws Exception {
 
         byte[] iv = Arrays.copyOfRange(hash, 0, 12);

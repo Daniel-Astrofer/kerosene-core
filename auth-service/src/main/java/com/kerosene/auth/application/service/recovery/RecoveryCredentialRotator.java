@@ -25,17 +25,33 @@ import com.kerosene.notification.service.NotificationService;
 
 import java.util.Map;
 
+/** Validates recovery completion proof and atomically replaces account authentication credentials. */
 @Service
 public class RecoveryCredentialRotator {
 
+    /** Verifies a fresh code from the replacement authenticator. */
     private final TOTPVerifier totpVerifier;
+    /** Verifies passkey enrollment proof and derives RP/origin metadata. */
     private final PasskeyService passkeyService;
+    /** Loads and updates account credentials. */
     private final AuthUserGateway userGateway;
+    /** Lists, deletes, and saves account passkey credentials. */
     private final AuthPasskeyGateway passkeyGateway;
+    /** Generates the replacement one-time recovery-code set. */
     private final RecoveryCodeService recoveryCodeService;
+    /** Sends a security warning after credentials are rotated. */
     private final NotificationService notificationService;
+    /** Enforces one-account-per-device installation binding before the new credential is saved. */
     private final DeviceBindingPolicy deviceBindingPolicy;
 
+    /** Creates the credential rotation service from proof, persistence, policy, and notification boundaries. */
+    /** @param totpVerifier fresh authenticator code verifier */
+    /** @param passkeyService replacement passkey proof verifier */
+    /** @param userGateway account persistence port */
+    /** @param passkeyGateway passkey persistence port */
+    /** @param recoveryCodeService replacement code generator */
+    /** @param notificationService recovery-completed notification service */
+    /** @param deviceBindingPolicy device installation ownership policy */
     public RecoveryCredentialRotator(TOTPVerifier totpVerifier,
             PasskeyService passkeyService,
             AuthUserGateway userGateway,
@@ -52,6 +68,9 @@ public class RecoveryCredentialRotator {
         this.deviceBindingPolicy = deviceBindingPolicy;
     }
 
+    /** Requires a session ID, a fresh TOTP code, and complete replacement passkey proof/metadata. */
+    /** @param request recovery completion request */
+    /** @throws IllegalArgumentException when required session or proof fields are missing */
     public void validateFinishRequest(EmergencyRecoveryFinishRequest request) {
         if (request == null || request.getRecoverySessionId() == null || request.getRecoverySessionId().isBlank()) {
             throw new IllegalArgumentException("Recovery sessionId is required.");
@@ -68,6 +87,15 @@ public class RecoveryCredentialRotator {
         }
     }
 
+    /**
+     * Revalidates one-time recovery-code ownership, verifies new TOTP/passkey proof, rotates password,
+     * TOTP and backup codes, removes old passkeys, claims the device installation and notifies the owner.
+     *
+     * @param state consumed recovery session containing replacement secrets and matched old code hashes
+     * @param request completion proof and replacement passkey metadata
+     * @param totpSecret decrypted replacement TOTP seed
+     * @return account name and raw replacement codes for one-time display
+     */
     public RotationResult rotate(EmergencyRecoveryState state, EmergencyRecoveryFinishRequest request,
             String totpSecret) {
         validateFinishRequest(request);
@@ -142,6 +170,11 @@ public class RecoveryCredentialRotator {
         return new RotationResult(user.getUsername(), newBackupCodes.rawCodes());
     }
 
+    /** Builds the persisted passkey entity from verified proof and client/device metadata. */
+    /** @param user account receiving the new credential */
+    /** @param request verified completion request */
+    /** @param publicKeyBytes decoded public key material */
+    /** @return active passkey credential with counter and proof-derived RP/origin */
     private PasskeyCredential buildPasskeyCredential(UserDataBase user, EmergencyRecoveryFinishRequest request,
             byte[] publicKeyBytes) {
         PasskeyCredential credential = new PasskeyCredential();
@@ -182,6 +215,10 @@ public class RecoveryCredentialRotator {
         return credential;
     }
 
+    /** Decodes COSE key material when present, otherwise legacy publicKey material, accepting both Base64 alphabets. */
+    /** @param request recovery completion request */
+    /** @return decoded public key bytes */
+    /** @throws IllegalArgumentException when required key data is absent or malformed */
     private byte[] decodePasskeyPublicKey(EmergencyRecoveryFinishRequest request) {
         String keyToDecode = request.getPublicKeyCose() != null && !request.getPublicKeyCose().isBlank()
                 ? request.getPublicKeyCose()
@@ -197,6 +234,9 @@ public class RecoveryCredentialRotator {
         }
     }
 
+    /** Resolves the RP identifier from authenticator proof, falling back to client-data context. */
+    /** @param request completion request containing proof fields */
+    /** @return matched or inferred relying-party identifier */
     private String resolveRelyingPartyIdFromProof(EmergencyRecoveryFinishRequest request) {
         String matchedRpId = passkeyService.resolveRelyingPartyIdFromAuthenticatorData(
                 request.getAuthData(),
@@ -207,6 +247,11 @@ public class RecoveryCredentialRotator {
         return passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON());
     }
 
+    /**
+     * Successful credential rotation result returned to the recovery use case.
+     * @param username account whose credentials were rotated
+     * @param newBackupCodes raw replacement codes shown once
+     */
     public record RotationResult(String username, List<String> newBackupCodes) {
     }
 }

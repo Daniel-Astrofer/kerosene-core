@@ -1,41 +1,62 @@
 package com.kerosene.auth.dto;
 
+/** Input contract for enabling, disabling, or resetting application PIN protection. */
 public class ConfigureAppPinRequestDTO {
-
+    /** whether PIN verification should be enabled or disabled */
     private Boolean enabled;
+    /** new PIN value when configuring or changing the verifier */
     private String pin;
+    /** existing PIN required when changing protected PIN settings */
     private String currentPin;
+    /** TOTP proof used by flows that reset the PIN without the current PIN */
     private String totpCode;
 
-    public Boolean getEnabled() {
-        return enabled;
-    }
+    /**
+     * Returns whether PIN verification should be enabled or disabled
+     * @return requested enabled state
+     */
+    public Boolean getEnabled() { return enabled; }
 
-    public void setEnabled(Boolean enabled) {
-        this.enabled = enabled;
-    }
+    /**
+     * Sets whether PIN verification should be enabled or disabled
+     * @param enabled requested enabled state
+     */
+    public void setEnabled(Boolean enabled) { this.enabled = enabled; }
 
-    public String getPin() {
-        return pin;
-    }
+    /**
+     * Returns new PIN value when configuring or changing the verifier
+     * @return new PIN
+     */
+    public String getPin() { return pin; }
 
-    public void setPin(String pin) {
-        this.pin = pin;
-    }
+    /**
+     * Sets new PIN value when configuring or changing the verifier
+     * @param pin new PIN
+     */
+    public void setPin(String pin) { this.pin = pin; }
 
-    public String getCurrentPin() {
-        return currentPin;
-    }
+    /**
+     * Returns existing PIN required when changing protected PIN settings
+     * @return current PIN
+     */
+    public String getCurrentPin() { return currentPin; }
 
-    public void setCurrentPin(String currentPin) {
-        this.currentPin = currentPin;
-    }
+    /**
+     * Sets existing PIN required when changing protected PIN settings
+     * @param currentPin current PIN
+     */
+    public void setCurrentPin(String currentPin) { this.currentPin = currentPin; }
 
-    public String getTotpCode() {
-        return totpCode;
-    }
+    /**
+     * Returns tOTP proof used by flows that reset the PIN without the current PIN
+     * @return TOTP code
+     */
+    public String getTotpCode() { return totpCode; }
 
-    public void setTotpCode(String totpCode) {
-        this.totpCode = totpCode;
-    }
+    /**
+     * Sets tOTP proof used by flows that reset the PIN without the current PIN
+     * @param totpCode TOTP code
+     */
+    public void setTotpCode(String totpCode) { this.totpCode = totpCode; }
+
 }

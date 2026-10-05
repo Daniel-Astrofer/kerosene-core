@@ -77,7 +77,22 @@ public record UserNotificationPayload(
             payload.put("metadata", metadata);
         }
 
+        // First-class communication fields. Legacy clients continue reading
+        // metadata, while newer clients can render structured financial state.
+        putIfPresent(payload, "amount", metadata.getOrDefault("amount",
+                metadata.getOrDefault("amountBtc", metadata.get("amountSats"))));
+        putIfPresent(payload, "currency", metadata.getOrDefault("currency", metadata.get("ticker")));
+        putIfPresent(payload, "status", metadata.get("status"));
+        putIfPresent(payload, "expiresAt", metadata.get("expiresAt"));
+        putIfPresent(payload, "presentationPolicy", metadata.get("presentationPolicy"));
+
         return payload;
+    }
+
+    private static void putIfPresent(Map<String, Object> target, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            target.put(key, value);
+        }
     }
 
     private static Map<String, String> sanitizeMetadata(Map<String, String> source) {

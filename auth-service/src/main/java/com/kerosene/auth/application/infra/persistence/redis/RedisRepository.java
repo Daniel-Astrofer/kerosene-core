@@ -14,16 +14,35 @@ import org.springframework.stereotype.Repository;
 import java.util.concurrent.TimeUnit;
 import java.util.Objects;
 
+/**
+ * Redis-backed implementation of temporary authentication state and shared counters.
+ * Signup and recovery records use namespaced keys and explicit TTLs; the GETDEL methods
+ * consume one-time state atomically, while counter helpers deliberately degrade to null
+ * or a logged no-op for selected Redis outages.
+ */
 @Repository
 public class RedisRepository implements RedisContract {
+    /** Serializes structured temporary authentication records to and from JSON. */
     private final ObjectMapper mapper;
+    /** Executes string-valued Redis operations and atomic scripts. */
     private final StringRedisTemplate redis;
 
+    /** Creates the repository with the shared JSON mapper and Redis connection template. */
+    /** @param mapper application-configured Jackson mapper */
+    /** @param redis Redis template configured for string keys and values */
     public RedisRepository(ObjectMapper mapper, StringRedisTemplate redis) {
         this.mapper = mapper;
         this.redis = redis;
     }
 
+    /**
+     * Stores a pending user record as JSON using the username appended to the caller prefix.
+     * Serialization failures are infrastructure errors and are surfaced as IllegalStateException.
+     *
+     * @param key key prefix supplied by the signup flow
+     * @param dto temporary user data to serialize
+     * @param expirationInMinutes TTL applied to the Redis value
+     */
     @Override
     public void save(String key, UserDTO dto, long expirationInMinutes) {
         try {
@@ -37,8 +56,17 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /** Logger for repository diagnostics; counter logs use a hash reference instead of the raw key. */
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RedisRepository.class);
 
+    /**
+     * Reads and deserializes the pending user record addressed by prefix and username.
+     *
+     * @param key key prefix supplied by the signup flow
+     * @param dto object whose username completes the key
+     * @return stored user data, or {@code null} when the key is absent
+     * @throws IllegalStateException when stored JSON cannot be deserialized
+     */
     @Override
     public UserDTO find(String key, UserDTO dto) {
         try {
@@ -54,12 +82,23 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Deletes a pending user record, reporting absence as invalid temporary credentials.
+     *
+     * @param key key prefix supplied by the signup flow
+     * @param dto object whose username completes the key
+     * @throws AuthExceptions.InvalidCredentials when no matching temporary record exists
+     */
     public void delete(String key, UserDTO dto) {
         if (!redis.delete(key + dto.getUsername())) {
             throw new AuthExceptions.InvalidCredentials("Temporary user not found to delete");
         }
     }
 
+    /** Stores signup state as JSON under its session namespace with a minute-based TTL. */
+    /** @param sessionId signup session identifier used as the key suffix */
+    /** @param state structured signup state to persist */
+    /** @param expirationInMinutes lifetime of the state in minutes */
     @Override
     public void saveSignupState(String sessionId, SignupState state, long expirationInMinutes) {
         try {
@@ -78,6 +117,13 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Reads signup state without consuming it.
+     *
+     * @param sessionId signup session identifier
+     * @return decoded state, or {@code null} if no value exists
+     * @throws IllegalStateException when stored JSON cannot be decoded
+     */
     @Override
     public SignupState findSignupState(String sessionId) {
         try {
@@ -91,6 +137,13 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Atomically reads and removes signup state with Redis GETDEL, preventing concurrent reuse.
+     *
+     * @param sessionId signup session identifier
+     * @return consumed state, or {@code null} when absent
+     * @throws IllegalStateException when the consumed JSON cannot be decoded
+     */
     @Override
     public SignupState getdelSignupState(String sessionId) {
         try {
@@ -111,6 +164,9 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /** Removes signup state explicitly and reports when the expected temporary value is absent. */
+    /** @param sessionId signup session identifier */
+    /** @throws AuthExceptions.InvalidCredentials when no signup state was deleted */
     @Override
     public void deleteSignupState(String sessionId) {
         if (!redis.delete("signup:" + sessionId)) {
@@ -118,6 +174,10 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /** Persists emergency-recovery state in its own namespace with a minute-based TTL. */
+    /** @param sessionId recovery session identifier */
+    /** @param state recovery data to persist */
+    /** @param expirationInMinutes lifetime of the state in minutes */
     @Override
     public void saveEmergencyRecoveryState(String sessionId, EmergencyRecoveryState state, long expirationInMinutes) {
         try {
@@ -129,6 +189,13 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Reads emergency-recovery state without consuming it.
+     *
+     * @param sessionId recovery session identifier
+     * @return decoded state, or {@code null} when absent
+     * @throws IllegalStateException when stored JSON cannot be decoded
+     */
     @Override
     public EmergencyRecoveryState findEmergencyRecoveryState(String sessionId) {
         try {
@@ -143,6 +210,13 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Atomically reads and consumes emergency-recovery state with Redis GETDEL.
+     *
+     * @param sessionId recovery session identifier
+     * @return consumed state, or {@code null} when absent
+     * @throws IllegalStateException when consumed JSON cannot be decoded
+     */
     @Override
     public EmergencyRecoveryState getdelEmergencyRecoveryState(String sessionId) {
         try {
@@ -162,6 +236,9 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /** Deletes recovery state explicitly and reports when the expected value is absent. */
+    /** @param sessionId recovery session identifier */
+    /** @throws AuthExceptions.InvalidCredentials when no recovery state was deleted */
     @Override
     public void deleteEmergencyRecoveryState(String sessionId) {
         if (!redis.delete("recovery:" + sessionId)) {
@@ -169,6 +246,13 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Increments a Redis counter. Redis runtime failures are logged with a hashed key reference
+     * and return {@code null}, allowing callers to apply their documented degraded-mode policy.
+     *
+     * @param key counter key
+     * @return incremented value, or {@code null} when Redis fails
+     */
     @Override
     public Long increment(String key) {
         try {
@@ -184,6 +268,14 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Atomically increments a counter and sets its expiry only on the first increment.
+     * Redis failures are logged with a hashed key reference and return {@code null}.
+     *
+     * @param key counter key
+     * @param timeoutSeconds TTL assigned on first increment
+     * @return incremented value, or {@code null} when Redis fails
+     */
     @Override
     public Long incrementWithExpire(String key, long timeoutSeconds) {
         try {
@@ -205,6 +297,12 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /**
+     * Applies a seconds-based TTL, logging Redis failures as a no-op with a hashed key reference.
+     *
+     * @param key Redis key to expire
+     * @param timeoutSeconds requested remaining lifetime
+     */
     @Override
     public void expire(String key, long timeoutSeconds) {
         try {
@@ -216,21 +314,33 @@ public class RedisRepository implements RedisContract {
         }
     }
 
+    /** Reads an unstructured string value by key. */
+    /** @param key Redis key */
+    /** @return stored string or {@code null} when the key is absent */
     @Override
     public String getValue(String key) {
         return redis.opsForValue().get(key);
     }
 
+    /** Reads and deletes a string value in the same Redis operation. */
+    /** @param key Redis key */
+    /** @return prior value or {@code null} when the key is absent */
     @Override
     public String getAndDeleteValue(String key) {
         return redis.opsForValue().getAndDelete(key);
     }
 
+    /** Writes an unstructured string value with a seconds-based TTL. */
+    /** @param key Redis key */
+    /** @param value string value to store */
+    /** @param timeoutSeconds TTL in seconds */
     @Override
     public void setValue(String key, String value, long timeoutSeconds) {
         redis.opsForValue().set(key, value, timeoutSeconds, TimeUnit.SECONDS);
     }
 
+    /** Deletes an unstructured Redis value; absence is treated as an idempotent outcome. */
+    /** @param key Redis key */
     @Override
     public void deleteValue(String key) {
         redis.delete(key);

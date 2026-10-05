@@ -47,7 +47,7 @@ class ArchitectureGuardrailsTest {
     @Test
     void objectMappersAreCreatedOnlyInSpringConfiguration() {
         List<String> violations = PRODUCTION_CLASSES.stream()
-                .filter(javaClass -> !javaClass.getPackageName().startsWith("com.kerosene.config"))
+                .filter(javaClass -> !javaClass.getPackageName().startsWith("com.kerosene.platform.config"))
                 .filter(javaClass -> !javaClass.isAssignableTo(jakarta.persistence.AttributeConverter.class))
                 .flatMap(javaClass -> javaClass.getConstructorCallsFromSelf().stream())
                 .filter(this::isObjectMapperConstructorCall)
