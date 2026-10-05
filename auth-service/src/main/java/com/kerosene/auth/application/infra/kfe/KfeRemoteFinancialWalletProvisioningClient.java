@@ -6,7 +6,7 @@ import org.slf4j.Marker;
 import org.slf4j.MarkerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import com.kerosene.common.security.workload.InternalServiceRestTemplateFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
@@ -36,19 +36,17 @@ public class KfeRemoteFinancialWalletProvisioningClient extends KfeRemoteClientS
     /**
      * Creates the client with a longer read timeout suitable for wallet creation/provisioning.
      *
-     * @param restTemplateBuilder Spring HTTP client builder
+     * @param restTemplateFactory factory configuring internal service HTTP clients
      * @param baseUrl KFE service root
-     * @param internalSecret credential for the internal endpoint
      * @param connectTimeoutMs connection timeout
      * @param readTimeoutMs provisioning response timeout
      */
     public KfeRemoteFinancialWalletProvisioningClient(
-            RestTemplateBuilder restTemplateBuilder,
+            InternalServiceRestTemplateFactory restTemplateFactory,
             @Value("${kfe.remote.base-url:http://kfe-service:8080}") String baseUrl,
-            @Value("${kfe.internal.shared-secret:}") String internalSecret,
             @Value("${kfe.remote.connect-timeout-ms:2000}") long connectTimeoutMs,
             @Value("${kfe.remote.wallet-provisioning.read-timeout-ms:180000}") long readTimeoutMs) {
-        super(restTemplateBuilder, baseUrl, internalSecret, connectTimeoutMs, readTimeoutMs);
+        super(restTemplateFactory, baseUrl, connectTimeoutMs, readTimeoutMs);
     }
 
     /**

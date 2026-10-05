@@ -2,7 +2,7 @@ package com.kerosene.auth.application.infra.kfe;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import com.kerosene.common.security.workload.InternalServiceRestTemplateFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
@@ -25,19 +25,17 @@ public class KfeRemoteFinancialRailHealthClient extends KfeRemoteClientSupport i
     /**
      * Creates the client with shared KFE transport settings and internal authentication.
      *
-     * @param restTemplateBuilder Spring HTTP client builder
+     * @param restTemplateFactory factory configuring internal service HTTP clients
      * @param baseUrl KFE service root
-     * @param internalSecret credential for internal health endpoints
      * @param connectTimeoutMs connection timeout
      * @param readTimeoutMs response timeout
      */
     public KfeRemoteFinancialRailHealthClient(
-            RestTemplateBuilder restTemplateBuilder,
+            InternalServiceRestTemplateFactory restTemplateFactory,
             @Value("${kfe.remote.base-url:http://kfe-service:8080}") String baseUrl,
-            @Value("${kfe.internal.shared-secret:}") String internalSecret,
             @Value("${kfe.remote.connect-timeout-ms:2000}") long connectTimeoutMs,
             @Value("${kfe.remote.read-timeout-ms:5000}") long readTimeoutMs) {
-        super(restTemplateBuilder, baseUrl, internalSecret, connectTimeoutMs, readTimeoutMs);
+        super(restTemplateFactory, baseUrl, connectTimeoutMs, readTimeoutMs);
     }
 
     /**

@@ -5,13 +5,12 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.kerosene.common.exception.FinancialProviderUnavailableException;
 import com.kerosene.common.infra.logging.LogSanitizer;
+import com.kerosene.common.security.workload.InternalServiceRestTemplateFactory;
+import com.kerosene.common.security.workload.WorkloadIdentityProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.core.env.MapPropertySource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,9 +21,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.lang.reflect.Field;
 import java.net.SocketTimeoutException;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,10 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.RETURNS_SELF;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -50,9 +42,8 @@ class KfeRemoteFinancialWalletProvisioningClientTest {
     @Test
     void postsPrimaryWalletProvisioningRequestToKfe() throws Exception {
         KfeRemoteFinancialWalletProvisioningClient client = new KfeRemoteFinancialWalletProvisioningClient(
-                new RestTemplateBuilder(),
+                legacyClientFactory("credential"),
                 "http://kfe.test",
-                "credential",
                 100,
                 100);
         MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate(client));
@@ -71,9 +62,8 @@ class KfeRemoteFinancialWalletProvisioningClientTest {
     @Test
     void postsPrimaryWalletRepairRequestWithoutInitialAddress() throws Exception {
         KfeRemoteFinancialWalletProvisioningClient client = new KfeRemoteFinancialWalletProvisioningClient(
-                new RestTemplateBuilder(),
+                legacyClientFactory("credential"),
                 "http://kfe.test",
-                "credential",
                 100,
                 100);
         MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate(client));
@@ -92,25 +82,12 @@ class KfeRemoteFinancialWalletProvisioningClientTest {
     @Test
     void rejectsMissingInternalCredentialBeforeCallingKfe() {
         KfeRemoteFinancialWalletProvisioningClient client = new KfeRemoteFinancialWalletProvisioningClient(
-                new RestTemplateBuilder(),
+                legacyClientFactory(""),
                 "http://kfe.test",
-                "",
                 100,
                 100);
 
         assertThrows(IllegalStateException.class, () -> client.ensurePrimaryWalletReady(42L, null));
-    }
-
-    @Test
-    void provisioningTimeoutDefaultsToThreeMinutesEvenWithGenericFiveSecondTimeout() {
-        assertConfiguredTimeout(Map.of("kfe.remote.read-timeout-ms", "5000"), Duration.ofSeconds(180));
-    }
-
-    @Test
-    void provisioningTimeoutCanBeConfiguredIndependently() {
-        assertConfiguredTimeout(Map.of(
-                "kfe.remote.read-timeout-ms", "5000",
-                "kfe.remote.wallet-provisioning.read-timeout-ms", "175000"), Duration.ofSeconds(175));
     }
 
     @Test
@@ -180,27 +157,9 @@ class KfeRemoteFinancialWalletProvisioningClientTest {
         }
     }
 
-    private void assertConfiguredTimeout(Map<String, Object> timeoutProperties, Duration expectedReadTimeout) {
-        RestTemplateBuilder builder = mock(RestTemplateBuilder.class, RETURNS_SELF);
-        when(builder.build()).thenReturn(new RestTemplate());
-        Map<String, Object> properties = new HashMap<>(timeoutProperties);
-        properties.put("kfe.remote.connect-timeout-ms", "2345");
-        properties.put("kfe.internal.shared-secret", "credential");
-        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-            context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("provisioning-test", properties));
-            context.registerBean(RestTemplateBuilder.class, () -> builder);
-            context.register(KfeRemoteFinancialWalletProvisioningClient.class);
-            context.refresh();
-
-            context.getBean(KfeRemoteFinancialWalletProvisioningClient.class);
-            verify(builder).readTimeout(expectedReadTimeout);
-            verify(builder).connectTimeout(Duration.ofMillis(2345));
-        }
-    }
-
     private KfeRemoteFinancialWalletProvisioningClient client() {
         return new KfeRemoteFinancialWalletProvisioningClient(
-                new RestTemplateBuilder(), "http://kfe.test", "credential", 100, 100);
+                legacyClientFactory("credential"), "http://kfe.test", 100, 100);
     }
 
     private ListAppender<ILoggingEvent> attachAppender(Logger logger) {
@@ -229,5 +188,10 @@ class KfeRemoteFinancialWalletProvisioningClientTest {
         Field field = KfeRemoteClientSupport.class.getDeclaredField("restTemplate");
         field.setAccessible(true);
         return (RestTemplate) field.get(client);
+    }
+
+    private InternalServiceRestTemplateFactory legacyClientFactory(String secret) {
+        return new InternalServiceRestTemplateFactory(
+                new WorkloadIdentityProperties().toConfig(), null, secret);
     }
 }

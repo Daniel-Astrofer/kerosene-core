@@ -2,12 +2,10 @@ package com.kerosene.content.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,15 +17,13 @@ import com.kerosene.content.service.HomeSurfaceComposer;
 import com.kerosene.content.service.HomeUiOverrideService;
 import com.kerosene.content.service.HomeUiPushService;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 
 /**
  * Internal ops endpoint for publishing home UI overrides and live pushes.
- * Auth: X-KFE-Internal-Secret (same pattern as other internal KFE routes).
+ * The shared internal filter authenticates the calling KFE workload.
  */
 @RestController
 @RequestMapping("/internal/content/home-ui")
@@ -41,8 +37,7 @@ public class HomeUiPublishController {
     private final HomeUiPushService pushService;
     /** Parses JSON payload strings supplied by internal operators. */
     private final ObjectMapper objectMapper;
-    /** Shared secret required on every publishing request; never included in response data. */
-    private final String internalSecret;
+
 
     /**
      * Creates the internal publishing controller.
@@ -57,13 +52,11 @@ public class HomeUiPublishController {
             HomeUiOverrideService overrideService,
             HomeSurfaceComposer surfaceComposer,
             HomeUiPushService pushService,
-            ObjectMapper objectMapper,
-            @Value("${kfe.internal.shared-secret:}") String internalSecret) {
+            ObjectMapper objectMapper) {
         this.overrideService = overrideService;
         this.surfaceComposer = surfaceComposer;
         this.pushService = pushService;
         this.objectMapper = objectMapper;
-        this.internalSecret = internalSecret;
     }
 
     /**
@@ -76,9 +69,7 @@ public class HomeUiPublishController {
      */
     @PostMapping("/publish")
     public ResponseEntity<ApiResponse<Map<String, Object>>> publish(
-            @RequestHeader(name = "X-KFE-Internal-Secret", required = false) String credential,
             @RequestBody HomeUiPublishRequestDTO request) {
-        verifyCredential(credential);
         require(request != null, "request is required");
         String action = request.action() == null ? "" : request.action().trim().toUpperCase(Locale.ROOT);
 
@@ -241,37 +232,6 @@ public class HomeUiPublishController {
             return value.trim();
         }
         return fallback;
-    }
-
-    /**
-     * Requires a configured service secret and compares it to the request credential.
-     *
-     * @param credential credential supplied by the internal caller
-     * @throws ResponseStatusException with 503 when no server secret is configured, or 401 when missing/invalid
-     */
-    private void verifyCredential(String credential) {
-        if (internalSecret == null || internalSecret.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Internal secret not configured");
-        }
-        if (credential == null || credential.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing internal credential");
-        }
-        if (!constantTimeEquals(internalSecret, credential)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid internal credential");
-        }
-    }
-
-    /**
-     * Compares UTF-8 credential bytes using the JDK constant-time digest comparison primitive.
-     *
-     * @param expected configured server-side secret
-     * @param provided request credential
-     * @return whether both byte sequences match
-     */
-    private static boolean constantTimeEquals(String expected, String provided) {
-        byte[] a = expected.getBytes(StandardCharsets.UTF_8);
-        byte[] b = provided.getBytes(StandardCharsets.UTF_8);
-        return MessageDigest.isEqual(a, b);
     }
 
     /**
