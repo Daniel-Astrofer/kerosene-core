@@ -8,11 +8,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import com.kerosene.common.dto.ApiResponse;
-import com.kerosene.common.financial.FinancialColdWalletPsbtApprovalRequest;
-import com.kerosene.common.financial.FinancialCustodyTransferApprovalRequest;
-import com.kerosene.common.financial.FinancialLocalFactorApprovalRequest;
-import com.kerosene.common.financial.FinancialTransactionApprovalPort;
-import com.kerosene.common.financial.FinancialWalletOutboundApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialColdWalletPsbtApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialCustodyTransferApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialLocalFactorApprovalRequest;
+import com.kerosene.common.financial.approval.FinancialTransactionApprovalPort;
+import com.kerosene.common.financial.approval.FinancialWalletOutboundApprovalRequest;
 
 @RestController
 @RequestMapping("/internal/kfe/transaction-approval")

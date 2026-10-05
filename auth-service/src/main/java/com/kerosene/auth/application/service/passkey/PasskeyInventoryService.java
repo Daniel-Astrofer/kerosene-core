@@ -22,21 +22,41 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Builds compatible passkey/device-key inventory and recovery guidance for the current login. */
 @Service
 public class PasskeyInventoryService {
 
+    /** Logger for challenge issuance failures. */
     private static final Logger log = LoggerFactory.getLogger(PasskeyInventoryService.class);
 
+    /** Public factor identifier used for the device-key challenge in multi-factor guidance. */
     public static final String FACTOR_DEVICE_KEY = "DEVICE_KEY";
+    /** Public factor identifier used for the WebAuthn passkey challenge. */
     public static final String FACTOR_PASSKEY = "PASSKEY";
 
+    /** Repository providing owner-scoped passkey inventory projections. */
     private final PasskeyCredentialRepository passkeyCredentialRepository;
+    /** Repository checking whether an owner has an active device-key credential. */
     private final DeviceKeyCredentialRepository deviceKeyCredentialRepository;
+    /** Resolves current WebAuthn RP/origin and creates passkey challenges. */
     private final PasskeyService passkeyService;
+    /** Issues device-key authentication challenges. */
     private final DeviceKeyService deviceKeyService;
+    /** Configured lifetime shown for a passkey challenge. */
     private final long passkeyChallengeTtlSeconds;
+    /** Whether device key is preferred when both factors are accepted. */
     private final boolean preferDeviceKey;
 
+    /**
+     * Creates the inventory/guidance service and applies safe defaults to challenge lifetime.
+     *
+     * @param passkeyCredentialRepository passkey inventory query repository
+     * @param deviceKeyCredentialRepository active device-key lookup repository
+     * @param passkeyService passkey challenge and RP-context service
+     * @param deviceKeyService device-key challenge service
+     * @param passkeyChallengeTtlSeconds configured challenge TTL, reset to 90 when nonpositive
+     * @param preferDeviceKey whether to prefer DEVICE_KEY in the response
+     */
     public PasskeyInventoryService(
             PasskeyCredentialRepository passkeyCredentialRepository,
             DeviceKeyCredentialRepository deviceKeyCredentialRepository,
@@ -52,6 +72,9 @@ public class PasskeyInventoryService {
         this.preferDeviceKey = preferDeviceKey;
     }
 
+    /** Projects credential metadata and computes compatibility with the current RP and host. */
+    /** @param user account whose credentials are listed */
+    /** @return inventory including registration, compatibility, legacy, and device fields */
     public PasskeyInventoryDTO inventoryFor(UserDataBase user) {
         List<PasskeyInventoryProjection> credentials = passkeyCredentialRepository.findInventoryByUserId(user.getId());
         String currentRpId = passkeyService.resolveCurrentRelyingPartyId();
@@ -74,11 +97,17 @@ public class PasskeyInventoryService {
                 devices);
     }
 
+    /** Returns true for a currently compatible credential or a legacy credential with unknown context. */
+    /** @param user account whose inventory is evaluated */
+    /** @return whether a passkey may be used for the current login */
     public boolean hasUsablePasskeyForCurrentLogin(UserDataBase user) {
         PasskeyInventoryDTO inventory = inventoryFor(user);
         return inventory.compatibleForCurrentLogin() || inventory.legacyCredentialsPresent();
     }
 
+    /** Checks for at least one active device key after rejecting unsaved or absent user references. */
+    /** @param user account to check */
+    /** @return true when an active device key is stored */
     public boolean hasActiveDeviceKey(UserDataBase user) {
         if (user == null || user.getId() == null) {
             return false;
@@ -86,6 +115,9 @@ public class PasskeyInventoryService {
         return deviceKeyCredentialRepository.existsActiveByUserId(user.getId());
     }
 
+    /** Determines whether a credential's saved RP/origin metadata is incompatible with current context. */
+    /** @param credential passkey credential to evaluate */
+    /** @return true only for a known incompatible result; unknown legacy metadata is not rejected here */
     public boolean isKnownIncompatibleForCurrentLogin(PasskeyCredential credential) {
         return compatibilityOf(
                 credential.getRelyingPartyId(),
@@ -94,6 +126,10 @@ public class PasskeyInventoryService {
                 passkeyService.resolveCurrentRequestHost()) == CompatibilityStatus.INCOMPATIBLE;
     }
 
+    /** Determines compatibility from an explicitly supplied RP ID and origin host. */
+    /** @param relyingPartyId saved RP ID */
+    /** @param originHost saved origin host */
+    /** @return true when known incompatible */
     public boolean isKnownIncompatibleForCurrentLogin(String relyingPartyId, String originHost) {
         return compatibilityOf(
                 relyingPartyId,
@@ -106,6 +142,9 @@ public class PasskeyInventoryService {
      * Builds a 428-style payload with typed challenges.
      *
      * @param passkeyChallengeHex optional pre-issued passkey challenge (may be null)
+     * @param user account requiring an accepted credential factor
+     * @param reason public explanation of why authentication must continue
+     * @return structured challenge-required response with accepted factors and preference
      */
     public PasskeyActionRequiredDTO buildChallengeRequired(UserDataBase user, String passkeyChallengeHex, String reason) {
         PasskeyInventoryDTO inventory = inventoryFor(user);
@@ -173,6 +212,10 @@ public class PasskeyInventoryService {
                 preferredFactor);
     }
 
+    /** Builds recovery guidance directing the user to link another usable passkey. */
+    /** @param user affected account */
+    /** @param reason public reason for requesting another passkey */
+    /** @return action-required payload without issued challenges */
     public PasskeyActionRequiredDTO buildLinkNewPasskeyGuidance(UserDataBase user, String reason) {
         PasskeyInventoryDTO inventory = inventoryFor(user);
         return new PasskeyActionRequiredDTO(
@@ -191,6 +234,9 @@ public class PasskeyInventoryService {
 
     /**
      * Counter replay / desync — not "credential missing". Never first-prompt re-link.
+     * @param user affected account
+     * @param reason optional explanatory text
+     * @return security-conflict guidance that does not request first-time relinking
      */
     public PasskeyActionRequiredDTO buildReplayConflictGuidance(UserDataBase user, String reason) {
         PasskeyInventoryDTO inventory = inventoryFor(user);
@@ -214,6 +260,9 @@ public class PasskeyInventoryService {
 
     /**
      * Soft-lock after repeated replay failures on the same credential.
+     * @param user affected account
+     * @param lockSeconds configured lock interval
+     * @return locked-device guidance with a rounded wait in minutes
      */
     public PasskeyActionRequiredDTO buildReplayLockedGuidance(UserDataBase user, long lockSeconds) {
         PasskeyInventoryDTO inventory = inventoryFor(user);
@@ -234,6 +283,10 @@ public class PasskeyInventoryService {
                 null);
     }
 
+    /** Selects an accepted factor using deployment preference and available challenge order. */
+    /** @param acceptedFactors factor identifiers included in the response */
+    /** @param hasDeviceKey whether the owner has an active device key */
+    /** @return preferred factor identifier, or null when none can be offered */
     private String resolvePreferredFactor(List<String> acceptedFactors, boolean hasDeviceKey) {
         if (preferDeviceKey && hasDeviceKey && acceptedFactors.contains(FACTOR_DEVICE_KEY)) {
             return FACTOR_DEVICE_KEY;
@@ -247,6 +300,11 @@ public class PasskeyInventoryService {
         return null;
     }
 
+    /** Projects one repository row to a client device entry with compatibility and fingerprinted ID. */
+    /** @param credential stored metadata projection */
+    /** @param currentRpId current relying-party context */
+    /** @param currentHost current request host */
+    /** @return public device inventory entry */
     private PasskeyDeviceDTO toDevice(PasskeyInventoryProjection credential, String currentRpId, String currentHost) {
         CompatibilityStatus compatibility = compatibilityOf(
                 credential.relyingPartyId(),
@@ -276,6 +334,12 @@ public class PasskeyInventoryService {
                 compatibility == CompatibilityStatus.COMPATIBLE);
     }
 
+    /** Classifies credential context as compatible, incompatible, or unknown for this login. */
+    /** @param relyingPartyId saved RP ID */
+    /** @param originHost saved origin host */
+    /** @param currentRpId current RP ID */
+    /** @param currentHost current request host */
+    /** @return compatibility classification including legacy mobile-origin exceptions */
     private CompatibilityStatus compatibilityOf(
             String relyingPartyId,
             String originHost,
@@ -321,6 +385,9 @@ public class PasskeyInventoryService {
         return CompatibilityStatus.INCOMPATIBLE;
     }
 
+    /** Identifies application-scoped RP names that are not DNS hostnames or scheme strings. */
+    /** @param rpId RP identifier */
+    /** @return true when the identifier contains neither dot nor colon */
     private boolean isApplicationScopedRp(String rpId) {
         if (!hasText(rpId)) {
             return false;
@@ -329,6 +396,9 @@ public class PasskeyInventoryService {
         return !normalized.contains(".") && !normalized.contains(":");
     }
 
+    /** Recognizes Android origin tokens that cannot be parsed as ordinary HTTP hostnames. */
+    /** @param originHost persisted origin token */
+    /** @return true for apk-key-hash or android scheme tokens */
     private boolean isAndroidOriginToken(String originHost) {
         if (!hasText(originHost)) {
             return false;
@@ -337,12 +407,21 @@ public class PasskeyInventoryService {
         return normalized.startsWith("apk-key-hash:") || normalized.startsWith("android:");
     }
 
+    /** Requests relinking only when TOTP is available and no compatible or legacy credential exists. */
+    /** @param user account factor state */
+    /** @param inventory projected inventory */
+    /** @return whether client recovery should link a new passkey */
     private boolean shouldLinkNewPasskey(UserDataBase user, PasskeyInventoryDTO inventory) {
         return user.hasTotpEnabled()
                 && !inventory.compatibleForCurrentLogin()
                 && !inventory.legacyCredentialsPresent();
     }
 
+    /** Selects client-facing recovery text based on relinking need and challenge availability. */
+    /** @param user account factor state */
+    /** @param inventory projected inventory */
+    /** @param canRetryWithChallenge whether the current operation has a challenge to retry */
+    /** @return actionable guidance string */
     private String guidanceFor(UserDataBase user, PasskeyInventoryDTO inventory, boolean canRetryWithChallenge) {
         if (shouldLinkNewPasskey(user, inventory)) {
             return "A passkey atual nao atende o login deste dispositivo. Entre com senha + TOTP e vincule uma nova passkey.";
@@ -353,17 +432,28 @@ public class PasskeyInventoryService {
         return "Use uma passkey registrada neste login ou vincule outra passkey compatível.";
     }
 
+    /** Compares two nonblank RP/origin strings case-insensitively. */
+    /** @param left saved metadata */
+    /** @param right current request metadata */
+    /** @return true when both exist and match ignoring case */
     private boolean matches(String left, String right) {
         return hasText(left) && hasText(right) && left.equalsIgnoreCase(right);
     }
 
+    /** Tests whether a metadata string contains non-whitespace text. */
+    /** @param value candidate text */
+    /** @return true for non-null, nonblank values */
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
 
+    /** Three-state result distinguishing known compatibility from absent legacy context. */
     private enum CompatibilityStatus {
+        /** Credential metadata matches the current login context. */
         COMPATIBLE,
+        /** Credential metadata conflicts with the current login context. */
         INCOMPATIBLE,
+        /** Saved or current context is insufficient to classify compatibility. */
         UNKNOWN
     }
 }

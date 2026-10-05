@@ -1,5 +1,7 @@
 .gradle/
 **/build/
+bin/
+**/bin/
 *.class
 *.log
 .idea/
@@ -15,3 +17,7 @@ __pycache__/
 # Sibling repo worktrees (polyrepo workspace)
 archive/
 services/
+
+# Web admin build artifacts
+web-admin-build/*
+!web-admin-build/.gitkeep

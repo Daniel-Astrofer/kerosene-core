@@ -5,20 +5,28 @@ import org.springframework.stereotype.Component;
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.model.enums.AccountSecurityType;
 
+/** Central feature gate for Shamir and multi-factor multisig account modes. */
 @Component
 public class AdvancedAccountSecurityAvailability {
 
+    /** Whether this build is configured to accept advanced account security modes. */
     private final boolean advancedModesEnabled;
 
+    /** Captures the deployment's advanced-mode feature flag. */
+    /** @param advancedModesEnabled value of account.security.advanced-modes-enabled */
     public AdvancedAccountSecurityAvailability(
             @Value("${account.security.advanced-modes-enabled:false}") boolean advancedModesEnabled) {
         this.advancedModesEnabled = advancedModesEnabled;
     }
 
+    /** Reports whether advanced modes are enabled. @return configured feature state */
     public boolean isEnabled() {
         return advancedModesEnabled;
     }
 
+    /** Rejects advanced modes when the feature flag is disabled. */
+    /** @param accountSecurityType requested account security mode */
+    /** @throws AuthExceptions.InvalidCredentials when the requested mode is unavailable */
     public void assertSupported(AccountSecurityType accountSecurityType) {
         if (accountSecurityType == AccountSecurityType.SHAMIR
                 || accountSecurityType == AccountSecurityType.MULTISIG_2FA) {

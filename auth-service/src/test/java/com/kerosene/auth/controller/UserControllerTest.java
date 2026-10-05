@@ -10,7 +10,7 @@ import com.kerosene.auth.application.orchestrator.login.contracts.Signup;
 import com.kerosene.auth.application.usecase.user.GeneratePowChallengeUseCase;
 import com.kerosene.auth.application.usecase.user.LogoutCurrentSessionUseCase;
 import com.kerosene.auth.dto.UserDTO;
-import com.kerosene.common.exception.GlobalExceptionHandler;
+import com.kerosene.platform.exception.GlobalExceptionHandler;
 
 import java.util.Map;
 

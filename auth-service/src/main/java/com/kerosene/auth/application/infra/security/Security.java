@@ -15,8 +15,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import com.kerosene.common.release.ReleaseAttestationFilter;
-import com.kerosene.common.security.EndpointPolicyRegistry;
+import com.kerosene.platform.release.ReleaseAttestationFilter;
+import com.kerosene.platform.security.EndpointPolicyRegistry;
 
 @Configuration
 @EnableWebSecurity

@@ -25,7 +25,7 @@ import com.kerosene.auth.application.service.authentication.login.chain.LoginReq
 import com.kerosene.auth.application.service.authentication.login.chain.LoginUserLookupHandler;
 import com.kerosene.auth.application.service.authentication.login.chain.LoginValidationChain;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.dto.UserDTO;
 import com.kerosene.auth.model.entity.UserDataBase;
 

@@ -1,30 +1,18 @@
-# Kerosene Core (Auth gateway)
+<!--
+status: active
+audience: internal
+owner: core
+source_of_truth: core source tree and Gradle settings
+last_reviewed: 2026-09-03
+-->
 
-Java/Spring identity, session, notification and public gateway service.
+# Kerosene Core
 
-## Modules
+Auth, sessions, notifications and gateway policy. Start at the
+[documentation](../../kerosene-global-docs/services/users-authentication/docs/quickstart/README.md) and [quickstart](../../kerosene-global-docs/services/users-authentication/docs/quickstart/QUICKSTART.md).
 
-- `auth-service`: Auth, sessions, notifications and public API.
+Financial execution belongs to the independent KFE service.
 
-Cross-repository contracts are consumed from the sibling
-`kerosene-contracts` composite build. The administrative CLI lives in
-`kerosene-admin`; Bitcoin and Lightning adapters live in `kerosene-rails`.
-Image recipes and their healthcheck helper live in `kerosene-deploy`.
-Financial execution lives in `kerosene-kfe`; neutral Java utilities live in
-`kerosene-shared`.
+## Documentação global
 
-Auth and KFE have separate source repositories and builds. Auth communicates
-with KFE through remote clients and canonical contracts; the Core build no
-longer consumes KFE implementation classes.
-
-Documentation: [English](docs/en/README.md) ·
-[Português (Brasil)](docs/pt-BR/README.md)
-
-Module ownership and extraction gates:
-[English](docs/en/MODULE_BOUNDARIES.md) ·
-[Português (Brasil)](docs/pt-BR/FRONTEIRAS-DOS-MODULOS.md)
-
-KFE-specific architecture and runbooks are owned by `kerosene-kfe`.
-
-`web-admin-build/` is an empty packaging mount. Deploy generates the Flutter
-bundle there before building the server image; placeholder HTML is not shipped.
+Arquitetura transversal, regras de negócio compartilhadas e infraestrutura/operação global estão no repositório externo [kerosene-global-docs](../../kerosene-global-docs/README.md). A documentação inline de implementação permanece junto ao código neste repositório.

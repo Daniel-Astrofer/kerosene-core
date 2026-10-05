@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import com.kerosene.common.vaultmesh.VaultMeshDayStatus;
-import com.kerosene.common.vaultmesh.VaultMeshSettlementPort;
+import com.kerosene.common.vaultmesh.governance.VaultMeshDayStatus;
+import com.kerosene.common.vaultmesh.settlement.VaultMeshSettlementPort;
 
 import java.net.URI;
 import java.net.http.HttpClient;

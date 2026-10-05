@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.kerosene.common.financial.FinancialQuorumPort;
+import com.kerosene.common.financial.operations.FinancialQuorumPort;
 import com.kerosene.sovereign.quorum.FailStopPolicy;
 import com.kerosene.sovereign.quorum.QuorumMembership;
 import com.kerosene.sovereign.quorum.QuorumPeer;

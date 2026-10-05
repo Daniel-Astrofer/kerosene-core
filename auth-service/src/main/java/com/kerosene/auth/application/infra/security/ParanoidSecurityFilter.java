@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import com.kerosene.security.SuicideService;
+import com.kerosene.security.infra.SuicideService;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;

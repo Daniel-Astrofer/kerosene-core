@@ -1,6 +1,6 @@
 -- Flyway V2 operational hardening for production schema.
--- Source: src/main/resources/db/migration.sql, kept idempotent while the
--- project transitions away from out-of-band SQL scripts.
+-- Consolidated from the former out-of-band SQL script; Flyway owns schema
+-- changes for this service.
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 001: Adicionar coluna totp_secret na tabela financial.wallets

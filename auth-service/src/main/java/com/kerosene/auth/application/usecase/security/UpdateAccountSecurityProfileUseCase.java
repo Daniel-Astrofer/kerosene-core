@@ -15,14 +15,24 @@ import com.kerosene.auth.model.entity.UserDataBase;
 import com.kerosene.auth.model.enums.AccountSecurityType;
 import com.kerosene.common.exception.ErrorCodes;
 
+/** Validates and persists an account security mode, then returns its refreshed security profile. */
 @Component
 public class UpdateAccountSecurityProfileUseCase {
 
+    /** Persists the modified account entity. */
     private final UserServiceContract userService;
+    /** Builds the updated public inventory and checks mode prerequisites. */
     private final PasskeyInventoryService passkeyInventoryService;
+    /** Rejects security modes that are disabled or unavailable in this deployment. */
     private final AdvancedAccountSecurityAvailability advancedAccountSecurityAvailability;
+    /** Resolves device-specific PIN status included in the returned profile. */
     private final AppPinService appPinService;
 
+    /** Creates the account security profile update operation. */
+    /** @param userService persistence boundary */
+    /** @param passkeyInventoryService passkey prerequisite and projection service */
+    /** @param advancedAccountSecurityAvailability mode availability policy */
+    /** @param appPinService device-scoped PIN status service */
     public UpdateAccountSecurityProfileUseCase(
             UserServiceContract userService,
             PasskeyInventoryService passkeyInventoryService,
@@ -34,6 +44,11 @@ public class UpdateAccountSecurityProfileUseCase {
         this.appPinService = appPinService;
     }
 
+    /** Validates the requested mode, updates and persists account security fields, then returns the profile. */
+    /** @param user account entity selected by the authenticated boundary */
+    /** @param request requested mode and mode-specific thresholds */
+    /** @param deviceHash device reference used to include PIN status */
+    /** @return persisted account security profile */
     @Transactional
     public AccountSecurityProfileDTO execute(
             UserDataBase user,
@@ -50,6 +65,9 @@ public class UpdateAccountSecurityProfileUseCase {
                 appPinService.getStatus(persistedUser, deviceHash));
     }
 
+    /** Selects the requested mode (STANDARD when omitted), checks feature availability, and applies its fields. */
+    /** @param user account to mutate */
+    /** @param request requested security configuration */
     private void validateAndApply(
             UserDataBase user,
             AccountSecurityUpdateRequestDTO request) {
@@ -66,6 +84,9 @@ public class UpdateAccountSecurityProfileUseCase {
         }
     }
 
+    /** Applies SHAMIR after validating the total-share and reconstruction-threshold bounds. */
+    /** @param user account to update */
+    /** @param request configuration carrying required share counts */
     private void applyShamir(
             UserDataBase user,
             AccountSecurityUpdateRequestDTO request) {
@@ -89,6 +110,9 @@ public class UpdateAccountSecurityProfileUseCase {
         user.setMultisigThreshold(2);
     }
 
+    /** Applies MULTISIG_2FA after validating threshold and requiring a usable passkey for 3FA. */
+    /** @param user account to update */
+    /** @param request configuration carrying the optional factor threshold */
     private void applyMultisig(
             UserDataBase user,
             AccountSecurityUpdateRequestDTO request) {
@@ -113,6 +137,8 @@ public class UpdateAccountSecurityProfileUseCase {
         user.setMultisigThreshold(multisigThreshold);
     }
 
+    /** Applies PASSKEY mode only when a passkey usable for the current login is linked. */
+    /** @param user account to update */
     private void applyPasskey(UserDataBase user) {
         if (!passkeyInventoryService.hasUsablePasskeyForCurrentLogin(user)) {
             throw new AuthExceptions.StructuredAuthException(
@@ -129,6 +155,8 @@ public class UpdateAccountSecurityProfileUseCase {
         user.setMultisigThreshold(2);
     }
 
+    /** Resets advanced mode fields and restores STANDARD security defaults. */
+    /** @param user account to update */
     private void applyStandard(UserDataBase user) {
         user.setAccountSecurity(AccountSecurityType.STANDARD);
         user.setShamirTotalShares(null);

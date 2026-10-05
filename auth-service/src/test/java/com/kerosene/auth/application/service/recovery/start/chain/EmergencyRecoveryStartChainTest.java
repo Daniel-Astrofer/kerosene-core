@@ -17,7 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
 import com.kerosene.auth.application.port.out.AuthUserGateway;
 import com.kerosene.auth.application.service.authentication.contracts.SignupVerifier;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.application.service.pow.PowService;
 import com.kerosene.auth.application.service.recovery.RecoveryCodeService;
 import com.kerosene.auth.application.service.recovery.RecoveryRateLimitService;

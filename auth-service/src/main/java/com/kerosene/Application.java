@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
+/** Spring Boot composition root for authentication, notification, and content persistence. */
 @SpringBootApplication
 @EntityScan(basePackages = {
         "com.kerosene.auth.model.entity",
@@ -18,6 +19,11 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 })
 public class Application {
 
+    /**
+     * Starts the authentication service and its configured Spring application context.
+     *
+     * @param args command-line arguments forwarded to Spring Boot
+     */
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
     }

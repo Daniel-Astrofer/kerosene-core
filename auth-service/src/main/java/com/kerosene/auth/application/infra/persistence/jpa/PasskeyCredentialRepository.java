@@ -13,15 +13,25 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/** Persistence queries and atomic signature-counter updates for WebAuthn passkey credentials. */
 @Repository
 public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCredential, UUID> {
+    /** Loads a credential by its binary identifier and fetches its user in the same query. */
     @EntityGraph(attributePaths = "user")
     Optional<PasskeyCredential> findByCredentialId(byte[] credentialId);
 
+    /** Finds a credential only when its binary identifier and owning user both match. */
     Optional<PasskeyCredential> findByCredentialIdAndUserId(byte[] credentialId, Long userId);
 
+    /** Lists all credential entities for a user. */
     List<PasskeyCredential> findByUserId(Long userId);
 
+    /**
+     * Projects a user's credential inventory, ordered by most recent access and then first enrollment.
+     *
+     * @param userId owning user identifier
+     * @return inventory projection rows ordered newest first
+     */
     @Query("""
             select new com.kerosene.auth.application.infra.persistence.jpa.PasskeyInventoryProjection(
                 p.credentialId,
@@ -44,6 +54,12 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
             """)
     List<PasskeyInventoryProjection> findInventoryByUserId(@Param("userId") Long userId);
 
+    /**
+     * Loads verification material and account state by credential ID.
+     *
+     * @param credentialId raw WebAuthn credential identifier bytes
+     * @return minimal verification projection when the credential exists
+     */
     @Query("""
             select new com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection(
                 p.credentialId,
@@ -63,6 +79,13 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
     Optional<PasskeyVerificationProjection> findVerificationByCredentialId(
             @Param("credentialId") byte[] credentialId);
 
+    /**
+     * Loads verification material only when credential ownership matches the supplied user.
+     *
+     * @param credentialId raw WebAuthn credential identifier bytes
+     * @param userId required credential owner
+     * @return verification projection when both credential and owner match
+     */
     @Query("""
             select new com.kerosene.auth.application.infra.persistence.jpa.PasskeyVerificationProjection(
                 p.credentialId,
@@ -84,6 +107,15 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
             @Param("credentialId") byte[] credentialId,
             @Param("userId") Long userId);
 
+    /**
+     * Advances an active credential counter only when the new value is strictly greater.
+     * The conditional update is atomic and prevents replay of an older/equal authenticator assertion.
+     *
+     * @param credentialId credential identifier bytes
+     * @param userId owner of the credential
+     * @param newSignatureCount counter returned by verified authenticator data
+     * @return affected row count; zero indicates stale counter, wrong owner, or inactive credential
+     */
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
@@ -99,10 +131,13 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
             @Param("userId") Long userId,
             @Param("newSignatureCount") long newSignatureCount);
 
+    /** Lists credentials by their user-handle bytes. */
     List<PasskeyCredential> findByUserHandle(byte[] userHandle);
 
+    /** Finds the first credential tied to a user's installation identifier. */
     Optional<PasskeyCredential> findFirstByUserIdAndDeviceInstallId(Long userId, String deviceInstallId);
 
+    /** Loads active credentials for an installation and fetches each owning user. */
     @EntityGraph(attributePaths = "user")
     @Query("""
             select p from PasskeyCredential p
@@ -111,11 +146,13 @@ public interface PasskeyCredentialRepository extends JpaRepository<PasskeyCreden
             """)
     List<PasskeyCredential> findActiveByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
 
+    /** Deletes credentials associated with an installation ID across users. */
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from PasskeyCredential p where p.deviceInstallId = :deviceInstallId")
     int deleteByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
 
+    /** Deletes credentials only for the matching user and installation pair. */
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

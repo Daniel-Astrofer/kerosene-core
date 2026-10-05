@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.infra.persistence.jpa.UserAppPinSettingsRepository;
-import com.kerosene.auth.application.service.cripto.contracts.Hasher;
+import com.kerosene.auth.application.service.crypto.contracts.Hasher;
 import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
 import com.kerosene.auth.dto.AppPinStatusDTO;
 import com.kerosene.auth.dto.ConfigureAppPinRequestDTO;
@@ -18,17 +18,36 @@ import com.kerosene.common.exception.ErrorCodes;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 
+/** Manages a numeric application PIN scoped to a user/device pair with lockout and TOTP recovery. */
 @Service
 public class AppPinService {
 
+    /** Repository for per-device PIN settings and write-locked updates. */
     private final UserAppPinSettingsRepository repository;
+    /** Argon2-qualified hasher used to store and compare PINs. */
     private final Hasher hasher;
+    /** TOTP verifier used to authorize PIN replacement when the current PIN is unavailable. */
     private final TOTPVerifier totpVerifier;
+    /** Minimum accepted PIN digit count. */
     private final int minPinLength;
+    /** Maximum accepted PIN digit count. */
     private final int maxPinLength;
+    /** Failed verification count that triggers a temporary lock. */
     private final int maxAttempts;
+    /** Duration applied to a lock after reaching the failed-attempt limit. */
     private final int lockoutMinutes;
 
+    /**
+     * Creates the PIN service with repository, cryptographic, TOTP, and configurable policy limits.
+     *
+     * @param repository per-device PIN settings repository
+     * @param hasher Argon2 PIN hashing/verifying implementation
+     * @param totpVerifier TOTP recovery-factor verifier
+     * @param minPinLength minimum allowed PIN length
+     * @param maxPinLength maximum allowed PIN length
+     * @param maxAttempts failures before lockout
+     * @param lockoutMinutes lock duration in minutes
+     */
     public AppPinService(
             UserAppPinSettingsRepository repository,
             @Qualifier("Argon2Hasher") Hasher hasher,
@@ -46,6 +65,15 @@ public class AppPinService {
         this.lockoutMinutes = lockoutMinutes;
     }
 
+    /**
+     * Enables or disables PIN protection for one device. Reconfiguration of an enabled PIN requires
+     * either the current PIN or an active account TOTP; enabling hashes the new PIN and resets counters.
+     *
+     * @param user account that owns the device PIN
+     * @param deviceHash device identifier to scope settings
+     * @param request requested enabled state and authorization material
+     * @return resulting status for this user/device pair
+     */
     @Transactional
     public AppPinStatusDTO configure(UserDataBase user, String deviceHash, ConfigureAppPinRequestDTO request) {
         String normalizedDeviceHash = normalizeDeviceHash(deviceHash);
@@ -82,7 +110,18 @@ public class AppPinService {
         return toStatus(user, settings);
     }
 
-    @Transactional
+    /**
+     * Checks the device PIN in an independent transaction so rejected attempts and lockout state
+     * survive any caller rollback. A wrong PIN is a local-factor client error, while the threshold
+     * failure returns a rate-limited lock response.
+     *
+     * @param user account that owns the device PIN
+     * @param deviceHash device identifier to scope settings
+     * @param pin submitted numeric PIN
+     * @return updated PIN status after successful verification
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+            noRollbackFor = AuthExceptions.StructuredAuthException.class)
     public AppPinStatusDTO verify(UserDataBase user, String deviceHash, String pin) {
         String normalizedDeviceHash = normalizeDeviceHash(deviceHash);
         UserAppPinSettings settings = repository.findByUserIdAndDeviceHash(user.getId(), normalizedDeviceHash)
@@ -127,6 +166,10 @@ public class AppPinService {
                 toStatus(user, settings));
     }
 
+    /** Returns current PIN policy/status and resets an expired lock when the device is identified. */
+    /** @param user account that owns the device PIN */
+    /** @param deviceHash optional device identifier; absent yields disabled/default status */
+    /** @return PIN status projection */
     @Transactional
     public AppPinStatusDTO getStatus(UserDataBase user, String deviceHash) {
         String normalizedDeviceHash = normalizeOptionalDeviceHash(deviceHash);
@@ -139,6 +182,10 @@ public class AppPinService {
         return toStatus(user, settings);
     }
 
+    /** Creates disabled settings for a previously unseen owner/device pair. */
+    /** @param user owning account */
+    /** @param deviceHash normalized device identifier */
+    /** @return unsaved default settings */
     private UserAppPinSettings newSettings(UserDataBase user, String deviceHash) {
         UserAppPinSettings settings = new UserAppPinSettings();
         settings.setUser(user);
@@ -148,6 +195,9 @@ public class AppPinService {
         return settings;
     }
 
+    /** Clears an elapsed lock and its failures, persisting the reset while retaining other settings. */
+    /** @param settings loaded device PIN settings */
+    /** @return original settings or persisted reset settings */
     private UserAppPinSettings resetExpiredLockIfNeeded(UserAppPinSettings settings) {
         if (settings.getLockedUntil() != null && LocalDateTime.now().isAfter(settings.getLockedUntil())) {
             settings.setLockedUntil(null);
@@ -157,6 +207,11 @@ public class AppPinService {
         return settings;
     }
 
+    /** Authorizes replacing an enabled PIN with the current PIN or a valid active TOTP code. */
+    /** @param user account owning the settings */
+    /** @param settings current PIN settings */
+    /** @param currentPin optional current PIN */
+    /** @param totpCode optional recovery TOTP */
     private void authorizeExistingSettings(
             UserDataBase user,
             UserAppPinSettings settings,
@@ -189,6 +244,10 @@ public class AppPinService {
                 "Informe o PIN atual ou um codigo TOTP valido para alterar a protecao do aplicativo.");
     }
 
+    /** Rejects an operation while the device PIN lock deadline is still in the future. */
+    /** @param user account owning the settings */
+    /** @param settings current PIN settings */
+    /** @throws AuthExceptions.StructuredAuthException when lockout is active */
     private void assertNotLocked(UserDataBase user, UserAppPinSettings settings) {
         if (settings.getLockedUntil() != null && LocalDateTime.now().isBefore(settings.getLockedUntil())) {
             throw new AuthExceptions.StructuredAuthException(
@@ -199,6 +258,10 @@ public class AppPinService {
         }
     }
 
+    /** Builds a conflict error for a device without enabled PIN settings. */
+    /** @param user account requesting PIN verification */
+    /** @param deviceHash normalized device identifier */
+    /** @return structured not-configured error including current status */
     private AuthExceptions.StructuredAuthException notConfigured(UserDataBase user, String deviceHash) {
         return new AuthExceptions.StructuredAuthException(
                 "PIN numerico ainda nao configurado para este dispositivo.",
@@ -207,6 +270,10 @@ public class AppPinService {
                 getStatus(user, deviceHash));
     }
 
+    /** Projects configuration limits, lock status, remaining attempts, and timestamps for the client. */
+    /** @param user account whose TOTP state is included */
+    /** @param settings current device settings, or {@code null} when absent */
+    /** @return app-PIN status DTO */
     private AppPinStatusDTO toStatus(UserDataBase user, UserAppPinSettings settings) {
         boolean enabled = isEnabled(settings);
         int failedAttempts = settings != null && settings.getFailedAttempts() != null ? settings.getFailedAttempts() : 0;
@@ -230,6 +297,9 @@ public class AppPinService {
                 settings != null ? settings.getUpdatedAt() : null);
     }
 
+    /** Requires both an enabled flag and a non-empty stored hash to consider PIN protection active. */
+    /** @param settings device settings, possibly absent */
+    /** @return true only for complete enabled settings */
     private boolean isEnabled(UserAppPinSettings settings) {
         return settings != null
                 && Boolean.TRUE.equals(settings.getEnabled())
@@ -237,6 +307,10 @@ public class AppPinService {
                 && !settings.getPinHash().isBlank();
     }
 
+    /** Requires and normalizes a device identifier before read/write PIN operations. */
+    /** @param deviceHash supplied device identifier */
+    /** @return trimmed device identifier */
+    /** @throws AuthExceptions.StructuredAuthException when no device can be identified */
     private String normalizeDeviceHash(String deviceHash) {
         String normalized = normalizeOptionalDeviceHash(deviceHash);
         if (normalized == null) {
@@ -249,6 +323,10 @@ public class AppPinService {
         return normalized;
     }
 
+    /** Trims an optional device identifier and rejects values exceeding the storage bound. */
+    /** @param deviceHash supplied identifier */
+    /** @return trimmed identifier or {@code null} when absent */
+    /** @throws AuthExceptions.InvalidCredentials when identifier exceeds 128 characters */
     private String normalizeOptionalDeviceHash(String deviceHash) {
         if (deviceHash == null || deviceHash.isBlank()) {
             return null;
@@ -260,6 +338,11 @@ public class AppPinService {
         return normalized;
     }
 
+    /** Trims and validates a numeric PIN against configured digit bounds. */
+    /** @param pin candidate PIN */
+    /** @param required whether absent input is an error */
+    /** @return normalized PIN or {@code null} when optional input is absent */
+    /** @throws AuthExceptions.InvalidCredentials for absent required, nonnumeric, or out-of-range input */
     private String normalizedPin(String pin, boolean required) {
         if (pin == null || pin.isBlank()) {
             if (required) {
@@ -279,6 +362,10 @@ public class AppPinService {
         return normalized;
     }
 
+    /** Trims and validates an optional six-digit numeric TOTP value. */
+    /** @param totpCode candidate TOTP code */
+    /** @return normalized code or {@code null} when absent */
+    /** @throws AuthExceptions.InvalidCredentials for malformed non-empty input */
     private String normalizeTotpCode(String totpCode) {
         if (totpCode == null || totpCode.isBlank()) {
             return null;
@@ -290,6 +377,9 @@ public class AppPinService {
         return normalized;
     }
 
+    /** Hashes a PIN using a temporary character array and clears that array in a finally block. */
+    /** @param pin normalized PIN value */
+    /** @return encoded Argon2 hash */
     private String hashPin(String pin) {
         char[] pinChars = pin.toCharArray();
         try {
@@ -299,6 +389,10 @@ public class AppPinService {
         }
     }
 
+    /** Verifies a candidate against the stored hash and clears the temporary character array. */
+    /** @param pin normalized candidate PIN */
+    /** @param pinHash persisted encoded Argon2 hash */
+    /** @return true when the hash verification succeeds */
     private boolean matchesPin(String pin, String pinHash) {
         char[] pinChars = pin.toCharArray();
         try {

@@ -2,9 +2,9 @@ package com.kerosene.notification.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
-import com.kerosene.common.financial.FinancialDepositConfirmedNotificationRequest;
-import com.kerosene.common.financial.FinancialNotificationPort;
-import com.kerosene.common.financial.FinancialPaymentRequestDepositConfirmedNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialDepositConfirmedNotificationRequest;
+import com.kerosene.common.financial.notification.FinancialNotificationPort;
+import com.kerosene.common.financial.notification.FinancialPaymentRequestDepositConfirmedNotificationRequest;
 
 import java.util.UUID;
 

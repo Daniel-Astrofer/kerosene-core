@@ -12,12 +12,18 @@ import org.springframework.stereotype.Service;
  * Service responsible for authenticating users during login.
  * Validates credentials and device information.
  */
+/** Adapts login requests to an ordered credential-validation chain and wipes secret buffers afterward. */
 @Service
 public class LoginValidator implements LoginVerifier {
 
+    /** Rule operations shared by ordered login handlers. */
     private final LoginCredentialRules rules;
+    /** Ordered sequence for required-field, throttling, lookup, and passphrase checks. */
     private final LoginValidationChain validationChain;
 
+    /** Creates the login validator. */
+    /** @param rules reusable login validation and cleanup operations */
+    /** @param validationChain ordered login rule chain */
     public LoginValidator(LoginCredentialRules rules,
             LoginValidationChain validationChain) {
         this.rules = rules;
@@ -29,6 +35,7 @@ public class LoginValidator implements LoginVerifier {
      *
      * @param dto the user credentials
      * @return the authenticated user entity
+     * @throws com.kerosene.auth.AuthExceptions.InvalidCredentials when validation fails
      */
     @Override
     public UserDataBase matcherWithoutDevice(UserDTOContract dto) {
@@ -43,8 +50,10 @@ public class LoginValidator implements LoginVerifier {
     }
 
     /**
-     * Finds a user by username only — used by the TOTP verification step
-     * where the passphrase was already validated in the initial login request.
+     * Finds a user by normalized username only, for the second-factor step after the initial
+     * credential request already validated the passphrase.
+     * @param username submitted username
+     * @return persisted user
      */
     @Override
     public UserDataBase findByUsernameOnly(String username) {

@@ -37,23 +37,52 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+/** Orchestrates WebAuthn passkey enrollment, login, replay protection, and onboarding completion. */
 @Service
 public class PasskeyOrchestrator {
 
+    /** Logger for passkey operational events; identity and credential references are sanitized. */
     private static final Logger log = LoggerFactory.getLogger(PasskeyOrchestrator.class);
+    /** Authentication log marker used for security-sensitive onboarding events. */
+    private static final org.slf4j.Marker AUTH_MARKER = org.slf4j.MarkerFactory.getMarker("AUTH");
 
+    /** WebAuthn protocol operations for challenges, signatures, origins, and authenticator data. */
     private final PasskeyService passkeyService;
+    /** Credential lookup, persistence, and monotonic counter advancement repository. */
     private final PasskeyCredentialRepository passkeyCredentialRepository;
+    /** Account lookup used to resolve passkey owners. */
     private final UserRepository userRepository;
+    /** JWT issuer for passkey-authenticated or newly created accounts. */
     private final JwtServicer jwtServicer;
+    /** Temporary signup session state used during onboarding registration. */
     private final SignupStateStore signupStateStore;
+    /** Inventory and client-action guidance for unusable credentials. */
     private final PasskeyInventoryService passkeyInventoryService;
+    /** Signup finalizer and account financial-readiness operation. */
     private final FinalizeSignupAccount finalizeSignupAccount;
+    /** Temporary pre-authentication storage used when TOTP remains required. */
     private final RedisServicer redisService;
+    /** Device-installation ownership checks and unlink transaction policy. */
     private final DeviceBindingPolicy deviceBindingPolicy;
+    /** Replay-failure tracking and temporary credential lock policy. */
     private final DeviceCredentialReplayGuard deviceCredentialReplayGuard;
+    /** Isolated transaction boundary for credential write operations. */
     private final TransactionTemplate transactionTemplate;
 
+    /**
+     * Creates the orchestrator and a transaction template for isolated credential writes.
+     * @param passkeyService WebAuthn protocol operations
+     * @param passkeyCredentialRepository credential persistence and counter updates
+     * @param userRepository account lookup
+     * @param jwtServicer session token issuer
+     * @param signupStateStore pending signup state
+     * @param passkeyInventoryService inventory and action guidance service
+     * @param finalizeSignupAccount signup finalizer
+     * @param redisService temporary authentication state storage
+     * @param deviceBindingPolicy installation ownership policy
+     * @param deviceCredentialReplayGuard replay failure and lock policy
+     * @param transactionManager database transaction manager
+     */
     public PasskeyOrchestrator(
             PasskeyService passkeyService,
             PasskeyCredentialRepository passkeyCredentialRepository,
@@ -82,6 +111,9 @@ public class PasskeyOrchestrator {
     /**
      * Not fully transactional: binding conflict is resolved in REQUIRES_NEW TXs so AUTH_024
      * never poisons the caller's transaction (UnexpectedRollbackException → HTTP 500).
+     * @param userId authenticated account identifier
+     * @param request registration proof and device metadata
+     * @return HTTP response describing success or registration failure
      */
     public ResponseEntity<ApiResponse<?>> registerPasskey(Long userId, PasskeyRegistrationRequest request) {
         try {
@@ -160,6 +192,12 @@ public class PasskeyOrchestrator {
         }
     }
 
+    /** Persists a verified credential and its decoded identity, context, and device metadata. */
+    /** @param user existing credential owner */
+    /** @param request registration request already verified against the challenge */
+    /** @param pkToVerify decoded public COSE key */
+    /** @param decoder Base64 decoder selected for identifier data */
+    /** @return successful registration response */
     private ResponseEntity<ApiResponse<?>> persistRegisteredPasskey(
             UserDataBase user,
             PasskeyRegistrationRequest request,
@@ -198,6 +236,12 @@ public class PasskeyOrchestrator {
         return ResponseEntity.ok(ApiResponse.success("Passkey registered successfully", "OK"));
     }
 
+    /**
+     * Resolves the owner and credential, consumes and verifies the challenge, advances the replay
+     * counter, then returns TOTP continuation or a session token.
+     * @param request submitted WebAuthn assertion
+     * @return authentication result, challenge requirement, or actionable failure response
+     */
     @Transactional
     public ResponseEntity<ApiResponse<Object>> verifyAndLogin(PasskeyVerifyRequest request) {
         byte[] credentialIdBytes = null;
@@ -478,6 +522,9 @@ public class PasskeyOrchestrator {
     /**
      * Binding conflict / challenge verification happen outside a single write TX so AUTH_024
      * cannot surface as UnexpectedRollbackException (HTTP 500) to the mobile client.
+     * @param sessionId pending signup session identifier
+     * @param request registration proof and device metadata
+     * @return account-created response or a typed failure response
      */
     public ResponseEntity<ApiResponse<?>> finishOnboardingRegistration(String sessionId, PasskeyRegistrationRequest request) {
         SignupState state = signupStateStore.findSignupState(sessionId);
@@ -565,23 +612,22 @@ public class PasskeyOrchestrator {
         state.setPasskeyBrowser(request.getBrowser());
         state.setPasskeyRegistered(true);
 
-        signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
-
         UserDataBase user;
         try {
+            signupStateStore.saveSignupState(sessionId, state, Duration.ofMinutes(1440));
             user = finalizeSignupAccount.execute(sessionId);
         } catch (FinancialProviderUnavailableException
                  | FinalizeSignupAccount.VaultNotReadyException exception) {
-            log.warn("Passkey onboarding finalization is temporarily unavailable for sessionRef={} userRef={}: {}",
+            log.warn(AUTH_MARKER, "Passkey onboarding finalization is temporarily unavailable for sessionRef={} userRef={}: {}",
                     LogSanitizer.fingerprint(sessionId),
                     LogSanitizer.fingerprint(state.getUsername()),
                     exception.getMessage());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(ApiResponse.error(
                             "Account creation is temporarily unavailable. " + exception.getMessage(),
-                            ErrorCodes.SYS_INTERNAL_ERROR));
+                            ErrorCodes.VAULT_STORAGE_ERROR));
         } catch (RuntimeException exception) {
-            log.error("Passkey onboarding finalization failed for sessionRef={} userRef={}: {} - {}",
+            log.error(AUTH_MARKER, "Passkey onboarding finalization failed for sessionRef={} userRef={}: {} - {}",
                     LogSanitizer.fingerprint(sessionId),
                     LogSanitizer.fingerprint(state.getUsername()),
                     exception.getClass().getSimpleName(),
@@ -598,6 +644,10 @@ public class PasskeyOrchestrator {
                 token));
     }
 
+    /** Rejects origins outside the configured allowlist and logs only fingerprinted identity data. */
+    /** @param username username associated with the request */
+    /** @param clientDataJSON encoded WebAuthn client data containing the origin */
+    /** @return unauthorized response when invalid, otherwise {@code null} */
     private ResponseEntity<ApiResponse<?>> rejectInvalidPasskeyOrigin(String username, String clientDataJSON) {
         if (passkeyService.isClientDataOriginAllowed(clientDataJSON)) {
             return null;
@@ -612,10 +662,20 @@ public class PasskeyOrchestrator {
                 ErrorCodes.AUTH_PASSKEY_INVALID_ORIGIN));
     }
 
+    /** Trims and lowercases with a locale-independent rule; null becomes the empty string. */
+    /** @param username submitted username */
+    /** @return normalized username */
     private String normalizeUsername(String username) {
         return username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
     }
 
+    /** Builds the client recovery response requesting a passkey compatible with this login. */
+    /** @param user account requiring a replacement or newly linked passkey */
+    /** @param status HTTP status associated with the failed attempt */
+    /** @param errorCode stable API error code */
+    /** @param message public failure message */
+    /** @param reason recovery instruction shown to the client */
+    /** @return response with structured passkey-link guidance */
     private ResponseEntity<ApiResponse<Object>> passkeyLinkRequired(
             UserDataBase user,
             HttpStatus status,
@@ -626,6 +686,10 @@ public class PasskeyOrchestrator {
         return ResponseEntity.status(status).body(ApiResponse.error(message, errorCode, data));
     }
 
+    /** Tracks a counter conflict and returns retry guidance or an active-lock response. */
+    /** @param user account whose credential failed replay validation */
+    /** @param credentialRef sanitized credential reference */
+    /** @return replay rejection or locked response */
     private ResponseEntity<ApiResponse<Object>> passkeyReplayConflict(UserDataBase user, String credentialRef) {
         boolean locked = deviceCredentialReplayGuard.recordReplayFailure(
                 user.getId(),
@@ -645,6 +709,9 @@ public class PasskeyOrchestrator {
                         data));
     }
 
+    /** Builds a locked response containing the replay guard's configured wait guidance. */
+    /** @param user account whose credential is temporarily locked */
+    /** @return HTTP 423 response */
     private ResponseEntity<ApiResponse<Object>> passkeyReplayLocked(UserDataBase user) {
         PasskeyActionRequiredDTO data = passkeyInventoryService.buildReplayLockedGuidance(
                 user,
@@ -656,6 +723,15 @@ public class PasskeyOrchestrator {
                         data));
     }
 
+    /** Logs a failed branch using sanitized identity, credential, origin, and counter references. */
+    /** @param failureBranch internal verification branch label */
+    /** @param errorCode associated API error code */
+    /** @param request assertion request, possibly absent on error paths */
+    /** @param normalizedUsername canonical username for fingerprinting */
+    /** @param credentialIdBytes decoded credential ID when available */
+    /** @param credential persisted verification projection when available */
+    /** @param storedSignatureCount previously persisted counter */
+    /** @param receivedSignatureCount counter received in the assertion */
     private void logVerifyFailure(
             String failureBranch,
             String errorCode,
@@ -682,6 +758,10 @@ public class PasskeyOrchestrator {
                 receivedSignatureCount == null ? "n/a" : receivedSignatureCount);
     }
 
+    /** Fingerprints decoded credential bytes or encoded request data for diagnostics. */
+    /** @param request request that may contain an encoded credential ID */
+    /** @param credentialIdBytes decoded credential ID when parsing succeeded */
+    /** @return sanitized reference, or {@code absent} */
     private String credentialRef(PasskeyVerifyRequest request, byte[] credentialIdBytes) {
         if (credentialIdBytes != null && credentialIdBytes.length > 0) {
             return LogSanitizer.fingerprint(credentialIdBytes);
@@ -692,6 +772,8 @@ public class PasskeyOrchestrator {
         return LogSanitizer.fingerprint(request.getCredentialId());
     }
 
+    /** Resolves the current RP ID for diagnostics, returning a bounded marker if resolution fails. */
+    /** @return current RP ID or {@code unavailable} */
     private String resolveCurrentRelyingPartyIdForLog() {
         try {
             return passkeyService.resolveCurrentRelyingPartyId();
@@ -700,6 +782,8 @@ public class PasskeyOrchestrator {
         }
     }
 
+    /** Resolves the request host for diagnostics, returning a bounded marker if resolution fails. */
+    /** @return current request host or {@code unavailable} */
     private String resolveCurrentRequestHostForLog() {
         try {
             return passkeyService.resolveCurrentRequestHost();
@@ -708,6 +792,9 @@ public class PasskeyOrchestrator {
         }
     }
 
+    /** Sanitizes log metadata and fingerprints values longer than the logging bound. */
+    /** @param value candidate metadata */
+    /** @return sanitized bounded text, fingerprint, or {@code absent} */
     private String safeLogMetadata(String value) {
         if (!hasText(value)) {
             return "absent";
@@ -719,11 +806,17 @@ public class PasskeyOrchestrator {
         return sanitized.length() > 128 ? LogSanitizer.fingerprint(sanitized) : sanitized;
     }
 
+    /** Copies the proof-derived relying-party ID and origin host into the credential. */
+    /** @param credential credential being prepared for persistence */
+    /** @param request verified registration proof and client data */
     private void applyPasskeyContextMetadata(PasskeyCredential credential, PasskeyRegistrationRequest request) {
         credential.setRelyingPartyId(resolveRelyingPartyIdFromProof(request));
         credential.setOriginHost(passkeyService.extractOriginHostFromClientData(request.getClientDataJSON()));
     }
 
+    /** Resolves the RP ID from authenticator proof, falling back to the client-data RP claim. */
+    /** @param request registration request carrying proof and client data */
+    /** @return first non-blank resolved RP ID, or {@code null} */
     private String resolveRelyingPartyIdFromProof(PasskeyRegistrationRequest request) {
         String matchedRpId = passkeyService.resolveRelyingPartyIdFromAuthenticatorData(
                 request.getAuthData(),
@@ -733,6 +826,9 @@ public class PasskeyOrchestrator {
                 passkeyService.resolveRelyingPartyIdFromClientData(request.getClientDataJSON()));
     }
 
+    /** Copies device metadata from registration and defaults an absent status to ACTIVE. */
+    /** @param credential credential entity to populate */
+    /** @param request submitted device metadata */
     private void applyPasskeyDeviceMetadata(PasskeyCredential credential, PasskeyRegistrationRequest request) {
         credential.setBrand(request.getBrand());
         credential.setModel(request.getModel());
@@ -743,14 +839,24 @@ public class PasskeyOrchestrator {
         credential.setStatus(firstNonBlank(request.getStatus(), "ACTIVE"));
     }
 
+    /** Returns trimmed text or a fallback when the candidate is null or blank. */
+    /** @param value candidate text */
+    /** @param fallback substitute text */
+    /** @return trimmed candidate or fallback */
     private String firstNonBlank(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
+    /** Treats legacy absent status as active and explicit ACTIVE as active case-insensitively. */
+    /** @param status persisted credential status */
+    /** @return whether the credential is eligible for authentication */
     private boolean isActiveCredential(String status) {
         return status == null || status.isBlank() || "ACTIVE".equalsIgnoreCase(status);
     }
 
+    /** Checks whether text is non-null and contains a non-whitespace character. */
+    /** @param value candidate text */
+    /** @return true when the value is not blank */
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }

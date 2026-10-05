@@ -2,9 +2,9 @@ package com.kerosene.auth.application.service.validation.totp;
 
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
-import com.kerosene.auth.application.service.cripto.contracts.Cryptography;
+import com.kerosene.auth.application.service.crypto.contracts.Cryptography;
 import com.kerosene.auth.application.service.validation.totp.contracts.TOTPVerifier;
-import com.kerosene.security.VaultKeyProvider;
+import com.kerosene.security.infra.VaultKeyProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -12,13 +12,23 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+/** Validates six-digit RFC 6238 codes and decrypts enrollment secrets using the attested Vault key. */
 @Service
 public class TOTPValidator implements TOTPVerifier {
 
+    /** Redis-backed enrollment and verification state dependency retained for constructor compatibility. */
     private final RedisServicer service;
+    /** AES-256 cryptography used to open the stored secret. */
     private final Cryptography cryptography;
+    /** Supplies the in-memory master key established after platform attestation. */
     private final VaultKeyProvider vaultKeyProvider;
 
+    /**
+     * Creates the validator with Redis access, AES-256 cryptography, and the attested key provider.
+     * @param service Redis service used by the surrounding authentication flow
+     * @param cryptography AES-256 implementation selected by Spring
+     * @param vaultKeyProvider source of the current master key
+     */
     public TOTPValidator(RedisServicer service,
             @Qualifier("aes256") Cryptography cryptography,
             VaultKeyProvider vaultKeyProvider) {
@@ -28,6 +38,12 @@ public class TOTPValidator implements TOTPVerifier {
         // Chave vive no VaultKeyProvider (RAM-only, pós-atestação TPM)
     }
 
+    /**
+     * Checks a code against the current 30-second counter and one adjacent counter on either side.
+     * @param totpSecret Base32 encoded shared secret
+     * @param code six-digit authenticator code
+     * @return true only when one permitted time window produces the supplied code
+     */
     @Override
     public boolean totpMatcher(String totpSecret, String code) {
         try {
@@ -52,7 +68,11 @@ public class TOTPValidator implements TOTPVerifier {
         }
     }
 
-    // RFC 6238 Standard Generator
+    /** Generates the six-digit HMAC-SHA1 OTP for one RFC 6238 time counter. */
+    /** @param key decoded shared secret bytes */
+    /** @param timeWindow Unix time divided by the 30-second step */
+    /** @return zero-padded six-digit one-time password */
+    /** @throws Exception when the runtime cannot initialize HMAC-SHA1 */
     private String generateTotp(byte[] key, long timeWindow) throws Exception {
         byte[] data = new byte[8];
         long value = timeWindow;
@@ -74,6 +94,13 @@ public class TOTPValidator implements TOTPVerifier {
         return String.format("%06d", otp);
     }
 
+    /**
+     * Opens a stored secret, accepting a valid legacy plaintext Base32 value as fallback.
+     * @param totpSecret Base64 encrypted secret or legacy Base32 secret
+     * @param secretKey key used to decrypt the encrypted representation
+     * @return plaintext Base32 secret with whitespace removed
+     * @throws IllegalStateException when the registration secret is absent
+     */
     @Override
     public String totpDecryptedToString(String totpSecret, SecretKey secretKey) {
         if (totpSecret == null) {
@@ -94,6 +121,12 @@ public class TOTPValidator implements TOTPVerifier {
         throw new RuntimeException("Decryption error: invalid TOTP secret format");
     }
 
+    /**
+     * Decrypts the enrollment secret and rejects the request when its code does not match.
+     * @param totpSecret encrypted or legacy plaintext secret
+     * @param totpCode code submitted by the authenticator
+     * @throws AuthExceptions.incorrectTotp when the code is invalid
+     */
     @Override
     public void totpVerify(String totpSecret, String totpCode) {
 

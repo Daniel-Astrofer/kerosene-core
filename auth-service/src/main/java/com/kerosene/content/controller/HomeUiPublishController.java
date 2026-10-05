@@ -29,11 +29,25 @@ import java.util.Map;
 @RequestMapping("/internal/content/home-ui")
 public class HomeUiPublishController {
 
+    /** Persists scoped, time-bounded home UI overrides. */
     private final HomeUiOverrideService overrideService;
+    /** Builds a personalized current surface before snapshot pushes. */
     private final HomeSurfaceComposer surfaceComposer;
+    /** Publishes snapshots, patches, and greetings to live clients. */
     private final HomeUiPushService pushService;
+    /** Parses JSON payload strings supplied by internal operators. */
     private final ObjectMapper objectMapper;
 
+
+    /**
+     * Creates the internal publishing controller.
+     *
+     * @param overrideService persistence service for scoped overrides
+     * @param surfaceComposer composer for user-specific full snapshots
+     * @param pushService live event publisher
+     * @param objectMapper JSON parser used to validate request payloads
+     * @param internalSecret configured shared internal credential
+     */
     public HomeUiPublishController(
             HomeUiOverrideService overrideService,
             HomeSurfaceComposer surfaceComposer,
@@ -45,6 +59,14 @@ public class HomeUiPublishController {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Routes an authenticated publish command to override, snapshot, patch, or greeting handling.
+     *
+     * @param credential value of {@code X-KFE-Internal-Secret}; missing credentials are rejected
+     * @param request command discriminator and action-specific payload
+     * @return success envelope with saved override or pushed event metadata
+     * @throws ResponseStatusException with 401/503 for credential configuration failures and 400 for invalid requests
+     */
     @PostMapping("/publish")
     public ResponseEntity<ApiResponse<Map<String, Object>>> publish(
             @RequestBody HomeUiPublishRequestDTO request) {
@@ -62,6 +84,14 @@ public class HomeUiPublishController {
         };
     }
 
+    /**
+     * Validates and stores a GLOBAL, USER, or SEGMENT JSON override with optional priority and dates.
+     * Active user-specific overrides also cause an immediate recomposed snapshot to be pushed.
+     *
+     * @param request publish command carrying override scope, payload, and optional scheduling data
+     * @return saved override ID, scope, and priority
+     * @throws ResponseStatusException when scope requirements, payload JSON, or timestamps are invalid
+     */
     private ResponseEntity<ApiResponse<Map<String, Object>>> upsertOverride(HomeUiPublishRequestDTO request) {
         require(request.payloadJson() != null && !request.payloadJson().isBlank(), "payloadJson is required");
         String scope = request.scope() == null ? "GLOBAL" : request.scope().trim().toUpperCase(Locale.ROOT);
@@ -110,6 +140,13 @@ public class HomeUiPublishController {
                 Map.of("id", saved.getId(), "scope", saved.getScope(), "priority", saved.getPriority())));
     }
 
+    /**
+     * Composes and pushes the current personalized snapshot using request values or stable defaults.
+     *
+     * @param request command containing the target user and optional view/locale/time zone
+     * @return target user and composed snapshot version
+     * @throws ResponseStatusException when userId is absent
+     */
     private ResponseEntity<ApiResponse<Map<String, Object>>> pushSnapshot(HomeUiPublishRequestDTO request) {
         require(request.userId() != null, "userId is required");
         HomeSurfaceResponseDTO surface = surfaceComposer.compose(
@@ -123,6 +160,13 @@ public class HomeUiPublishController {
                 Map.of("userId", request.userId(), "version", surface.version())));
     }
 
+    /**
+     * Parses and pushes a raw home UI patch for the requested user with a current ISO instant marker.
+     *
+     * @param request command containing a user ID and JSON patch
+     * @return success metadata for the target user
+     * @throws ResponseStatusException when required values are absent or payload JSON is invalid
+     */
     private ResponseEntity<ApiResponse<Map<String, Object>>> pushPatch(HomeUiPublishRequestDTO request) {
         require(request.userId() != null, "userId is required");
         require(request.payloadJson() != null && !request.payloadJson().isBlank(), "payloadJson is required");
@@ -137,6 +181,13 @@ public class HomeUiPublishController {
                 Map.of("userId", request.userId())));
     }
 
+    /**
+     * Parses and pushes a greeting payload for the requested user with a current ISO instant marker.
+     *
+     * @param request command containing a user ID and JSON greeting
+     * @return success metadata for the target user
+     * @throws ResponseStatusException when required values are absent or payload JSON is invalid
+     */
     private ResponseEntity<ApiResponse<Map<String, Object>>> pushGreeting(HomeUiPublishRequestDTO request) {
         require(request.userId() != null, "userId is required");
         require(request.payloadJson() != null && !request.payloadJson().isBlank(), "payloadJson is required");
@@ -151,6 +202,13 @@ public class HomeUiPublishController {
                 Map.of("userId", request.userId())));
     }
 
+    /**
+     * Parses a nullable optional ISO-8601 instant used by an override's active window.
+     *
+     * @param raw timestamp text, null/blank when the corresponding bound is open-ended
+     * @return parsed instant or null for an absent bound
+     * @throws ResponseStatusException when a nonblank value is not a valid ISO instant
+     */
     private Instant parseInstant(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -162,6 +220,13 @@ public class HomeUiPublishController {
         }
     }
 
+    /**
+     * Returns a trimmed nonblank request value or its supplied default.
+     *
+     * @param value optional request value
+     * @param fallback value used when input is null or blank
+     * @return normalized value or fallback
+     */
     private static String firstNonBlank(String value, String fallback) {
         if (value != null && !value.isBlank()) {
             return value.trim();
@@ -169,6 +234,13 @@ public class HomeUiPublishController {
         return fallback;
     }
 
+    /**
+     * Converts failed request preconditions to a 400 response.
+     *
+     * @param condition predicate that must hold
+     * @param message client-facing validation message
+     * @throws ResponseStatusException when condition is false
+     */
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);

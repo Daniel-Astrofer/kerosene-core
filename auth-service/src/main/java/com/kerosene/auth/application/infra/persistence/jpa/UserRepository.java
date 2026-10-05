@@ -4,13 +4,14 @@ import com.kerosene.auth.model.entity.UserDataBase;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
-
+/** Persistence queries for authentication users; password verification remains in the service layer. */
 @Repository
 public interface UserRepository extends JpaRepository<UserDataBase, Long> {
 
+    /** Looks up a user by its canonical username value. */
     UserDataBase findByUsername(String username);
 
+    /** Checks username uniqueness without retrieving the full user row. */
     boolean existsByUsername(String username);
 
     // ⚠️ existsByUsernameAndPassphrase was intentionally removed.

@@ -6,30 +6,43 @@ import org.springframework.stereotype.Service;
 import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.infra.persistence.redis.contracts.RedisContract;
 
+/** Enforces client- and username-scoped limits for starting emergency credential recovery. */
 @Service
 public class RecoveryRateLimitService {
 
+    /** Redis state and counter boundary. */
     private final RedisContract redisContract;
 
+    /** Duration of the client attempt-count window. */
     @Value("${auth.recovery.client-window-seconds:600}")
     private long clientWindowSeconds;
 
+    /** Maximum client start attempts before a block is written. */
     @Value("${auth.recovery.client-max-attempts:6}")
     private long clientMaxAttempts;
 
+    /** Duration of the username failure-count window. */
     @Value("${auth.recovery.username-window-seconds:1800}")
     private long usernameWindowSeconds;
 
+    /** Username failure count that activates both username and client blocks. */
     @Value("${auth.recovery.username-max-attempts:4}")
     private long usernameMaxAttempts;
 
+    /** Duration of temporary blocks written after exceeding configured limits. */
     @Value("${auth.recovery.block-seconds:1800}")
     private long recoveryBlockSeconds;
 
+    /** Creates the recovery throttle service. */
+    /** @param redisContract Redis counters and block-marker operations */
     public RecoveryRateLimitService(RedisContract redisContract) {
         this.redisContract = redisContract;
     }
 
+    /** Rejects active client/user blocks, then counts client starts in a fixed expiry window. */
+    /** @param normalizedUsername canonical account username */
+    /** @param clientFingerprint opaque client/device fingerprint */
+    /** @throws AuthExceptions.RecoveryRateLimitedException when blocked or over the attempt limit */
     public void enforceStartAttempt(String normalizedUsername, String clientFingerprint) {
         String clientKey = "auth:recovery:attempts:client:" + clientFingerprint;
         String clientBlockKey = "auth:recovery:block:client:" + clientFingerprint;
@@ -55,6 +68,9 @@ public class RecoveryRateLimitService {
         }
     }
 
+    /** Counts failed recovery proofs by username and blocks both username and client at the threshold. */
+    /** @param normalizedUsername canonical account username */
+    /** @param clientFingerprint client/device fingerprint to block with the account */
     public void registerFailure(String normalizedUsername, String clientFingerprint) {
         String userAttemptsKey = "auth:recovery:attempts:user:" + normalizedUsername;
         Long userAttempts = redisContract.increment(userAttemptsKey);
@@ -70,6 +86,9 @@ public class RecoveryRateLimitService {
         }
     }
 
+    /** Clears username/client attempt counters and block markers after all recovery codes match. */
+    /** @param normalizedUsername canonical account username */
+    /** @param clientFingerprint client/device fingerprint */
     public void clearFailures(String normalizedUsername, String clientFingerprint) {
         redisContract.deleteValue("auth:recovery:attempts:user:" + normalizedUsername);
         redisContract.deleteValue("auth:recovery:block:user:" + normalizedUsername);

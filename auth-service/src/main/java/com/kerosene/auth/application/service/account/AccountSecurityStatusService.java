@@ -7,12 +7,18 @@ import com.kerosene.auth.dto.AccountSecurityStatusDTO;
 import com.kerosene.auth.dto.PasskeyInventoryDTO;
 import com.kerosene.auth.model.entity.UserDataBase;
 
+/** Builds the account's consolidated authentication and recovery readiness status. */
 @Service
 public class AccountSecurityStatusService {
 
+    /** Loads the persisted account used to derive current security state. */
     private final UserServiceContract userService;
+    /** Projects registered and usable passkey details for the response. */
     private final PasskeyInventoryService passkeyInventoryService;
 
+    /** Creates the security status service. */
+    /** @param userService account lookup boundary */
+    /** @param passkeyInventoryService passkey inventory projection service */
     public AccountSecurityStatusService(
             UserServiceContract userService,
             PasskeyInventoryService passkeyInventoryService) {
@@ -20,6 +26,15 @@ public class AccountSecurityStatusService {
         this.passkeyInventoryService = passkeyInventoryService;
     }
 
+    /**
+     * Derives password, passkey, TOTP, backup-code, activation, and inbound-readiness flags.
+     * Inbound receiving is blocked while TOTP is disabled, and inactive status is reflected in
+     * both activation and receiving fields.
+     *
+     * @param userId account identifier
+     * @return consolidated security status
+     * @throws IllegalStateException when the authenticated account no longer exists
+     */
     public AccountSecurityStatusDTO getStatus(Long userId) {
         UserDataBase user = userService.buscarPorId(userId)
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found."));

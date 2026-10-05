@@ -21,12 +21,17 @@ import java.util.Set;
 @Service
 public class HomeStageImpressionService {
 
+    /** Logger for acknowledgement persistence and suppression decisions. */
     private static final Logger log = LoggerFactory.getLogger(HomeStageImpressionService.class);
 
+    /** Accepted client acknowledgement states, ordered by {@link #rank(String)}. */
     private static final Set<String> VALID_STATUS = Set.of("SEEN", "READ", "DISMISSED");
 
+    /** Persistence boundary for a user's stage impressions. */
     private final HomeStageImpressionRepository repository;
 
+    /** Creates the service with its impression repository. */
+    /** @param repository storage for per-user content fingerprints and acknowledgement status */
     public HomeStageImpressionService(HomeStageImpressionRepository repository) {
         this.repository = repository;
     }
@@ -34,6 +39,13 @@ public class HomeStageImpressionService {
     /**
      * If the composed stage is ONCE and the user already read this fingerprint,
      * replace with idle so the client shows the resting header.
+     */
+    /**
+     * Replaces an already acknowledged ONCE stage with the idle stage while preserving
+     * every other field in the composed home surface.
+     * @param userId authenticated account identifier, or {@code null} for anonymous content
+     * @param surface composed surface to inspect
+     * @return original surface or a copy with its consumed stage suppressed
      */
     public HomeSurfaceResponseDTO suppressIfAlreadyRead(Long userId, HomeSurfaceResponseDTO surface) {
         if (userId == null || surface == null || surface.stage() == null) {
@@ -51,6 +63,8 @@ public class HomeStageImpressionService {
         return withIdleStage(surface);
     }
 
+    /** Checks whether the user has an unexpired impression for the supplied content edition. */
+    /** @param userId account identifier @param fingerprint stable stage edition digest @return whether an active impression exists */
     public boolean hasActiveImpression(Long userId, String fingerprint) {
         if (userId == null || fingerprint == null || fingerprint.isBlank()) {
             return false;
@@ -58,6 +72,13 @@ public class HomeStageImpressionService {
         return repository.existsActiveImpression(userId, fingerprint, Instant.now());
     }
 
+    /**
+     * Records a client acknowledgement transactionally, upgrading status monotonically
+     * and deriving a fingerprint when older clients omit one.
+     * @param userId authenticated account identifier
+     * @param request acknowledgement payload from the client
+     * @throws IllegalArgumentException when authentication or required request data is absent
+     */
     @Transactional
     public void acknowledge(Long userId, HomeStageAckRequestDTO request) {
         if (userId == null) {
@@ -107,6 +128,7 @@ public class HomeStageImpressionService {
         log.info("Recorded home stage {} for user {} status={}", stageId, userId, status);
     }
 
+    /** Determines whether a non-idle stage uses one-shot playback semantics. */
     private static boolean isOnceActive(HomeStageDTO stage) {
         if (stage == null || stage.kind() == null) {
             return false;
@@ -119,6 +141,7 @@ public class HomeStageImpressionService {
         return "ONCE".equals(policy);
     }
 
+    /** Copies a surface while substituting its communication stage with the canonical idle stage. */
     private static HomeSurfaceResponseDTO withIdleStage(HomeSurfaceResponseDTO surface) {
         return new HomeSurfaceResponseDTO(
                 surface.schemaVersion(),
@@ -134,6 +157,7 @@ public class HomeStageImpressionService {
                 surface.restingHeader());
     }
 
+    /** Normalizes client status values and safely defaults unknown values to READ. */
     private static String normalizeStatus(String raw) {
         if (raw == null || raw.isBlank()) {
             return "READ";
@@ -142,6 +166,7 @@ public class HomeStageImpressionService {
         return VALID_STATUS.contains(s) ? s : "READ";
     }
 
+    /** Maps acknowledgement status to its monotonic progression rank. */
     private static int rank(String status) {
         return switch (normalizeStatus(status)) {
             case "SEEN" -> 1;
@@ -151,12 +176,14 @@ public class HomeStageImpressionService {
         };
     }
 
+    /** Trims text and maps null or blank values to null for validation. */
     private static String trimToNull(String s) {
         if (s == null) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
     }
 
+    /** Maps nullable text to an empty string for fingerprint input. */
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
     }

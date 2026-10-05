@@ -12,15 +12,20 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/** Persistence queries and monotonic-counter updates for registered device-key credentials. */
 @Repository
 public interface DeviceKeyCredentialRepository extends JpaRepository<DeviceKeyCredential, UUID> {
 
+    /** Finds a credential by its WebAuthn credential identifier. */
     Optional<DeviceKeyCredential> findByCredentialId(String credentialId);
 
+    /** Finds a credential only when it is associated with the specified user. */
     Optional<DeviceKeyCredential> findByCredentialIdAndUserId(String credentialId, Long userId);
 
+    /** Lists registered credentials owned by a user. */
     List<DeviceKeyCredential> findByUserId(Long userId);
 
+    /** Checks whether any credential has active status, treating null legacy status as ACTIVE. */
     @Query("""
             select count(d) > 0 from DeviceKeyCredential d
              where d.user.id = :userId
@@ -28,6 +33,16 @@ public interface DeviceKeyCredentialRepository extends JpaRepository<DeviceKeyCr
             """)
     boolean existsActiveByUserId(@Param("userId") Long userId);
 
+    /**
+     * Atomically advances an active credential's authenticator counter and last-used time.
+     * The strict old-counter predicate rejects replayed or non-increasing assertions.
+     *
+     * @param credentialId WebAuthn credential ID
+     * @param userId owning user ID
+     * @param newCounter counter reported by the verified authenticator assertion
+     * @param lastUsedAt verification time to persist
+     * @return number of rows updated; zero means ownership/state/counter preconditions failed
+     */
     @Modifying
     @Query("""
             update DeviceKeyCredential d
@@ -44,6 +59,7 @@ public interface DeviceKeyCredentialRepository extends JpaRepository<DeviceKeyCr
             @Param("newCounter") long newCounter,
             @Param("lastUsedAt") LocalDateTime lastUsedAt);
 
+    /** Loads active credentials for one installation and fetches the owning user in the same query. */
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "user")
     @Query("""
             select d from DeviceKeyCredential d
@@ -52,10 +68,12 @@ public interface DeviceKeyCredentialRepository extends JpaRepository<DeviceKeyCr
             """)
     List<DeviceKeyCredential> findActiveByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
 
+    /** Deletes all credential rows associated with one installation identifier. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from DeviceKeyCredential d where d.deviceInstallId = :deviceInstallId")
     int deleteByDeviceInstallId(@Param("deviceInstallId") String deviceInstallId);
 
+    /** Deletes credentials for one installation only within the specified user's ownership scope. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             delete from DeviceKeyCredential d

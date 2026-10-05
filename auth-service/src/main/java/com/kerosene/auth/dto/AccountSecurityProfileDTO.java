@@ -6,6 +6,18 @@ import com.kerosene.auth.model.enums.AccountSecurityType;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * API view of configured account security, factor requirements, and registered authenticators.
+ * @param accountSecurity selected account security mode
+ * @param shamirTotalShares configured total recovery shares for SHAMIR mode
+ * @param shamirThreshold minimum shares required to reconstruct the secret
+ * @param multisigThreshold number of factors required by MULTISIG_2FA mode, defaulting to two
+ * @param passkeyAvailable whether the deployment can offer passkey support
+ * @param passkeyEnabledForTransactions whether passkeys participate in transaction approval
+ * @param appPin app PIN configuration state
+ * @param requiredFactors factor identifiers derived from the selected mode
+ * @param passkeys public inventory summary of registered passkeys
+ */
 public record AccountSecurityProfileDTO(
         AccountSecurityType accountSecurity,
         Integer shamirTotalShares,
@@ -17,6 +29,14 @@ public record AccountSecurityProfileDTO(
         List<String> requiredFactors,
         PasskeyInventoryDTO passkeys) {
 
+    /**
+     * Creates the response projection from the persisted profile and related authenticator summaries.
+     * @param user account entity holding configured mode and thresholds
+     * @param passkeyAvailable whether the deployment supports passkeys
+     * @param passkeys passkey inventory response
+     * @param appPin PIN status response
+     * @return profile DTO with normalized multisig threshold and derived factors
+     */
     public static AccountSecurityProfileDTO fromUser(
             UserDataBase user,
             boolean passkeyAvailable,
@@ -34,6 +54,12 @@ public record AccountSecurityProfileDTO(
                 passkeys);
     }
 
+    /**
+     * Derives mode-specific factor identifiers; current rules do not consult the availability argument.
+     * @param user account entity whose security mode and multisig threshold select factors
+     * @param passkeyAvailable currently unused compatibility input
+     * @return ordered factor identifiers required by the selected account mode
+     */
     private static List<String> requiredFactorsFor(UserDataBase user, boolean passkeyAvailable) {
         List<String> factors = new ArrayList<>();
 

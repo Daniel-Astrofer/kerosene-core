@@ -20,7 +20,6 @@ import com.kerosene.auth.AuthExceptions;
 import com.kerosene.auth.application.service.authentication.contracts.LoginVerifier;
 import com.kerosene.auth.application.service.cache.contracts.RedisServicer;
 import com.kerosene.auth.dto.UserDTO;
-import com.kerosene.auth.model.contracts.User;
 import com.kerosene.auth.model.entity.UserDataBase;
 
 class StartLoginTest {

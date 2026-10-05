@@ -4,7 +4,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.kerosene.auth.application.service.security.CosignerSecretService;
-import com.kerosene.common.financial.FinancialNotificationAuditPort;
+import com.kerosene.common.financial.notification.FinancialNotificationAuditPort;
 import com.kerosene.common.infra.logging.LogSanitizer;
 import com.kerosene.notification.dto.DeviceTokenRegisterRequest;
 import com.kerosene.notification.model.entity.NotificationDeviceTokenEntity;

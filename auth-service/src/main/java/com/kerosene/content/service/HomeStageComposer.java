@@ -1,14 +1,12 @@
 package com.kerosene.content.service;
 
 import org.springframework.stereotype.Service;
-import com.kerosene.common.service.TickerService;
+import com.kerosene.platform.market.TickerService;
 import com.kerosene.content.dto.HomeRestingHeaderDTO;
 import com.kerosene.content.dto.HomeStageDTO;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.NumberFormat;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -25,18 +23,29 @@ import java.util.Map;
 @Service
 public class HomeStageComposer {
 
+    /** Provider for current BTC prices and 24-hour price movement. */
     private final TickerService tickerService;
 
+    /** Creates a stage composer backed by the market ticker. */
+    /** @param tickerService provider used to retrieve market values */
     public HomeStageComposer(TickerService tickerService) {
         this.tickerService = tickerService;
     }
 
+    /** Returns the stable header shown when no ephemeral stage is active. */
     public HomeRestingHeaderDTO restingHeader() {
         return HomeRestingHeaderDTO.defaults();
     }
 
+    /**
+     * Chooses a localized 24-hour change stage, price-only stage, or idle stage.
+     * Attempts one ticker refresh when movement data is absent.
+     * @param locale requested locale for stage copy
+     * @param balanceView balance presentation mode retained by this composition contract
+     * @return composed market stage, or the idle stage when market data is unavailable
+     */
     public HomeStageDTO compose(String locale, String balanceView) {
-        String lang = normalizeLocale(locale);
+        String lang = HomeLocaleSupport.normalizeLocale(locale);
         if (tickerService.getChange24hPercent("usd") == null) {
             try {
                 tickerService.updatePrices();
@@ -57,16 +66,17 @@ public class HomeStageComposer {
         return HomeStageDTO.idle();
     }
 
+    /** Builds the signed 24-hour change banner and its directional visual treatment. */
     private HomeStageDTO marketChangeStage(String lang, BigDecimal change, BigDecimal usd) {
         BigDecimal abs = change.abs().setScale(1, RoundingMode.HALF_UP);
-        String pct = formatPercent(lang, abs);
+        String pct = HomeLocaleSupport.formatPercent(lang, abs);
         boolean up = change.signum() >= 0;
         String title = up
-                ? t(lang,
+                ? HomeLocaleSupport.translate(lang,
                         "Bitcoin subiu " + pct + "% nas últimas 24h",
                         "Bitcoin is up " + pct + "% in the last 24h",
                         "Bitcoin subió " + pct + "% en las últimas 24h")
-                : t(lang,
+                : HomeLocaleSupport.translate(lang,
                         "Bitcoin caiu " + pct + "% nas últimas 24h",
                         "Bitcoin is down " + pct + "% in the last 24h",
                         "Bitcoin bajó " + pct + "% en las últimas 24h");
@@ -82,9 +92,10 @@ public class HomeStageComposer {
         return bannerStage("stage-btc-24h", "MARKET", title, duration, "transparent", atmo);
     }
 
+    /** Builds a localized USD price banner used when no 24-hour change is available. */
     private HomeStageDTO marketPriceStage(String lang, BigDecimal usd) {
-        String price = formatMoney(lang, usd, "USD");
-        String title = t(lang,
+        String price = HomeLocaleSupport.formatMoney(lang, usd, "USD");
+        String title = HomeLocaleSupport.translate(lang,
                 "BTC cotado a " + price + " neste momento",
                 "BTC trading at " + price + " right now",
                 "BTC cotizado a " + price + " en este momento");
@@ -97,6 +108,7 @@ public class HomeStageComposer {
         return bannerStage("stage-btc-usd", "MARKET", title, marqueeMs(title), "transparent", atmo);
     }
 
+    /** Creates the shared ONCE banner contract, including layout, media, motion, and lifecycle. */
     private HomeStageDTO bannerStage(
             String id,
             String kind,
@@ -130,6 +142,7 @@ public class HomeStageComposer {
                 atmosphere);
     }
 
+    /** Reads a market price while treating provider failure as unavailable data. */
     private BigDecimal safePrice(String currency) {
         try {
             return tickerService.getPrice(currency);
@@ -138,52 +151,10 @@ public class HomeStageComposer {
         }
     }
 
+    /** Estimates a complete marquee dwell and clamps it to the supported playback interval. */
     static int marqueeMs(String text) {
         int len = text == null ? 0 : text.trim().length();
         return Math.min(12_000, Math.max(5_500, len * 90));
     }
 
-    private static String normalizeLocale(String raw) {
-        if (raw == null || raw.isBlank()) return "pt";
-        String lang = raw.trim().toLowerCase(Locale.ROOT);
-        if (lang.startsWith("en")) return "en";
-        if (lang.startsWith("es")) return "es";
-        return "pt";
-    }
-
-    private static String t(String lang, String pt, String en, String es) {
-        return switch (lang) {
-            case "en" -> en;
-            case "es" -> es;
-            default -> pt;
-        };
-    }
-
-    private static String formatPercent(String lang, BigDecimal value) {
-        Locale locale = switch (lang) {
-            case "en" -> Locale.US;
-            case "es" -> Locale.forLanguageTag("es-ES");
-            default -> Locale.forLanguageTag("pt-BR");
-        };
-        NumberFormat nf = NumberFormat.getNumberInstance(locale);
-        nf.setMinimumFractionDigits(1);
-        nf.setMaximumFractionDigits(1);
-        return nf.format(value);
-    }
-
-    private static String formatMoney(String lang, BigDecimal value, String currency) {
-        Locale locale = switch (lang) {
-            case "en" -> Locale.US;
-            case "es" -> Locale.forLanguageTag("es-ES");
-            default -> Locale.forLanguageTag("pt-BR");
-        };
-        NumberFormat nf = NumberFormat.getCurrencyInstance(locale);
-        try {
-            nf.setCurrency(java.util.Currency.getInstance(currency));
-        } catch (Exception ignored) {
-        }
-        nf.setMaximumFractionDigits(0);
-        nf.setMinimumFractionDigits(0);
-        return nf.format(value);
-    }
 }

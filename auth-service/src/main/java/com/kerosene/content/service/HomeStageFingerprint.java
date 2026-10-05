@@ -15,8 +15,10 @@ import java.util.Locale;
  */
 public final class HomeStageFingerprint {
 
+    /** Prevents instantiation of this stateless fingerprint utility. */
     private HomeStageFingerprint() {}
 
+    /** Computes the stable edition fingerprint from a stage's identity and visible copy. */
     public static String of(HomeStageDTO stage) {
         if (stage == null) {
             return ofParts("idle", "IDLE", "", "");
@@ -30,6 +32,7 @@ public final class HomeStageFingerprint {
         return ofParts(stage.id(), stage.kind(), title, body);
     }
 
+    /** Normalizes fingerprint parts and hashes them using a newline-delimited canonical form. */
     public static String ofParts(String stageId, String kind, String title, String body) {
         String raw = String.join(
                 "\n",
@@ -40,10 +43,12 @@ public final class HomeStageFingerprint {
         return sha256Hex(raw);
     }
 
+    /** Converts nullable source text to an empty string for canonical fingerprint construction. */
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
     }
 
+    /** Returns a compact hexadecimal SHA-256 digest, with a JVM hash fallback if unavailable. */
     private static String sha256Hex(String raw) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

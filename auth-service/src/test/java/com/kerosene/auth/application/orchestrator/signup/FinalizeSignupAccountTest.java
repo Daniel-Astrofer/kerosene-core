@@ -8,7 +8,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.kerosene.common.financial.FinancialWalletProvisioningPort;
+import com.kerosene.common.financial.operations.FinancialWalletProvisioningPort;
 import com.kerosene.auth.application.orchestrator.signup.port.PasskeyGateway;
 import com.kerosene.auth.application.orchestrator.signup.port.SignupStateStore;
 import com.kerosene.auth.application.orchestrator.signup.port.UserNotifier;
@@ -18,7 +18,7 @@ import com.kerosene.auth.dto.SignupState;
 import com.kerosene.auth.model.entity.PasskeyCredential;
 import com.kerosene.auth.model.entity.UserDataBase;
 import com.kerosene.auth.model.enums.AccountSecurityType;
-import com.kerosene.security.VaultKeyProvider;
+import com.kerosene.security.infra.VaultKeyProvider;
 import com.kerosene.notification.model.UserNotificationPayload;
 
 import java.util.List;
